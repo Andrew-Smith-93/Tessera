@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name="kwinrc"/>
+    <group name="Script-tessera">
+        <entry name="enableTiling" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="defaultLayout" type="String">
+            <default>master-stack</default>
+        </entry>
+        <entry name="gapInner" type="Int">
+            <default>8</default>
+        </entry>
+        <entry name="gapOuter" type="Int">
+            <default>10</default>
+        </entry>
+        <entry name="masterRatio" type="Double">
+            <default>0.55</default>
+        </entry>
+        <entry name="masterCount" type="Int">
+            <default>1</default>
+        </entry>
+        <entry name="perDesktopLayout" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="tileNewWindows" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="showOsd" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="nvidiaDebounceMs" type="Int">
+            <default>60</default>
+        </entry>
+        <entry name="smoothResize" type="Bool">
+            <default>false</default>
+        </entry>
+        <entry name="ignoreMinimized" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="floatFilter" type="String">
+            <default>krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1,Steam,steam_app,steamwebhelper</default>
+        </entry>
+        <entry name="customRulesJson" type="String">
+            <default>[]</default>
+        </entry>
+        <entry name="desktopLayoutsJson" type="String">
+            <default>{}</default>
+        </entry>
+    </group>
+</kcfg>

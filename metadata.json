@@ -1,0 +1,26 @@
+{
+    "KPlugin": {
+        "Name": "Tessera",
+        "Description": "Modern, GPU-optimized dynamic tiling window manager for KDE Plasma 6 with an intuitive visual configuration interface.",
+        "Icon": "preferences-desktop-virtual",
+        "Authors": [
+            {
+                "Name": "Drew",
+                "Email": "user@localhost"
+            }
+        ],
+        "Id": "tessera",
+        "Version": "1.0.1",
+        "License": "GPL-3.0+",
+        "Website": "https://github.com/drew/tessera",
+        "Category": "Window Management",
+        "ServiceTypes": [
+            "KWin/Script"
+        ]
+    },
+    "X-Plasma-API": "declarativescript",
+    "X-Plasma-MainScript": "ui/tessera.qml",
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "KPackageStructure": "KWin/Script",
+    "X-KDE-PluginKeyword": "tessera"
+}

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Tessera Settings launcher wrapper
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHONPATH="$DIR/tessera-control" python3 "$DIR/tessera-control/tessera_settings.py" "$@"

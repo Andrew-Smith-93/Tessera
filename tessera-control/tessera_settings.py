@@ -1,0 +1,773 @@
+#!/usr/bin/env python3
+"""
+Tessera Control Center
+The intuitive, modern configuration interface for Tessera Tiling Window Manager on KDE Plasma 6.
+"""
+
+import sys
+import os
+import subprocess
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QPushButton, QSlider, QSpinBox, QCheckBox, QTabWidget,
+    QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QLineEdit,
+    QMessageBox, QFrame, QScrollArea, QGroupBox, QGridLayout
+)
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont, QIcon, QColor
+
+from config_manager import ConfigManager
+from ui_preview import LiveDesktopPreview
+from window_picker import get_active_window_info
+
+APP_STYLESHEET = """
+QMainWindow {
+    background-color: #1e222b;
+}
+QWidget {
+    color: #eff0f1;
+    font-family: 'Noto Sans', 'Segoe UI', sans-serif;
+    font-size: 10pt;
+}
+QTabWidget::pane {
+    border: 1px solid #31363b;
+    background-color: #232629;
+    border-radius: 8px;
+    padding: 10px;
+}
+QTabBar::tab {
+    background: #1e222b;
+    color: #a0a6ad;
+    padding: 10px 18px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 4px;
+    font-weight: 500;
+}
+QTabBar::tab:selected {
+    background: #232629;
+    color: #3daee9;
+    border-bottom: 2px solid #3daee9;
+}
+QTabBar::tab:hover {
+    color: #eff0f1;
+}
+QGroupBox {
+    border: 1px solid #31363b;
+    border-radius: 8px;
+    margin-top: 18px;
+    padding-top: 14px;
+    font-weight: bold;
+    color: #3daee9;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 12px;
+    padding: 0 6px;
+}
+QPushButton {
+    background-color: #31363b;
+    border: 1px solid #474f56;
+    border-radius: 6px;
+    padding: 7px 16px;
+    color: #eff0f1;
+    font-weight: 500;
+}
+QPushButton:hover {
+    background-color: #3daee9;
+    border-color: #3daee9;
+    color: #ffffff;
+}
+QPushButton:pressed {
+    background-color: #2b84b5;
+}
+QPushButton#primaryBtn {
+    background-color: #1b668f;
+    border: 1px solid #3daee9;
+    color: #ffffff;
+    font-weight: bold;
+}
+QPushButton#primaryBtn:hover {
+    background-color: #3daee9;
+}
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #31363b;
+    border-radius: 3px;
+}
+QSlider::sub-page:horizontal {
+    background: #3daee9;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #eff0f1;
+    width: 16px;
+    margin-top: -5px;
+    margin-bottom: -5px;
+    border-radius: 8px;
+}
+QSlider::handle:horizontal:hover {
+    background: #3daee9;
+}
+QTableWidget {
+    background-color: #1e222b;
+    border: 1px solid #31363b;
+    border-radius: 6px;
+    gridline-color: #31363b;
+}
+QTableWidget::item:selected {
+    background-color: #1b668f;
+}
+QHeaderView::section {
+    background-color: #2b2e33;
+    padding: 6px;
+    border: 1px solid #31363b;
+    font-weight: bold;
+}
+QLineEdit, QComboBox, QSpinBox {
+    background-color: #1e222b;
+    border: 1px solid #474f56;
+    border-radius: 6px;
+    padding: 6px;
+    color: #eff0f1;
+}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
+    border: 1px solid #3daee9;
+}
+"""
+
+class LayoutCard(QFrame):
+    def __init__(self, layout_id, title, desc, parent_window):
+        super().__init__()
+        self.layout_id = layout_id
+        self.parent_window = parent_window
+        self.setFrameShape(QFrame.StyledPanel)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet("""
+            QFrame {
+                background-color: #282c34;
+                border: 2px solid #3a3f4b;
+                border-radius: 8px;
+                padding: 10px;
+            }
+            QFrame:hover {
+                border-color: #3daee9;
+                background-color: #2c323c;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        self.title_lbl = QLabel(title)
+        self.title_lbl.setFont(QFont("SansSerif", 11, QFont.Bold))
+        self.desc_lbl = QLabel(desc)
+        self.desc_lbl.setStyleSheet("color: #a0a6ad; font-size: 9pt;")
+        self.desc_lbl.setWordWrap(True)
+
+        layout.addWidget(self.title_lbl)
+        layout.addWidget(self.desc_lbl)
+
+    def mousePressEvent(self, event):
+        self.parent_window.select_default_layout(self.layout_id)
+
+    def set_selected(self, selected):
+        if selected:
+            self.setStyleSheet("""
+                QFrame {
+                    background-color: #1e3a50;
+                    border: 2px solid #3daee9;
+                    border-radius: 8px;
+                    padding: 10px;
+                }
+            """)
+            self.title_lbl.setStyleSheet("color: #3daee9;")
+        else:
+            self.setStyleSheet("""
+                QFrame {
+                    background-color: #282c34;
+                    border: 2px solid #3a3f4b;
+                    border-radius: 8px;
+                    padding: 10px;
+                }
+                QFrame:hover {
+                    border-color: #3daee9;
+                    background-color: #2c323c;
+                }
+            """)
+            self.title_lbl.setStyleSheet("color: #eff0f1;")
+
+class TesseraControlWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Tessera Control Center — KDE Plasma 6")
+        self.resize(860, 680)
+        self.setStyleSheet(APP_STYLESHEET)
+
+        self.cfg_mgr = ConfigManager()
+        self.layout_cards = {}
+
+        self.init_ui()
+        self.load_settings_into_ui()
+
+    def init_ui(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_vbox = QVBoxLayout(central_widget)
+        main_vbox.setContentsMargins(16, 16, 16, 16)
+        main_vbox.setSpacing(12)
+
+        # Header Bar
+        header_hbox = QHBoxLayout()
+        title_vbox = QVBoxLayout()
+        app_title = QLabel("TESSERA CONTROL CENTER")
+        app_title.setFont(QFont("SansSerif", 14, QFont.Bold))
+        app_title.setStyleSheet("color: #3daee9; letter-spacing: 1px;")
+        app_sub = QLabel("Dynamic Tiling Window Manager for KDE Plasma 6 (NVIDIA Hardware Optimized)")
+        app_sub.setStyleSheet("color: #8c939d; font-size: 9pt;")
+        title_vbox.addWidget(app_title)
+        title_vbox.addWidget(app_sub)
+
+        header_hbox.addLayout(title_vbox)
+        header_hbox.addStretch()
+
+        self.enable_switch = QCheckBox("Enable Tiling")
+        self.enable_switch.setFont(QFont("SansSerif", 11, QFont.Bold))
+        self.enable_switch.setChecked(True)
+        self.enable_switch.toggled.connect(self.on_enable_toggled)
+        header_hbox.addWidget(self.enable_switch)
+
+        main_vbox.addLayout(header_hbox)
+
+        # Tabs
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self.create_layouts_tab(), "📐 Layouts")
+        self.tabs.addTab(self.create_gaps_tab(), "📏 Gaps & Geometry")
+        self.tabs.addTab(self.create_workspaces_tab(), "🖥️ Workspaces")
+        self.tabs.addTab(self.create_rules_tab(), "🎯 Window Rules")
+        self.tabs.addTab(self.create_nvidia_tab(), "⚡ NVIDIA & Performance")
+        self.tabs.addTab(self.create_shortcuts_tab(), "⌨️ Shortcuts")
+        self.tabs.addTab(self.create_presets_tab(), "✨ Presets")
+
+        main_vbox.addWidget(self.tabs)
+
+        # Footer Actions
+        footer_hbox = QHBoxLayout()
+        self.status_lbl = QLabel("Ready")
+        self.status_lbl.setStyleSheet("color: #6c757d; font-style: italic;")
+        footer_hbox.addWidget(self.status_lbl)
+        footer_hbox.addStretch()
+
+        self.reload_kwin_btn = QPushButton("🔄 Retile Now")
+        self.reload_kwin_btn.clicked.connect(self.retile_kwin)
+        footer_hbox.addWidget(self.reload_kwin_btn)
+
+        self.save_btn = QPushButton("💾 Save & Apply")
+        self.save_btn.setObjectName("primaryBtn")
+        self.save_btn.clicked.connect(self.save_and_apply)
+        footer_hbox.addWidget(self.save_btn)
+
+        main_vbox.addLayout(footer_hbox)
+
+    # -------------------------------------------------------------
+    # TAB 1: Layouts
+    # -------------------------------------------------------------
+    def create_layouts_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        lbl = QLabel("Select Default Tiling Layout:")
+        lbl.setFont(QFont("SansSerif", 11, QFont.Bold))
+        layout.addWidget(lbl)
+
+        grid = QGridLayout()
+        grid.setSpacing(12)
+
+        card_defs = [
+            ("master-stack", "Master + Stack", "Primary master pane on left; secondary windows stacked vertically on right."),
+            ("bsp", "Binary Split (BSP)", "Alternates horizontal and vertical partitions recursively (Hyprland / Dwindle style)."),
+            ("columns", "Columns", "Arranges all open windows into equal or weighted vertical columns."),
+            ("rows", "Rows", "Arranges windows in horizontal bands across the screen."),
+            ("monocle", "Monocle (Deck)", "Full-screen working area for focused window with rapid cycle switching."),
+            ("floating", "Floating Only", "Disables automatic placement; preserves manual floating window positions.")
+        ]
+
+        row = 0
+        col = 0
+        for lid, title, desc in card_defs:
+            card = LayoutCard(lid, title, desc, self)
+            self.layout_cards[lid] = card
+            grid.addWidget(card, row, col)
+            col += 1
+            if col > 1:
+                col = 0
+                row += 1
+
+        layout.addLayout(grid)
+
+        # Behavior options
+        grp = QGroupBox("Layout Behavior")
+        grp_layout = QVBoxLayout(grp)
+        self.tile_new_chk = QCheckBox("Automatically tile newly spawned windows")
+        self.ignore_minimized_chk = QCheckBox("Ignore minimized windows during tile redistribution")
+        grp_layout.addWidget(self.tile_new_chk)
+        grp_layout.addWidget(self.ignore_minimized_chk)
+        layout.addWidget(grp)
+
+        layout.addStretch()
+        return tab
+
+    def select_default_layout(self, layout_id):
+        self.cfg_mgr.config["defaultLayout"] = layout_id
+        for lid, card in self.layout_cards.items():
+            card.set_selected(lid == layout_id)
+        self.refresh_preview()
+        self.set_status(f"Default layout set to: {layout_id}")
+
+    # -------------------------------------------------------------
+    # TAB 2: Gaps & Geometry (With Live Preview)
+    # -------------------------------------------------------------
+    def create_gaps_tab(self):
+        tab = QWidget()
+        layout = QHBoxLayout(tab)
+        layout.setSpacing(16)
+
+        # Controls VBox
+        ctrl_vbox = QVBoxLayout()
+
+        # Inner Gap
+        inner_grp = QGroupBox("Inner Gap (Spacing between windows)")
+        ig_layout = QVBoxLayout(inner_grp)
+        self.inner_gap_val = QLabel("8 px")
+        self.inner_gap_val.setStyleSheet("color: #3daee9; font-weight: bold;")
+        self.inner_gap_slider = QSlider(Qt.Horizontal)
+        self.inner_gap_slider.setRange(0, 40)
+        self.inner_gap_slider.setValue(8)
+        self.inner_gap_slider.valueChanged.connect(self.on_inner_gap_changed)
+        ig_layout.addWidget(self.inner_gap_val)
+        ig_layout.addWidget(self.inner_gap_slider)
+        ctrl_vbox.addWidget(inner_grp)
+
+        # Outer Gap
+        outer_grp = QGroupBox("Outer Gap (Screen edge margin)")
+        og_layout = QVBoxLayout(outer_grp)
+        self.outer_gap_val = QLabel("10 px")
+        self.outer_gap_val.setStyleSheet("color: #3daee9; font-weight: bold;")
+        self.outer_gap_slider = QSlider(Qt.Horizontal)
+        self.outer_gap_slider.setRange(0, 60)
+        self.outer_gap_slider.setValue(10)
+        self.outer_gap_slider.valueChanged.connect(self.on_outer_gap_changed)
+        og_layout.addWidget(self.outer_gap_val)
+        og_layout.addWidget(self.outer_gap_slider)
+        ctrl_vbox.addWidget(outer_grp)
+
+        # Master Ratio
+        ratio_grp = QGroupBox("Master Ratio (%)")
+        rg_layout = QVBoxLayout(ratio_grp)
+        self.master_ratio_val = QLabel("55%")
+        self.master_ratio_val.setStyleSheet("color: #3daee9; font-weight: bold;")
+        self.master_ratio_slider = QSlider(Qt.Horizontal)
+        self.master_ratio_slider.setRange(20, 80)
+        self.master_ratio_slider.setValue(55)
+        self.master_ratio_slider.valueChanged.connect(self.on_master_ratio_changed)
+        rg_layout.addWidget(self.master_ratio_val)
+        rg_layout.addWidget(self.master_ratio_slider)
+        ctrl_vbox.addWidget(ratio_grp)
+
+        # Master Count
+        count_grp = QGroupBox("Master Windows Count")
+        cg_layout = QHBoxLayout(count_grp)
+        self.master_count_spin = QSpinBox()
+        self.master_count_spin.setRange(1, 5)
+        self.master_count_spin.setValue(1)
+        self.master_count_spin.valueChanged.connect(self.on_master_count_changed)
+        cg_layout.addWidget(QLabel("Active Masters:"))
+        cg_layout.addWidget(self.master_count_spin)
+        ctrl_vbox.addWidget(count_grp)
+
+        ctrl_vbox.addStretch()
+        layout.addLayout(ctrl_vbox, 1)
+
+        # Live Preview VBox
+        preview_vbox = QVBoxLayout()
+        p_title = QLabel("LIVE DESKTOP PREVIEW")
+        p_title.setFont(QFont("SansSerif", 10, QFont.Bold))
+        p_title.setStyleSheet("color: #3daee9;")
+        preview_vbox.addWidget(p_title)
+
+        self.preview_widget = LiveDesktopPreview()
+        preview_vbox.addWidget(self.preview_widget, 1)
+
+        p_hint = QLabel("Adjust sliders above to observe spacing and margins in real-time.")
+        p_hint.setStyleSheet("color: #6c757d; font-size: 8.5pt;")
+        p_hint.setWordWrap(True)
+        preview_vbox.addWidget(p_hint)
+
+        layout.addLayout(preview_vbox, 1)
+        return tab
+
+    def on_inner_gap_changed(self, val):
+        self.inner_gap_val.setText(f"{val} px")
+        self.cfg_mgr.config["gapInner"] = val
+        self.refresh_preview()
+
+    def on_outer_gap_changed(self, val):
+        self.outer_gap_val.setText(f"{val} px")
+        self.cfg_mgr.config["gapOuter"] = val
+        self.refresh_preview()
+
+    def on_master_ratio_changed(self, val):
+        self.master_ratio_val.setText(f"{val}%")
+        self.cfg_mgr.config["masterRatio"] = val / 100.0
+        self.refresh_preview()
+
+    def on_master_count_changed(self, val):
+        self.cfg_mgr.config["masterCount"] = val
+        self.refresh_preview()
+
+    def refresh_preview(self):
+        self.preview_widget.update_params(
+            self.cfg_mgr.config.get("defaultLayout", "master-stack"),
+            self.cfg_mgr.config.get("gapInner", 8),
+            self.cfg_mgr.config.get("gapOuter", 10),
+            self.cfg_mgr.config.get("masterRatio", 0.55),
+            self.cfg_mgr.config.get("masterCount", 1)
+        )
+
+    # -------------------------------------------------------------
+    # TAB 3: Workspaces
+    # -------------------------------------------------------------
+    def create_workspaces_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        self.per_desktop_chk = QCheckBox("Enable Independent Layouts per Virtual Desktop")
+        self.per_desktop_chk.setChecked(True)
+        layout.addWidget(self.per_desktop_chk)
+
+        grp = QGroupBox("Virtual Desktop Layout Assignments")
+        grp_layout = QGridLayout(grp)
+        grp_layout.setSpacing(12)
+
+        self.desk_combos = {}
+        layouts_list = ["master-stack", "bsp", "columns", "rows", "monocle", "floating"]
+
+        for d in range(1, 7):
+            lbl = QLabel(f"Virtual Desktop {d}:")
+            lbl.setFont(QFont("SansSerif", 10, QFont.Bold))
+            cb = QComboBox()
+            cb.addItems(layouts_list)
+            self.desk_combos[str(d)] = cb
+
+            row = (d - 1) // 2
+            col = ((d - 1) % 2) * 2
+            grp_layout.addWidget(lbl, row, col)
+            grp_layout.addWidget(cb, row, col + 1)
+
+        layout.addWidget(grp)
+        layout.addStretch()
+        return tab
+
+    # -------------------------------------------------------------
+    # TAB 4: Window Rules (Interactive)
+    # -------------------------------------------------------------
+    def create_rules_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Picker bar
+        picker_box = QGroupBox("Interactive Window Rule Creator")
+        p_layout = QHBoxLayout(picker_box)
+
+        self.capture_btn = QPushButton("🎯 Capture Active Window")
+        self.capture_btn.setStyleSheet("background-color: #2e5b88; font-weight: bold;")
+        self.capture_btn.clicked.connect(self.capture_active_window)
+        p_layout.addWidget(self.capture_btn)
+
+        self.rule_pattern_edit = QLineEdit()
+        self.rule_pattern_edit.setPlaceholderText("Window class or title (e.g. Steam, spotify, kcalc)")
+        p_layout.addWidget(self.rule_pattern_edit, 2)
+
+        self.rule_type_combo = QComboBox()
+        self.rule_type_combo.addItems(["class", "title"])
+        p_layout.addWidget(self.rule_type_combo)
+
+        self.rule_action_combo = QComboBox()
+        self.rule_action_combo.addItems(["float", "tile"])
+        p_layout.addWidget(self.rule_action_combo)
+
+        add_rule_btn = QPushButton("➕ Add Rule")
+        add_rule_btn.clicked.connect(self.add_custom_rule)
+        p_layout.addWidget(add_rule_btn)
+
+        layout.addWidget(picker_box)
+
+        # Rules Table
+        self.rules_table = QTableWidget(0, 3)
+        self.rules_table.setHorizontalHeaderLabels(["Pattern", "Match Type", "Action"])
+        self.rules_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.rules_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.rules_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        layout.addWidget(self.rules_table)
+
+        btn_bar = QHBoxLayout()
+        del_rule_btn = QPushButton("🗑️ Remove Selected Rule")
+        del_rule_btn.clicked.connect(self.remove_selected_rule)
+        btn_bar.addWidget(del_rule_btn)
+        btn_bar.addStretch()
+        layout.addLayout(btn_bar)
+
+        return tab
+
+    def capture_active_window(self):
+        self.set_status("Inspecting active window...")
+        info = get_active_window_info()
+        target = info.get("class") or info.get("title")
+        if target:
+            self.rule_pattern_edit.setText(target)
+            self.rule_type_combo.setCurrentText("class" if info.get("class") else "title")
+            self.set_status(f"Captured window: {target}")
+        else:
+            self.set_status("Focus the desired window, then click Capture again.")
+
+    def add_custom_rule(self):
+        pat = self.rule_pattern_edit.text().strip()
+        if not pat:
+            return
+        mtype = self.rule_type_combo.currentText()
+        act = self.rule_action_combo.currentText()
+
+        rules = self.cfg_mgr.config.get("customRules", [])
+        rules.append({"pattern": pat, "matchType": mtype, "action": act})
+        self.cfg_mgr.config["customRules"] = rules
+        self.populate_rules_table()
+        self.rule_pattern_edit.clear()
+        self.set_status(f"Added rule: {pat} -> {act}")
+
+    def remove_selected_rule(self):
+        row = self.rules_table.currentRow()
+        if row >= 0:
+            rules = self.cfg_mgr.config.get("customRules", [])
+            if row < len(rules):
+                del rules[row]
+                self.cfg_mgr.config["customRules"] = rules
+                self.populate_rules_table()
+                self.set_status("Rule removed")
+
+    def populate_rules_table(self):
+        rules = self.cfg_mgr.config.get("customRules", [])
+        self.rules_table.setRowCount(len(rules))
+        for r_idx, rule in enumerate(rules):
+            self.rules_table.setItem(r_idx, 0, QTableWidgetItem(rule.get("pattern", "")))
+            self.rules_table.setItem(r_idx, 1, QTableWidgetItem(rule.get("matchType", "class")))
+            act_item = QTableWidgetItem(rule.get("action", "float"))
+            if rule.get("action") == "float":
+                act_item.setForeground(QColor("#f67400"))
+            else:
+                act_item.setForeground(QColor("#27ae60"))
+            self.rules_table.setItem(r_idx, 2, act_item)
+
+    # -------------------------------------------------------------
+    # TAB 5: NVIDIA & Performance
+    # -------------------------------------------------------------
+    def create_nvidia_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        grp = QGroupBox("NVIDIA Proprietary Driver & Compositor Optimizations")
+        g_layout = QVBoxLayout(grp)
+
+        lbl_desc = QLabel(
+            "Tessera includes dedicated geometry pipeline tuning specifically for NVIDIA Pascal/Turing/Ampere/Ada "
+            "GPUs on KDE Plasma 6 (X11 & Wayland) to eliminate resize flicker, frame drops, and latency."
+        )
+        lbl_desc.setWordWrap(True)
+        lbl_desc.setStyleSheet("color: #a0a6ad; margin-bottom: 10px;")
+        g_layout.addWidget(lbl_desc)
+
+        # Debounce slider
+        db_box = QHBoxLayout()
+        db_label = QLabel("GPU Redraw Debounce:")
+        self.debounce_val = QLabel("60 ms")
+        self.debounce_val.setStyleSheet("color: #3daee9; font-weight: bold;")
+        self.debounce_slider = QSlider(Qt.Horizontal)
+        self.debounce_slider.setRange(20, 200)
+        self.debounce_slider.setValue(60)
+        self.debounce_slider.valueChanged.connect(self.on_debounce_changed)
+        db_box.addWidget(db_label)
+        db_box.addWidget(self.debounce_slider)
+        db_box.addWidget(self.debounce_val)
+        g_layout.addLayout(db_box)
+
+        self.smooth_resize_chk = QCheckBox("Smooth Animated Geometry (Uncheck for instant tear-free commit on NVIDIA X11)")
+        self.smooth_resize_chk.setChecked(False)
+        g_layout.addWidget(self.smooth_resize_chk)
+
+        self.osd_chk = QCheckBox("Show Native Plasma OSD when changing layouts or tiling states")
+        self.osd_chk.setChecked(True)
+        g_layout.addWidget(self.osd_chk)
+
+        layout.addWidget(grp)
+        layout.addStretch()
+        return tab
+
+    def on_debounce_changed(self, val):
+        self.debounce_val.setText(f"{val} ms")
+        self.cfg_mgr.config["nvidiaDebounceMs"] = val
+
+    # -------------------------------------------------------------
+    # TAB 6: Shortcuts Cheatsheet
+    # -------------------------------------------------------------
+    def create_shortcuts_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        lbl = QLabel("Native Plasma 6 Global Shortcuts:")
+        lbl.setFont(QFont("SansSerif", 11, QFont.Bold))
+        layout.addWidget(lbl)
+
+        table = QTableWidget(11, 2)
+        table.setHorizontalHeaderLabels(["Action", "Keybinding"])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+
+        shortcuts = [
+            ("Toggle Tiling Globally", "Meta + Shift + T"),
+            ("Cycle to Next Layout", "Meta + Space"),
+            ("Cycle to Previous Layout", "Meta + Shift + Space"),
+            ("Toggle Active Window Floating", "Meta + Shift + F"),
+            ("Focus Next Window", "Meta + J  /  Meta + Down"),
+            ("Focus Previous Window", "Meta + K  /  Meta + Up"),
+            ("Swap Window Forward", "Meta + Shift + J"),
+            ("Swap Window Backward", "Meta + Shift + K"),
+            ("Expand Master Ratio", "Meta + L  /  Meta + Right"),
+            ("Shrink Master Ratio", "Meta + H  /  Meta + Left"),
+            ("Force Retile Workspace", "Meta + Shift + R")
+        ]
+
+        for idx, (act, sc) in enumerate(shortcuts):
+            table.setItem(idx, 0, QTableWidgetItem(act))
+            sc_item = QTableWidgetItem(sc)
+            sc_item.setForeground(QColor("#3daee9"))
+            table.setItem(idx, 1, sc_item)
+
+        layout.addWidget(table)
+        hint = QLabel("Shortcuts can also be customized directly in KDE System Settings -> Shortcuts -> KWin.")
+        hint.setStyleSheet("color: #6c757d; font-size: 8.5pt;")
+        layout.addWidget(hint)
+        return tab
+
+    # -------------------------------------------------------------
+    # TAB 7: Presets
+    # -------------------------------------------------------------
+    def create_presets_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        lbl = QLabel("One-Click Configuration Presets:")
+        lbl.setFont(QFont("SansSerif", 11, QFont.Bold))
+        layout.addWidget(lbl)
+
+        presets = [
+            ("hyprland", "🌀 Hyprland Aesthetic", "Binary Split (BSP/Dwindle), 8px inner gaps, 12px outer gaps, snappy debounce."),
+            ("i3_classic", "🪟 i3 / Sway Classic", "Master-Stack, compact 4px gaps, 50% split ratio, minimal margins."),
+            ("amethyst", "🍎 macOS Amethyst", "Master-Stack, 10px inner gaps, 14px outer gaps, 55% master ratio."),
+            ("ultrawide", "🖥️ Ultrawide Productivity", "Master-Stack, 65% primary pane, 2 masters, 10px gaps for 21:9 or 32:9 monitors."),
+            ("zero_gap", "⚡ Zero Gap Hacker", "Master-Stack, 0px gaps, maximized screen estate.")
+        ]
+
+        for pid, p_title, p_desc in presets:
+            box = QGroupBox(p_title)
+            b_layout = QHBoxLayout(box)
+            b_desc = QLabel(p_desc)
+            b_desc.setWordWrap(True)
+            b_desc.setStyleSheet("color: #a0a6ad;")
+            b_btn = QPushButton("Apply Preset")
+            b_btn.clicked.connect(lambda checked, p=pid: self.apply_preset_action(p))
+            b_layout.addWidget(b_desc, 3)
+            b_layout.addWidget(b_btn, 1)
+            layout.addWidget(box)
+
+        layout.addStretch()
+        return tab
+
+    def apply_preset_action(self, preset_id):
+        if self.cfg_mgr.apply_preset(preset_id):
+            self.load_settings_into_ui()
+            self.set_status(f"Preset '{preset_id}' loaded and applied!")
+
+    # -------------------------------------------------------------
+    # State Management & Actions
+    # -------------------------------------------------------------
+    def on_enable_toggled(self, checked):
+        self.cfg_mgr.config["enableTiling"] = checked
+        self.set_status("Tiling enabled" if checked else "Tiling disabled")
+
+    def load_settings_into_ui(self):
+        cfg = self.cfg_mgr.config
+        self.enable_switch.setChecked(cfg.get("enableTiling", True))
+        self.inner_gap_slider.setValue(cfg.get("gapInner", 8))
+        self.outer_gap_slider.setValue(cfg.get("gapOuter", 10))
+        self.master_ratio_slider.setValue(int(cfg.get("masterRatio", 0.55) * 100))
+        self.master_count_spin.setValue(cfg.get("masterCount", 1))
+        self.debounce_slider.setValue(cfg.get("nvidiaDebounceMs", 60))
+        self.smooth_resize_chk.setChecked(cfg.get("smoothResize", False))
+        self.osd_chk.setChecked(cfg.get("showOsd", True))
+        self.tile_new_chk.setChecked(cfg.get("tileNewWindows", True))
+        self.ignore_minimized_chk.setChecked(cfg.get("ignoreMinimized", True))
+        self.per_desktop_chk.setChecked(cfg.get("perDesktopLayout", True))
+
+        dl = cfg.get("defaultLayout", "master-stack")
+        for lid, card in self.layout_cards.items():
+            card.set_selected(lid == dl)
+
+        desk_map = cfg.get("desktopLayouts", {})
+        for d, combo in self.desk_combos.items():
+            if d in desk_map:
+                combo.setCurrentText(desk_map[d])
+
+        self.populate_rules_table()
+        self.refresh_preview()
+
+    def save_and_apply(self):
+        cfg = self.cfg_mgr.config
+        cfg["enableTiling"] = self.enable_switch.isChecked()
+        cfg["gapInner"] = self.inner_gap_slider.value()
+        cfg["gapOuter"] = self.outer_gap_slider.value()
+        cfg["masterRatio"] = self.master_ratio_slider.value() / 100.0
+        cfg["masterCount"] = self.master_count_spin.value()
+        cfg["nvidiaDebounceMs"] = self.debounce_slider.value()
+        cfg["smoothResize"] = self.smooth_resize_chk.isChecked()
+        cfg["showOsd"] = self.osd_chk.isChecked()
+        cfg["tileNewWindows"] = self.tile_new_chk.isChecked()
+        cfg["ignoreMinimized"] = self.ignore_minimized_chk.isChecked()
+        cfg["perDesktopLayout"] = self.per_desktop_chk.isChecked()
+
+        desk_map = {}
+        for d, combo in self.desk_combos.items():
+            desk_map[d] = combo.currentText()
+        cfg["desktopLayouts"] = desk_map
+
+        self.cfg_mgr.save()
+        self.set_status("✓ Settings saved and synced with KWin!")
+
+    def retile_kwin(self):
+        self.save_and_apply()
+        try:
+            subprocess.run(["qdbus6", "org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"], check=False)
+            self.set_status("✓ Retile command sent to KWin.")
+        except Exception as e:
+            self.set_status(f"Error communicating with KWin: {e}")
+
+    def set_status(self, msg):
+        self.status_lbl.setText(msg)
+        self.status_lbl.setStyleSheet("color: #3daee9; font-weight: bold;")
+        QTimer.singleShot(4000, lambda: self.status_lbl.setStyleSheet("color: #6c757d; font-style: italic;"))
+
+def main():
+    app = QApplication(sys.argv)
+    window = TesseraControlWindow()
+    window.show()
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()

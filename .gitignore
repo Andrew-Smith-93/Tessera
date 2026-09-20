@@ -1,0 +1,15 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# User local configs
+.cache/
+*.log
+
+# Git / OS
+.DS_Store
+*.swp
+*~

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Tessera Control Center
+GenericName=Tiling Window Manager Settings
+Comment=Configure layouts, gaps, window rules, and NVIDIA optimizations for Tessera KWin 6 Tiling Manager
+Exec=tessera-settings
+Icon=tessera
+Terminal=false
+Type=Application
+Categories=Settings;DesktopSettings;Qt;KDE;
+StartupNotify=true
+Keywords=tiling;window manager;kwin;plasma;nvidia;layout;gaps;
