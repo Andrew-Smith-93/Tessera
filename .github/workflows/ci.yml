@@ -1,0 +1,45 @@
+name: CI & Packaging Quality Assurance
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Python Syntax & Bytecode Compilation
+        run: |
+          python3 -m py_compile tessera-control/*.py
+          echo "All Python modules compiled successfully."
+
+      - name: Validate JSON Manifests
+        run: |
+          python3 -c "import json; json.load(open('metadata.json'))"
+          echo "metadata.json is valid."
+
+      - name: Validate XML Config Schema
+        run: |
+          python3 -c "import xml.etree.ElementTree as ET; ET.parse('contents/config/main.xml')"
+          echo "contents/config/main.xml is valid XML."
+
+      - name: Run Layout Algorithm Tests
+        run: |
+          python3 tests/test_layouts.py
+
+      - name: Test .kwinscript Release Packaging
+        run: |
+          chmod +x package.sh
+          ./package.sh
+          ls -la dist/
+          unzip -t dist/*.kwinscript

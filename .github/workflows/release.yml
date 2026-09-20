@@ -1,0 +1,41 @@
+name: Publish Release & KDE Store Assets
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build Official .kwinscript Bundle
+        run: |
+          chmod +x package.sh
+          ./package.sh
+
+      - name: Package Standalone Control Center
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          tar -czf "dist/tessera-control-center-${TAG_NAME}.tar.gz" tessera-control/ desktop/ bin/ README.md LICENSE
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.kwinscript
+            dist/*.tar.gz
+          generate_release_notes: true
+          draft: false
+          prerelease: false

@@ -5,6 +5,10 @@ __pycache__/
 *.so
 .Python
 
+# Build outputs
+dist/
+build/
+
 # User local configs
 .cache/
 *.log

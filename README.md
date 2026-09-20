@@ -4,8 +4,31 @@
 
 [![Platform: KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6.3+-3daee9.svg?logo=kde&logoColor=white)](https://kde.org/plasma-desktop/)
 [![Hardware: NVIDIA GPU Optimized](https://img.shields.io/badge/Hardware-NVIDIA_Optimized-76b900.svg?logo=nvidia&logoColor=white)](https://www.nvidia.com/)
+[![KDE Store: Pling / Discover](https://img.shields.io/badge/KDE_Store-Get_New_Scripts-1d99f3.svg?logo=kde&logoColor=white)](https://store.kde.org/)
+[![Arch AUR: kwin-script-tessera-git](https://img.shields.io/badge/Arch_AUR-kwin--script--tessera--git-1793d1.svg?logo=arch-linux&logoColor=white)](packaging/aur/PKGBUILD)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Python: 3.9+](https://img.shields.io/badge/Control_Center-PyQt_/_Qt6-41cd52.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![CI: Passing](https://img.shields.io/badge/CI-Automated_Testing-success.svg)](.github/workflows/ci.yml)
+
+---
+
+## 🛍️ Distribution & App Store Availability
+
+Tessera is built for frictionless distribution across the entire Linux ecosystem:
+
+1. **KDE Plasma Built-in Store ("Get New Scripts...")**:
+   - Available directly inside your desktop: **System Settings** → **Window Management** → **KWin Scripts** → **"Get New Scripts..."**.
+   - Search for **Tessera** and click **Install**.
+   - See [docs/KDE_STORE_PUBLISHING.md](docs/KDE_STORE_PUBLISHING.md) for maintainer upload instructions.
+2. **Arch Linux (AUR)**:
+   ```bash
+   yay -S kwin-script-tessera-git
+   ```
+3. **Official `.kwinscript` Bundle**:
+   - Download the latest standalone bundle from [GitHub Releases](https://github.com/drew/tessera/releases).
+   - Install via terminal:
+     ```bash
+     kpackagetool6 --type KWin/Script --install tessera-v1.0.1.kwinscript
+     ```
 
 ---
 

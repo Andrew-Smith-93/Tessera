@@ -1,0 +1,48 @@
+# Maintainer: Drew <user@localhost>
+pkgname=kwin-script-tessera-git
+_pkgname=tessera
+pkgver=1.0.1.r0
+pkgrel=1
+pkgdesc="Modern, GPU-optimized dynamic tiling window manager for KDE Plasma 6 with intuitive visual configuration"
+arch=('any')
+url="https://github.com/drew/tessera"
+license=('GPL3')
+depends=('kwin' 'plasma-workspace' 'python' 'python-pyqt5')
+makedepends=('git')
+provides=('kwin-script-tessera')
+conflicts=('kwin-script-tessera')
+source=("git+https://github.com/drew/tessera.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$srcdir/$_pkgname"
+    printf "1.0.1.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+    cd "$srcdir/$_pkgname"
+
+    # Install KWin Script
+    install -d "$pkgdir/usr/share/kwin/scripts/tessera"
+    cp -r contents "$pkgdir/usr/share/kwin/scripts/tessera/"
+    install -Dm644 metadata.json "$pkgdir/usr/share/kwin/scripts/tessera/metadata.json"
+
+    # Install Control Center
+    install -d "$pkgdir/usr/lib/tessera"
+    cp -r tessera-control/* "$pkgdir/usr/lib/tessera/"
+
+    # Install CLI launcher
+    install -d "$pkgdir/usr/bin"
+    cat << 'EOF' > "$pkgdir/usr/bin/tessera-settings"
+#!/usr/bin/env bash
+python3 /usr/lib/tessera/tessera_settings.py "$@"
+EOF
+    chmod +x "$pkgdir/usr/bin/tessera-settings"
+
+    # Install Desktop launcher & Icon
+    install -Dm644 desktop/org.kde.tessera.desktop "$pkgdir/usr/share/applications/org.kde.tessera.desktop"
+    install -Dm644 desktop/tessera.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/tessera.svg"
+
+    # Install License
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
