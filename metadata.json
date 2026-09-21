@@ -19,8 +19,9 @@
         ]
     },
     "X-Plasma-API": "declarativescript",
-    "X-Plasma-MainScript": "ui/tessera.qml",
+    "X-Plasma-MainScript": "ui/main.qml",
     "X-Plasma-API-Minimum-Version": "6.0",
     "KPackageStructure": "KWin/Script",
-    "X-KDE-PluginKeyword": "tessera"
+    "X-KDE-PluginKeyword": "tessera",
+    "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted"
 }
