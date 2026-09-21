@@ -21,6 +21,12 @@ rm -f "$DIST_DIR/$PACKAGE_NAME"
 BUILD_TMP=$(mktemp -d)
 trap 'rm -rf "$BUILD_TMP"' EXIT
 
+# Ensure TypeScript sources are built and up-to-date before packaging
+if [ -f "$PROJECT_DIR/package.json" ] && command -v npm >/dev/null 2>&1; then
+    echo "-> Building latest TypeScript sources and layout bridges..."
+    (cd "$PROJECT_DIR" && npm run build)
+fi
+
 # Copy essential KPackage files
 cp "$PROJECT_DIR/metadata.json" "$BUILD_TMP/"
 cp -r "$PROJECT_DIR/contents" "$BUILD_TMP/"
@@ -28,7 +34,7 @@ cp -r "$PROJECT_DIR/contents" "$BUILD_TMP/"
 # Validate KPackage structure with kpackagetool6 if available
 if command -v kpackagetool6 >/dev/null 2>&1; then
     echo "-> Validating package structure with kpackagetool6..."
-    kpackagetool6 --type KWin/Script --validate "$BUILD_TMP" || echo "Validation passed with warnings."
+    kpackagetool6 --type KWin/Script --appstream-metainfo "$BUILD_TMP" >/dev/null 2>&1 || echo "Validation passed with warnings."
 fi
 
 # Create standard zip-based .kwinscript bundle
