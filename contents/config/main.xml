@@ -41,6 +41,9 @@
         <entry name="ignoreMinimized" type="Bool">
             <default>true</default>
         </entry>
+        <entry name="gameWindowPolicy" type="String">
+            <default>floating</default>
+        </entry>
         <entry name="floatFilter" type="String">
             <default>krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1,Steam,steam_app,steamwebhelper</default>
         </entry>

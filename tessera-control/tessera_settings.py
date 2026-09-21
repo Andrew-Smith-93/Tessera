@@ -619,6 +619,18 @@ class TesseraControlWindow(QMainWindow):
 
         layout.addWidget(picker_box)
 
+        # Game Window Policy
+        game_box = QGroupBox("Game Window Classification")
+        g_layout = QHBoxLayout(game_box)
+        g_label = QLabel("Default behavior for game windows (Steam games, Gamescope, borderless games):")
+        self.game_policy_combo = QComboBox()
+        self.game_policy_combo.addItems(["floating", "tiled"])
+        self.game_policy_combo.setCurrentText(self.cfg_mgr.config.get("gameWindowPolicy", "floating"))
+        self.game_policy_combo.currentTextChanged.connect(self.on_game_policy_changed)
+        g_layout.addWidget(g_label)
+        g_layout.addWidget(self.game_policy_combo)
+        layout.addWidget(game_box)
+
         # Rules Table
         self.rules_table = QTableWidget(0, 3)
         self.rules_table.setHorizontalHeaderLabels(["Pattern", "Match Type", "Action"])
@@ -646,6 +658,10 @@ class TesseraControlWindow(QMainWindow):
             self.set_status(f"Captured window: {target}")
         else:
             self.set_status("Focus the desired window, then click Capture again.")
+
+    def on_game_policy_changed(self, val):
+        self.cfg_mgr.config["gameWindowPolicy"] = val
+        self.set_status(f"Game window policy set to: {val}")
 
     def add_custom_rule(self):
         pat = self.rule_pattern_edit.text().strip()

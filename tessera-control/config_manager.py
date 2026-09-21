@@ -26,6 +26,7 @@ DEFAULT_CONFIG = {
     "animationDurationMs": 200,
     "smoothResize": False,
     "ignoreMinimized": True,
+    "gameWindowPolicy": "floating",
     "floatFilter": "tessera,tessera-settings,tessera_settings.py",
     "customRules": [],
     "desktopLayouts": {
@@ -89,6 +90,7 @@ class ConfigManager:
             write_val("animationDurationMs", self.config.get("animationDurationMs", 200), "int")
             write_val("smoothResize", "true" if self.config.get("smoothResize") else "false", "bool")
             write_val("showOsd", "true" if self.config.get("showOsd") else "false", "bool")
+            write_val("gameWindowPolicy", self.config.get("gameWindowPolicy", "floating"))
             write_val("floatFilter", self.config.get("floatFilter", "tessera,tessera-settings,tessera_settings.py"))
             write_val("customRulesJson", json.dumps(self.config.get("customRules", [])))
             write_val("desktopLayoutsJson", json.dumps(self.config.get("desktopLayouts", {})))

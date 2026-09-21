@@ -44,7 +44,25 @@ async function bundle() {
     treeShaking: true,
   });
 
-  console.log("✅ Successfully built standalone KWin Adapter and updated contents/code/layouts.js");
+  // 3. QML Rules Bridge for contents/code/rules.js
+  await esbuild.build({
+    entryPoints: [resolve(__dirname, "src/qml-rules-compat.ts")],
+    bundle: true,
+    platform: "neutral",
+    mainFields: ["module", "main"],
+    alias: packageAliases,
+    target: "es2022",
+    format: "iife",
+    globalName: "RulesEngineModule",
+    footer: {
+      js: "var RuleEngine = RulesEngineModule.RuleEngine;"
+    },
+    outfile: resolve(__dirname, "../../contents/code/rules.js"),
+    sourcemap: false,
+    treeShaking: true,
+  });
+
+  console.log("✅ Successfully built standalone KWin Adapter and updated contents/code/layouts.js and contents/code/rules.js");
 }
 
 bundle().catch((err) => {

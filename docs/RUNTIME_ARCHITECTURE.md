@@ -47,7 +47,33 @@
 
 ---
 
-## 3. Inactive TypeScript Adapter
+## 3. Generated Rules Bridge
+
+- **Authoritative File**: [`contents/code/rules.js`](../contents/code/rules.js)
+- **Role**: Authoritative window classification and filtering bridge consumed by `main.qml`:
+  ```qml
+  import "../code/rules.js" as RulesModule
+  ```
+- **Build Pipeline**: Generated automatically by `esbuild` from the TypeScript monorepo source ([`apps/kwin-adapter/src/qml-rules-compat.ts`](../apps/kwin-adapter/src/qml-rules-compat.ts)) which imports [`@tessera/rules-engine`](../packages/rules-engine).
+- **Exported API**:
+  - `RuleEngine.classify(window, options)`: Returns structured `{ classification, reason, source, matchedRuleId, matchedPattern }`.
+  - `RuleEngine.shouldFloat(window, userFilterString, customRulesJson, gameWindowPolicy)`: Boolean check for legacy/convenience callers.
+  - `RuleEngine.isIgnored(window)`: Boolean check for unmanaged and non-normal surfaces.
+  - `RuleEngine.defaultFloatPatterns`: Immutable list of patterns floated by default (Tessera Control Center).
+- **Game-Safe Classification & Precedence**:
+  1. Unmanaged / non-normal surfaces -> `ignored` (source: `runtime`).
+  2. True fullscreen (`fullScreen === true`) -> `fullscreen` (source: `runtime`; cannot be overridden by user tile rule).
+  3. Explicit user rules (custom rules / user filter) -> `user-rule` (can override default game recognition or fallback).
+  4. Fullscreen-like borderless state (`noBorder === true`, `maximizeMode === 0`, geometry covers >= 98% of physical output with tolerance <= 5px) -> `fullscreen-like` (source: `runtime`).
+  5. Default game recognition (`steam_app_*`, `gamescope`, custom patterns; excludes ordinary Steam client and generic Wine without game identity) -> follows `gameWindowPolicy` (default: `floating`, source: `default-rule`).
+  6. Dialog / transient -> `dialog` (source: `runtime`).
+  7. Default float patterns (Tessera Control Center) -> `floating` (source: `default-rule`).
+  8. Default fallback -> `tiled` (source: `fallback`).
+- **Integrity Guarantee**: Enforced in CI and release workflows via `npm run verify:artifacts` (`git diff --exit-code contents/code/layouts.js contents/code/rules.js`). Releases cannot package stale or drifted rule logic.
+
+---
+
+## 4. Inactive TypeScript Adapter
 
 - **Source Location**: [`apps/kwin-adapter/src/`](../apps/kwin-adapter/src/)
 - **Bundle Output**: `dist/kwin-adapter.js` (34 KB standalone self-executing bundle)
@@ -61,21 +87,20 @@
 
 ---
 
-## 4. Duplicated & Dead Candidate Files
+## 5. Duplicated & Dead Candidate Files
 
-The following files exist in the repository but represent legacy or duplicated code paths. Per Phase 0 constraints, they are preserved and documented here rather than prematurely deleted:
+The following files exist in the repository but represent legacy or duplicated code paths. Per Phase 0/1A constraints, they are preserved and documented here rather than prematurely deleted:
 
 | File | Status | Rationale |
 | :--- | :--- | :--- |
 | `contents/code/main.js` | **Dead Candidate** | Legacy 1118-line monolithic script containing obsolete layout and rule code. Ignored by KWin when running in `declarativescript` mode (`ui/main.qml`). |
-| `contents/code/rules.js` | **Duplicated Candidate** | 105-line legacy rule engine superseded by `@tessera/rules-engine`. |
 | `contents/ui/tessera.qml` | **Dead Candidate** | Older alternative declarative entrypoint superseded by `contents/ui/main.qml`. |
 | `contents/ui/ZoneOverlay.qml`| **Dead Candidate** | Standalone QML overlay experiment; snap overlay is now rendered inline inside `main.qml`. |
 | `contents/ui/TopNotification.qml` | **Dead Candidate** | Custom notification overlay; superseded by native Plasma DBus OSD service. |
 
 ---
 
-## 5. Intended Migration Boundary
+## 6. Intended Migration Boundary
 
 Future convergence will separate concerns across strict architectural layers:
 
@@ -103,7 +128,7 @@ Future convergence will separate concerns across strict architectural layers:
 
 ---
 
-## 6. Critical Features to Preserve During Migration
+## 7. Critical Features to Preserve During Migration
 
 Any subsequent convergence or refactoring MUST preserve the following runtime invariants:
 

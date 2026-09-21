@@ -142,8 +142,8 @@ export class TilingEngine {
     if (this.config.ignoreMinimized && w.minimized) return false;
 
     const identity = this.toLogicalIdentity(w);
-    const classification = this.ruleEngine.classify(identity);
-    return classification === "tiled";
+    const result = this.ruleEngine.classify(identity);
+    return result.classification === "tiled";
   }
 
   /**

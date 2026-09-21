@@ -25,6 +25,7 @@ Item {
         nvidiaDebounceMs: 60,
         smoothResize: false,
         ignoreMinimized: true,
+        gameWindowPolicy: "floating",
         floatFilter: "tessera,tessera-settings,tessera_settings.py",
         customRulesJson: "[]",
         desktopLayoutsJson: "{}"
@@ -89,6 +90,7 @@ Item {
         config.overlayPollingMs = KWin.readConfig("overlayPollingMs", 16);
         config.smoothResize = KWin.readConfig("smoothResize", false);
         config.ignoreMinimized = KWin.readConfig("ignoreMinimized", true);
+        config.gameWindowPolicy = KWin.readConfig("gameWindowPolicy", "floating");
         config.floatFilter = KWin.readConfig("floatFilter", "tessera,tessera-settings,tessera_settings.py");
         config.customRulesJson = KWin.readConfig("customRulesJson", "[]");
         config.desktopLayoutsJson = KWin.readConfig("desktopLayoutsJson", "{}");
@@ -210,41 +212,17 @@ Item {
 
     function checkFilter(w) {
         if (!w) return false;
-        if (!w.managed) return false;
+        var screen = w.output || getScreenForPos(w.frameGeometry);
+        var screenArea = screen ? Workspace.clientArea(KWin.MaximizeArea, screen, Workspace.currentDesktop) : null;
+        var result = RulesModule.RuleEngine.classify(w, {
+            userFilterString: config.floatFilter,
+            customRules: config.customRulesJson,
+            gameWindowPolicy: config.gameWindowPolicy || "floating",
+            outputGeometry: screen ? screen.geometry : null,
+            outputUsableArea: screenArea
+        });
 
-        // Skip non-normal system surfaces (wallpaper, docks/panels, notifications)
-        if (w.desktopWindow || w.dock || w.splash || w.notification || w.onScreenDisplay) {
-            return false;
-        }
-        if (w.popupMenu || w.tooltip || w.specialWindow) {
-            return false;
-        }
-
-        // Only Tessera Control Center itself floats by default
-        var rClass = w.resourceClass ? w.resourceClass.toString().toLowerCase() : "";
-        var caption = w.caption ? w.caption.toString().toLowerCase() : "";
-        if (rClass.indexOf("tessera") !== -1 || caption.indexOf("tessera control center") !== -1) {
-            return false;
-        }
-
-        // Check custom rules if explicitly defined by user
-        if (config.customRulesJson && config.customRulesJson !== "[]") {
-            try {
-                var rules = JSON.parse(config.customRulesJson);
-                for (var r = 0; r < rules.length; r++) {
-                    var rule = rules[r];
-                    if (rule.matchType === "class" && rClass.indexOf(rule.pattern.toLowerCase()) !== -1) {
-                        return rule.action !== "float";
-                    }
-                    if (rule.matchType === "title" && caption.indexOf(rule.pattern.toLowerCase()) !== -1) {
-                        return rule.action !== "float";
-                    }
-                }
-            } catch (e) {}
-        }
-
-        // Everything else tiles (System Settings, pavucontrol, kcalc, steam, dialogs, etc.)
-        return true;
+        return result.classification === "tiled";
     }
 
     function getTileableWindows(screen) {
@@ -290,7 +268,7 @@ Item {
                     break;
                 }
             }
-            if (found || (savedMinimGeometries[pWid] && getScreenName(getScreenForPos(savedMinimGeometries[pWid])) === sName)) {
+            if (found || (savedMinimGeometries[pWid] && getScreenName(getScreenForPos(savedMinimGeometries[pWid])) === sName) || (savedTiledGeometries[pWid] && getScreenName(getScreenForPos(savedTiledGeometries[pWid])) === sName)) {
                 prunedPersistent.push(pWid);
             }
         }
