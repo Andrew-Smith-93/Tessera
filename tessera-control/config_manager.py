@@ -23,14 +23,8 @@ DEFAULT_CONFIG = {
     "nvidiaDebounceMs": 60,
     "smoothResize": False,
     "ignoreMinimized": True,
-    "floatFilter": "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1,Steam,steam_app,steamwebhelper",
-    "customRules": [
-        {"pattern": "kcalc", "matchType": "class", "action": "float"},
-        {"pattern": "systemsettings", "matchType": "class", "action": "float"},
-        {"pattern": "spectacle", "matchType": "class", "action": "float"},
-        {"pattern": "Steam", "matchType": "class", "action": "float"},
-        {"pattern": "pavucontrol", "matchType": "class", "action": "float"}
-    ],
+    "floatFilter": "tessera,tessera-settings,tessera_settings.py",
+    "customRules": [],
     "desktopLayouts": {
         "1": "master-stack",
         "2": "bsp",
@@ -89,62 +83,17 @@ class ConfigManager:
             write_val("nvidiaDebounceMs", self.config.get("nvidiaDebounceMs", 60), "int")
             write_val("smoothResize", "true" if self.config.get("smoothResize") else "false", "bool")
             write_val("showOsd", "true" if self.config.get("showOsd") else "false", "bool")
-            write_val("floatFilter", self.config.get("floatFilter", ""))
+            write_val("floatFilter", self.config.get("floatFilter", "tessera,tessera-settings,tessera_settings.py"))
             write_val("customRulesJson", json.dumps(self.config.get("customRules", [])))
             write_val("desktopLayoutsJson", json.dumps(self.config.get("desktopLayouts", {})))
 
             # Signal KWin to reload configuration
             subprocess.run(["qdbus6", "org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+            # Also invoke shortcut directly to force immediate script recomputation
+            subprocess.run(["qdbus6", "org.kde.kglobalaccel", "/component/kwin",
+                            "org.kde.kglobalaccel.Component.invokeShortcut", "Tessera: Retile Current Workspace"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
         except Exception as e:
             print(f"[Tessera Config] Error syncing to KWin: {e}")
-
-    def apply_preset(self, preset_name):
-        presets = {
-            "hyprland": {
-                "defaultLayout": "bsp",
-                "gapInner": 8,
-                "gapOuter": 12,
-                "masterRatio": 0.50,
-                "nvidiaDebounceMs": 50,
-                "showOsd": True
-            },
-            "i3_classic": {
-                "defaultLayout": "master-stack",
-                "gapInner": 4,
-                "gapOuter": 4,
-                "masterRatio": 0.50,
-                "nvidiaDebounceMs": 40,
-                "showOsd": True
-            },
-            "amethyst": {
-                "defaultLayout": "master-stack",
-                "gapInner": 10,
-                "gapOuter": 14,
-                "masterRatio": 0.55,
-                "nvidiaDebounceMs": 60,
-                "showOsd": True
-            },
-            "ultrawide": {
-                "defaultLayout": "master-stack",
-                "gapInner": 10,
-                "gapOuter": 12,
-                "masterRatio": 0.65,
-                "masterCount": 2,
-                "nvidiaDebounceMs": 60,
-                "showOsd": True
-            },
-            "zero_gap": {
-                "defaultLayout": "master-stack",
-                "gapInner": 0,
-                "gapOuter": 0,
-                "masterRatio": 0.50,
-                "nvidiaDebounceMs": 40,
-                "showOsd": False
-            }
-        }
-        if preset_name in presets:
-            self.config.update(presets[preset_name])
-            self.save()
-            return True
-        return False

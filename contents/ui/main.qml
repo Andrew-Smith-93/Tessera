@@ -9,7 +9,9 @@ import "../code/rules.js" as RulesModule
 Item {
     id: root
 
-    // Configuration Properties
+    // =========================================================================
+    // 1. Configuration Properties
+    // =========================================================================
     property var config: ({
         enableTiling: true,
         defaultLayout: "master-stack",
@@ -23,58 +25,52 @@ Item {
         nvidiaDebounceMs: 60,
         smoothResize: false,
         ignoreMinimized: true,
-        floatFilter: "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1,Steam,steam_app,steamwebhelper,tessera,tessera-settings,tessera_settings.py",
+        floatFilter: "tessera,tessera-settings,tessera_settings.py",
         customRulesJson: "[]",
         desktopLayoutsJson: "{}"
     })
 
-    // State Tracking
+    // =========================================================================
+    // 2. State Tracking
+    // =========================================================================
     property var desktopLayouts: ({})
-    property var floatingWindows: ({}) // window internalId -> boolean
+    property var floatingWindows: ({})   // windowId -> boolean (manual float)
+    property var preTiledWindows: ({})   // windowId -> boolean (single-window snap)
+    property var screenTiledWindows: ({}) // screenName -> array of windows
     property var currentLayoutList: ["master-stack", "bsp", "columns", "rows", "monocle", "floating"]
     property bool isArranging: false
     property var currentDraggingWindow: null
 
-    // References to overlay and HUD windows
-    property var overlayItem: null
-    property var hudItem: null
-
-    // Visual Drag & Drop Snap Zones Overlay Loader
-    Loader {
-        id: zoneOverlayLoader
-        source: Qt.resolvedUrl("ZoneOverlay.qml")
-        onLoaded: {
-            console.log("[Tessera] ZoneOverlay Loaded successfully!");
-            root.overlayItem = item;
-            if (item) {
-                item.layoutSelected.connect(function(layoutName) {
-                    root.setActiveLayout(layoutName);
-                });
-            }
-        }
-        onStatusChanged: {
-            if (status === Loader.Error) {
-                console.error("[Tessera] ZoneOverlay Loader Error: " + errorString());
-            }
-        }
+    function log(msg) {
+        console.log("[Tessera] " + msg);
     }
 
-    // Top Notification HUD Loader
-    Loader {
-        id: topHudLoader
-        source: Qt.resolvedUrl("TopNotification.qml")
-        onLoaded: {
-            console.log("[Tessera] TopNotification Loaded successfully!");
-            root.hudItem = item;
-        }
-        onStatusChanged: {
-            if (status === Loader.Error) {
-                console.error("[Tessera] TopNotification Loader Error: " + errorString());
-            }
-        }
+    function getWindowId(w) {
+        if (!w) return "";
+        return w.internalId ? w.internalId.toString() : (w.caption + "_" + (w.resourceClass || ""));
     }
 
-    // Load configuration from KWin KConfig
+    function getScreenName(scr) {
+        return scr ? (scr.name || "default") : "default";
+    }
+
+    function getScreenForPos(rect) {
+        var screens = Workspace.screens || [Workspace.activeScreen];
+        if (!screens || screens.length === 0) return Workspace.activeScreen;
+        var cx = rect.x + Math.floor((rect.width || 10) / 2);
+        var cy = rect.y + Math.floor((rect.height || 10) / 2);
+        for (var i = 0; i < screens.length; i++) {
+            var a = Workspace.clientArea(KWin.MaximizeArea, screens[i], Workspace.currentDesktop);
+            if (cx >= a.x && cx < a.x + a.width && cy >= a.y && cy < a.y + a.height) {
+                return screens[i];
+            }
+        }
+        return Workspace.activeScreen || screens[0];
+    }
+
+    // =========================================================================
+    // 3. Configuration Loading & Real-Time Synchronization
+    // =========================================================================
     function loadConfig() {
         config.enableTiling = KWin.readConfig("enableTiling", true);
         config.defaultLayout = KWin.readConfig("defaultLayout", "master-stack");
@@ -88,7 +84,7 @@ Item {
         config.nvidiaDebounceMs = KWin.readConfig("nvidiaDebounceMs", 60);
         config.smoothResize = KWin.readConfig("smoothResize", false);
         config.ignoreMinimized = KWin.readConfig("ignoreMinimized", true);
-        config.floatFilter = KWin.readConfig("floatFilter", "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,Steam,steam_app");
+        config.floatFilter = KWin.readConfig("floatFilter", "tessera,tessera-settings,tessera_settings.py");
         config.customRulesJson = KWin.readConfig("customRulesJson", "[]");
         config.desktopLayoutsJson = KWin.readConfig("desktopLayoutsJson", "{}");
 
@@ -98,95 +94,38 @@ Item {
             desktopLayouts = {};
         }
 
-        // Hook all existing windows for drag & drop zones
         var allWins = Workspace.stackingOrder || [];
         for (var i = 0; i < allWins.length; i++) {
             hookWindow(allWins[i]);
         }
 
-        log("Config loaded. Tiling active: " + config.enableTiling + " defaultLayout: " + config.defaultLayout);
-        retileNow();
+        log("Config reloaded live: gaps=" + config.gapInner + "/" + config.gapOuter + " ratio=" + config.masterRatio + " tiling=" + config.enableTiling);
     }
 
-    function log(msg) {
-        console.log("[Tessera] " + msg);
-    }
-
-    // Hook window move/resize events for visual snap zones
-    function hookWindow(w) {
-        if (!w || !w.managed || !w.normalWindow) return;
-        if (w._tesseraHooked) return;
-        w._tesseraHooked = true;
-
-        if (w.interactiveMoveResizeStarted) {
-            w.interactiveMoveResizeStarted.connect(function() {
-                currentDraggingWindow = w;
-                console.log("[Tessera] Drag started for: " + w.caption + ", overlay=" + root.overlayItem);
-                if (root.overlayItem) {
-                    root.overlayItem.showOverlay(getActiveLayout(), config.gapInner, config.gapOuter);
-                }
-            });
-        }
-        if (w.interactiveMoveResizeStepped) {
-            w.interactiveMoveResizeStepped.connect(function() {
-                if (root.overlayItem && root.overlayItem.visible) {
-                    root.overlayItem.updateHover(Workspace.cursorPos);
-                }
-            });
-        }
-        if (w.interactiveMoveResizeFinished) {
-            w.interactiveMoveResizeFinished.connect(function() {
-                console.log("[Tessera] Drag finished for: " + w.caption);
-                var target = root.overlayItem ? root.overlayItem.finishDrag() : null;
-                if (target && currentDraggingWindow) {
-                    var wid = currentDraggingWindow.internalId ? currentDraggingWindow.internalId.toString() : (currentDraggingWindow.caption + currentDraggingWindow.resourceClass);
-                    floatingWindows[wid] = true;
-
-                    if (target.type === "maximize") {
-                        if (typeof currentDraggingWindow.setMaximize === "function") {
-                            currentDraggingWindow.setMaximize(true, true);
-                        }
-                    } else {
-                        if (typeof currentDraggingWindow.setMaximize === "function") {
-                            currentDraggingWindow.setMaximize(false, false);
-                        }
-                        currentDraggingWindow.frameGeometry = Qt.rect(target.targetX, target.targetY, target.targetW, target.targetH);
-                    }
-                    if (root.hudItem) {
-                        root.hudItem.showMessage("Snapped: " + target.name);
-                    }
-                    osdCall.notify("Snapped: " + target.name, "preferences-desktop-virtual");
-                }
-                currentDraggingWindow = null;
-            });
-        }
-        if (w.minimizedChanged) {
-            w.minimizedChanged.connect(function() {
-                retileNow();
-            });
-        }
-        if (w.fullScreenChanged) {
-            w.fullScreenChanged.connect(function() {
-                retileNow();
-            });
+    // Listen to KWin options.configChanged (fires on org.kde.KWin.reconfigure)
+    Connections {
+        target: Options
+        function onConfigChanged() {
+            log("Options.configChanged signal detected!");
+            loadConfig();
+            retileNow();
         }
     }
 
-    // Native Plasma OSD notification
+    // Native Plasma OSD banner
     DBusCall {
         id: osdCall
         service: "org.kde.plasmashell"
         path: "/org/kde/osdService"
         method: "showText"
 
-        function notify(title, icon) {
+        function notify(text, icon) {
             if (!config.showOsd) return;
-            arguments = [icon || "preferences-desktop-virtual", "Tessera: " + title];
+            arguments = [icon || "preferences-desktop-virtual", "Tessera: " + text];
             call();
         }
     }
 
-    // Returns the active layout name for the current desktop
     function getCurrentDesktopKey() {
         if (!config.perDesktopLayout) return "global";
         var desk = Workspace.currentDesktop;
@@ -201,9 +140,6 @@ Item {
     function setActiveLayout(layoutName) {
         var key = getCurrentDesktopKey();
         desktopLayouts[key] = layoutName;
-        if (root.hudItem) {
-            root.hudItem.showMessage("LAYOUT: " + layoutName.toUpperCase());
-        }
         osdCall.notify("Layout: " + layoutName.toUpperCase(), "preferences-desktop-virtual");
         retileNow();
     }
@@ -221,7 +157,9 @@ Item {
         setActiveLayout(currentLayoutList[idx]);
     }
 
-    // Identify if a window belongs to current desktop
+    // =========================================================================
+    // 4. Window Filtering ("Tile Everything Period")
+    // =========================================================================
     function isWindowOnCurrentDesktop(w) {
         if (!w) return false;
         if (w.onAllDesktops) return true;
@@ -234,49 +172,90 @@ Item {
         return true;
     }
 
-    // Filter tileable windows for a screen
+    function checkFilter(w) {
+        if (!w) return false;
+        if (!w.managed) return false;
+
+        // Skip non-normal system surfaces (wallpaper, docks/panels, notifications)
+        if (w.desktopWindow || w.dock || w.splash || w.notification || w.onScreenDisplay) {
+            return false;
+        }
+        if (w.popupMenu || w.tooltip || w.specialWindow) {
+            return false;
+        }
+
+        // Only Tessera Control Center itself floats by default
+        var rClass = w.resourceClass ? w.resourceClass.toString().toLowerCase() : "";
+        var caption = w.caption ? w.caption.toString().toLowerCase() : "";
+        if (rClass.indexOf("tessera") !== -1 || caption.indexOf("tessera control center") !== -1) {
+            return false;
+        }
+
+        // Check custom rules if explicitly defined by user
+        if (config.customRulesJson && config.customRulesJson !== "[]") {
+            try {
+                var rules = JSON.parse(config.customRulesJson);
+                for (var r = 0; r < rules.length; r++) {
+                    var rule = rules[r];
+                    if (rule.matchType === "class" && rClass.indexOf(rule.pattern.toLowerCase()) !== -1) {
+                        return rule.action !== "float";
+                    }
+                    if (rule.matchType === "title" && caption.indexOf(rule.pattern.toLowerCase()) !== -1) {
+                        return rule.action !== "float";
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Everything else tiles (System Settings, pavucontrol, kcalc, steam, dialogs, etc.)
+        return true;
+    }
+
     function getTileableWindows(screen) {
         var allWindows = Workspace.stackingOrder || [];
         var tileables = [];
+        var sName = getScreenName(screen);
 
         for (var i = 0; i < allWindows.length; i++) {
             var w = allWindows[i];
-            if (!w) continue;
-
-            // Must be a managed normal window
-            if (!w.managed || !w.normalWindow || w.specialWindow) continue;
-
-            // Check desktop affinity
+            if (!w || !checkFilter(w)) continue;
             if (!isWindowOnCurrentDesktop(w)) continue;
 
-            // Check screen / monitor affinity
-            var sName = screen ? (screen.name || "") : "";
-            var wName = w.output ? (w.output.name || "") : "";
-            if (sName && wName && sName !== wName) continue;
+            // Check screen affinity
+            var wScreen = w.output || getScreenForPos(w.frameGeometry);
+            if (sName && getScreenName(wScreen) !== sName) continue;
 
-            // Ignore minimized if configured
             if (config.ignoreMinimized && w.minimized) continue;
 
-            // Check rule engine ignore
-            if (RulesModule.RuleEngine.isIgnored(w)) continue;
-
-            // Check if user set window to float
-            var wid = w.internalId ? w.internalId.toString() : (w.caption + w.resourceClass);
+            var wid = getWindowId(w);
             if (floatingWindows[wid] === true) continue;
-
-            // Check default rule engine float patterns
-            if (RulesModule.RuleEngine.shouldFloat(w, config.floatFilter, config.customRulesJson)) continue;
 
             tileables.push(w);
         }
 
-        return tileables;
+        // Maintain consistent window order
+        var existing = screenTiledWindows[sName] || [];
+        var ordered = [];
+        for (var e = 0; e < existing.length; e++) {
+            if (tileables.indexOf(existing[e]) !== -1) {
+                ordered.push(existing[e]);
+            }
+        }
+        for (var t = 0; t < tileables.length; t++) {
+            if (ordered.indexOf(tileables[t]) === -1) {
+                ordered.push(tileables[t]);
+            }
+        }
+
+        screenTiledWindows[sName] = ordered;
+        return ordered;
     }
 
-    // Core layout execution
+    // =========================================================================
+    // 5. Layout Calculation & Geometry Application
+    // =========================================================================
     function retileNow() {
-        if (!config.enableTiling) return;
-        if (isArranging) return;
+        if (!config.enableTiling || isArranging) return;
         isArranging = true;
 
         try {
@@ -297,6 +276,16 @@ Item {
 
                 var windows = getTileableWindows(screen);
                 if (windows.length === 0) continue;
+
+                // Handle single pre-tiled or single regular window
+                if (windows.length === 1) {
+                    var singleWin = windows[0];
+                    var swid = getWindowId(singleWin);
+                    if (preTiledWindows[swid] === true) {
+                        // Preserves user's manual half / quarter snap geometry
+                        continue;
+                    }
+                }
 
                 var options = {
                     gapInner: config.gapInner,
@@ -327,48 +316,663 @@ Item {
                         break;
                 }
 
-                // Apply geometries
                 for (var w = 0; w < windows.length && w < rects.length; w++) {
                     var win = windows[w];
                     var r = rects[w];
 
+                    if (win === currentDraggingWindow) continue;
+
                     if (typeof win.setMaximize === "function") {
                         win.setMaximize(false, false);
                     }
-
                     win.frameGeometry = Qt.rect(r.x, r.y, r.width, r.height);
                 }
             }
         } catch (err) {
-            console.error("[Tessera] Retile error: " + err);
+            log("Retile error: " + err);
         } finally {
             isArranging = false;
         }
     }
 
-    // Toggle tiling globally
+    // =========================================================================
+    // 6. KZones-Style Visual Snap Overlay (PlasmaCore.Dialog)
+    // =========================================================================
+    PlasmaCore.Dialog {
+        id: overlayDialog
+
+        title: "Tessera Snap Overlay"
+        location: PlasmaCore.Types.Desktop
+        type: PlasmaCore.Dialog.OnScreenDisplay
+        backgroundHints: PlasmaCore.Types.NoBackground
+        flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint | Qt.Popup
+        hideOnWindowDeactivate: true
+        visible: false
+        outputOnly: true
+        opacity: 1
+        width: Workspace.virtualScreenSize ? Workspace.virtualScreenSize.width : 1920
+        height: Workspace.virtualScreenSize ? Workspace.virtualScreenSize.height : 1080
+
+        property var snapZones: []
+        property int hoveredZoneIndex: -1
+        property var activeScreenGeom: Qt.rect(0, 0, 1920, 1080)
+
+        function showOverlay(w) {
+            visible = true;
+            setWidth(Workspace.virtualScreenSize.width);
+            setHeight(Workspace.virtualScreenSize.height);
+            hoveredZoneIndex = -1;
+            computeZones(w);
+        }
+
+        function hideOverlay() {
+            visible = false;
+            hoveredZoneIndex = -1;
+            snapZones = [];
+        }
+
+        function computeZones(w) {
+            var screen = w ? (w.output || getScreenForPos(w.frameGeometry)) : Workspace.activeScreen;
+            var area = Workspace.clientArea(KWin.MaximizeArea, screen, Workspace.currentDesktop);
+            activeScreenGeom = area;
+
+            var go = config.gapOuter;
+            var gi = config.gapInner;
+            var uw = area.width - (go * 2);
+            var uh = area.height - (go * 2);
+            var hw = Math.floor((uw - gi) / 2);
+            var hh = Math.floor((uh - gi) / 2);
+
+            var zones = [];
+
+            // 1. Top Maximize Bar Card
+            var barW = Math.min(800, Math.floor(uw * 0.6));
+            var barX = area.x + Math.floor((area.width - barW) / 2);
+            zones.push({
+                type: "maximize",
+                id: "maximize",
+                title: "Full Screen / Maximize",
+                badge: "🗖 Maximize",
+                desc: "Full Working Area",
+                slotIndex: -1,
+                rect: { x: barX, y: area.y + 10, width: barW, height: 56 },
+                targetRect: { x: area.x + go, y: area.y + go, width: uw, height: uh },
+                // Trigger bounds near top of screen
+                triggerX: area.x + 40,
+                triggerY: area.y,
+                triggerW: area.width - 80,
+                triggerH: 80
+            });
+
+            // 2. Left Half (Master Slot)
+            zones.push({
+                type: "half",
+                id: "left-half",
+                title: "Left Half (Master)",
+                badge: "⊞ Left Split",
+                desc: "50% Primary Pane",
+                slotIndex: 0,
+                rect: { x: area.x + go, y: area.y + go + 70, width: hw, height: uh - 70 },
+                targetRect: { x: area.x + go, y: area.y + go, width: hw, height: uh },
+                triggerX: area.x,
+                triggerY: area.y + 80,
+                triggerW: Math.floor(area.width / 2),
+                triggerH: area.height - 80
+            });
+
+            // 3. Right Half (Stack Slot)
+            zones.push({
+                type: "half",
+                id: "right-half",
+                title: "Right Half (Stack)",
+                badge: "▥ Right Split",
+                desc: "50% Secondary Pane",
+                slotIndex: 1,
+                rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: uh - 70 },
+                targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: uh },
+                triggerX: area.x + Math.floor(area.width / 2),
+                triggerY: area.y + 80,
+                triggerW: Math.floor(area.width / 2),
+                triggerH: area.height - 80
+            });
+
+            // 4. Top-Left Quarter
+            zones.push({
+                type: "quarter",
+                id: "top-left",
+                title: "Top-Left Quarter",
+                badge: "◤ Top-Left",
+                desc: "25% Quadrant",
+                slotIndex: 0,
+                rect: { x: area.x + go, y: area.y + go + 70, width: hw, height: Math.max(60, hh - 70) },
+                targetRect: { x: area.x + go, y: area.y + go, width: hw, height: hh },
+                triggerX: area.x,
+                triggerY: area.y,
+                triggerW: Math.floor(area.width * 0.22),
+                triggerH: Math.floor(area.height * 0.32)
+            });
+
+            // 5. Bottom-Left Quarter
+            zones.push({
+                type: "quarter",
+                id: "bottom-left",
+                title: "Bottom-Left Quarter",
+                badge: "◣ Bottom-Left",
+                desc: "25% Quadrant",
+                slotIndex: 0,
+                rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
+                targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
+                triggerX: area.x,
+                triggerY: area.y + Math.floor(area.height * 0.68),
+                triggerW: Math.floor(area.width * 0.22),
+                triggerH: Math.floor(area.height * 0.32)
+            });
+
+            // 6. Top-Right Quarter
+            zones.push({
+                type: "quarter",
+                id: "top-right",
+                title: "Top-Right Quarter",
+                badge: "◥ Top-Right",
+                desc: "25% Quadrant",
+                slotIndex: 1,
+                rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: Math.max(60, hh - 70) },
+                targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: hh },
+                triggerX: area.x + Math.floor(area.width * 0.78),
+                triggerY: area.y,
+                triggerW: Math.floor(area.width * 0.22),
+                triggerH: Math.floor(area.height * 0.32)
+            });
+
+            // 7. Bottom-Right Quarter
+            zones.push({
+                type: "quarter",
+                id: "bottom-right",
+                title: "Bottom-Right Quarter",
+                badge: "◢ Bottom-Right",
+                desc: "25% Quadrant",
+                slotIndex: 1,
+                rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
+                targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
+                triggerX: area.x + Math.floor(area.width * 0.78),
+                triggerY: area.y + Math.floor(area.height * 0.68),
+                triggerW: Math.floor(area.width * 0.22),
+                triggerH: Math.floor(area.height * 0.32)
+            });
+
+            snapZones = zones;
+        }
+
+        function updateHover(cursorPos) {
+            var matchedIndex = -1;
+
+            // 1. Check corner quarters first (higher priority in corners)
+            for (var i = 3; i < snapZones.length; i++) {
+                var qz = snapZones[i];
+                if (cursorPos.x >= qz.triggerX && cursorPos.x < qz.triggerX + qz.triggerW &&
+                    cursorPos.y >= qz.triggerY && cursorPos.y < qz.triggerY + qz.triggerH) {
+                    matchedIndex = i;
+                    break;
+                }
+            }
+
+            // 2. Check top maximize bar
+            if (matchedIndex === -1 && snapZones.length > 0) {
+                var mz = snapZones[0];
+                if (cursorPos.x >= mz.triggerX && cursorPos.x < mz.triggerX + mz.triggerW &&
+                    cursorPos.y >= mz.triggerY && cursorPos.y < mz.triggerY + mz.triggerH) {
+                    matchedIndex = 0;
+                }
+            }
+
+            // 3. Check Left/Right halves
+            if (matchedIndex === -1) {
+                if (snapZones.length > 1) {
+                    var lz = snapZones[1];
+                    if (cursorPos.x >= lz.triggerX && cursorPos.x < lz.triggerX + lz.triggerW &&
+                        cursorPos.y >= lz.triggerY && cursorPos.y < lz.triggerY + lz.triggerH) {
+                        matchedIndex = 1;
+                    }
+                }
+                if (snapZones.length > 2 && matchedIndex === -1) {
+                    var rz = snapZones[2];
+                    if (cursorPos.x >= rz.triggerX && cursorPos.x < rz.triggerX + rz.triggerW &&
+                        cursorPos.y >= rz.triggerY && cursorPos.y < rz.triggerY + rz.triggerH) {
+                        matchedIndex = 2;
+                    }
+                }
+            }
+
+            if (matchedIndex !== hoveredZoneIndex) {
+                hoveredZoneIndex = matchedIndex;
+                if (currentDraggingWindow && matchedIndex !== -1) {
+                    previewProspectiveLayout(currentDraggingWindow, snapZones[matchedIndex]);
+                }
+            }
+        }
+
+        function finishDrag() {
+            if (hoveredZoneIndex >= 0 && hoveredZoneIndex < snapZones.length) {
+                return snapZones[hoveredZoneIndex];
+            }
+            return null;
+        }
+
+        // Live preview of prospective window layout
+        function previewProspectiveLayout(draggedWin, targetZone) {
+            if (!draggedWin || !targetZone || isArranging) return;
+            var scr = draggedWin.output || getScreenForPos(draggedWin.frameGeometry);
+            var tiled = getTileableWindows(scr);
+            if (tiled.length <= 1) return;
+
+            var area = activeScreenGeom;
+            var go = config.gapOuter;
+            var gi = config.gapInner;
+            var uw = area.width - (go * 2);
+            var uh = area.height - (go * 2);
+            var hw = Math.floor((uw - gi) / 2);
+
+            for (var i = 0; i < tiled.length; i++) {
+                var other = tiled[i];
+                if (other === draggedWin) continue;
+
+                if (targetZone.id === "left-half") {
+                    // dragged window will take left half; other window previews on right half
+                    other.frameGeometry = Qt.rect(area.x + go + hw + gi, area.y + go, uw - hw - gi, uh);
+                } else if (targetZone.id === "right-half") {
+                    // dragged window will take right half; other window previews on left half
+                    other.frameGeometry = Qt.rect(area.x + go, area.y + go, hw, uh);
+                }
+            }
+        }
+
+        // =====================================================================
+        // Overlay Visual Representation (Exact LiveDesktopPreview Styling)
+        // =====================================================================
+        Item {
+            id: overlayContainer
+            anchors.fill: parent
+
+            // 30ms timer for continuous hover tracking without lag
+            Timer {
+                id: overlayTimer
+                interval: 30
+                running: overlayDialog.visible
+                repeat: true
+                onTriggered: {
+                    overlayDialog.updateHover(Workspace.cursorPos);
+                }
+            }
+
+            // Subtle dark scrim so zone cards have punchy contrast
+            Rectangle {
+                anchors.fill: parent
+                color: Qt.rgba(0, 0, 0, 0.20)
+            }
+
+            // Top Maximize Card
+            Repeater {
+                model: [overlayDialog.snapZones.length > 0 ? overlayDialog.snapZones[0] : null]
+
+                delegate: Rectangle {
+                    visible: modelData !== null
+                    x: modelData ? modelData.rect.x : 0
+                    y: modelData ? modelData.rect.y : 0
+                    width: modelData ? modelData.rect.width : 0
+                    height: modelData ? modelData.rect.height : 0
+                    radius: 8
+
+                    property bool isHovered: overlayDialog.hoveredZoneIndex === 0
+
+                    color: isHovered ? Qt.rgba(0.11, 0.40, 0.56, 0.85) : Qt.rgba(0.09, 0.11, 0.14, 0.75)
+                    border.color: isHovered ? "#3daee9" : Qt.rgba(0.31, 0.34, 0.38, 0.6)
+                    border.width: isHovered ? 3 : 2
+
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: 16
+
+                        Text {
+                            text: modelData ? modelData.badge : ""
+                            color: isHovered ? "#ffffff" : "#3daee9"
+                            font.bold: true
+                            font.pixelSize: isHovered ? 18 : 15
+                        }
+
+                        Text {
+                            text: isHovered ? "✓ Release to Maximize Window" : (modelData ? modelData.desc : "")
+                            color: isHovered ? "#ffffff" : "#a0a6ad"
+                            font.pixelSize: 12
+                            font.bold: isHovered
+                        }
+                    }
+                }
+            }
+
+            // Split Zones (Left Half & Right Half)
+            Repeater {
+                model: (overlayDialog.snapZones.length >= 3) ? [overlayDialog.snapZones[1], overlayDialog.snapZones[2]] : []
+
+                delegate: Rectangle {
+                    property int zoneIdx: index + 1
+                    property bool isHovered: overlayDialog.hoveredZoneIndex === zoneIdx
+
+                    x: modelData ? modelData.rect.x : 0
+                    y: modelData ? modelData.rect.y : 0
+                    width: modelData ? modelData.rect.width : 0
+                    height: modelData ? modelData.rect.height : 0
+                    radius: 8
+
+                    color: isHovered ? Qt.rgba(0.11, 0.40, 0.56, 0.65) : Qt.rgba(0.09, 0.11, 0.14, 0.60)
+                    border.color: isHovered ? "#3daee9" : Qt.rgba(0.31, 0.34, 0.38, 0.5)
+                    border.width: isHovered ? 3 : 2
+
+                    // Miniature Titlebar at top (LiveDesktopPreview aesthetic)
+                    Rectangle {
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        height: 26
+                        color: isHovered ? Qt.rgba(0.24, 0.68, 0.91, 0.35) : Qt.rgba(0, 0, 0, 0.4)
+                        topLeftRadius: 7
+                        topRightRadius: 7
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData ? modelData.title : ""
+                            color: isHovered ? "#ffffff" : "#a0a6ad"
+                            font.bold: true
+                            font.pixelSize: 11
+                        }
+                    }
+
+                    // Centered Badge
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 8
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: modelData ? modelData.badge : ""
+                            color: isHovered ? "#ffffff" : "#3daee9"
+                            font.bold: true
+                            font.pixelSize: isHovered ? 24 : 18
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: isHovered ? "✓ Release to Snap Here" : (modelData ? modelData.desc : "")
+                            color: isHovered ? "#3daee9" : "#6c757d"
+                            font.pixelSize: 12
+                            font.bold: isHovered
+                        }
+                    }
+                }
+            }
+
+            // Quarters in the 4 Corners (Rendered with glow when hovered)
+            Repeater {
+                model: (overlayDialog.snapZones.length >= 7) ? [overlayDialog.snapZones[3], overlayDialog.snapZones[4], overlayDialog.snapZones[5], overlayDialog.snapZones[6]] : []
+
+                delegate: Rectangle {
+                    property int quarterIdx: index + 3
+                    property bool isHovered: overlayDialog.hoveredZoneIndex === quarterIdx
+
+                    visible: isHovered // Subtle, lights up with glowing border and fill when corner is hovered
+                    x: modelData ? modelData.rect.x : 0
+                    y: modelData ? modelData.rect.y : 0
+                    width: modelData ? modelData.rect.width : 0
+                    height: modelData ? modelData.rect.height : 0
+                    radius: 8
+
+                    color: Qt.rgba(0.11, 0.40, 0.56, 0.75)
+                    border.color: "#3daee9"
+                    border.width: 3
+
+                    Rectangle {
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        height: 24
+                        color: Qt.rgba(0.24, 0.68, 0.91, 0.4)
+                        topLeftRadius: 7
+                        topRightRadius: 7
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData ? modelData.title : ""
+                            color: "#ffffff"
+                            font.bold: true
+                            font.pixelSize: 11
+                        }
+                    }
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 6
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: modelData ? modelData.badge : ""
+                            color: "#ffffff"
+                            font.bold: true
+                            font.pixelSize: 20
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: "✓ Release to Snap Quarter"
+                            color: "#3daee9"
+                            font.pixelSize: 12
+                            font.bold: true
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // =========================================================================
+    // 7. Window Event Hooks
+    // =========================================================================
+    function hookWindow(w) {
+        if (!w || !w.managed || !w.normalWindow) return;
+        if (w._tesseraHooked) return;
+        w._tesseraHooked = true;
+
+        if (w.interactiveMoveResizeStarted) {
+            w.interactiveMoveResizeStarted.connect(function() {
+                if (w.move && checkFilter(w)) {
+                    currentDraggingWindow = w;
+                    log("Drag started: " + w.caption);
+                    overlayDialog.showOverlay(w);
+                }
+            });
+        }
+
+        if (w.interactiveMoveResizeStepped) {
+            w.interactiveMoveResizeStepped.connect(function() {
+                if (overlayDialog.visible && currentDraggingWindow === w) {
+                    overlayDialog.updateHover(Workspace.cursorPos);
+                }
+            });
+        }
+
+        if (w.interactiveMoveResizeFinished) {
+            w.interactiveMoveResizeFinished.connect(function() {
+                if (currentDraggingWindow === w) {
+                    log("Drag finished: " + w.caption);
+                    var target = overlayDialog.finishDrag();
+                    if (target) {
+                        var wid = getWindowId(w);
+                        if (target.type === "maximize") {
+                            if (typeof w.setMaximize === "function") {
+                                w.setMaximize(true, true);
+                            }
+                            delete preTiledWindows[wid];
+                            floatingWindows[wid] = false;
+                            osdCall.notify("Maximized", "preferences-system-windows");
+                        } else {
+                            if (typeof w.setMaximize === "function") {
+                                w.setMaximize(false, false);
+                            }
+                            w.frameGeometry = Qt.rect(target.targetRect.x, target.targetRect.y, target.targetRect.width, target.targetRect.height);
+                            preTiledWindows[wid] = true;
+                            floatingWindows[wid] = false;
+
+                            // Update window order on this screen
+                            var scr = getScreenForPos(target.targetRect);
+                            var sName = getScreenName(scr);
+                            var currentWins = screenTiledWindows[sName] || [];
+                            var list = [];
+                            for (var k = 0; k < currentWins.length; k++) {
+                                if (currentWins[k] !== w) list.push(currentWins[k]);
+                            }
+                            if (target.slotIndex === 0) {
+                                list.unshift(w);
+                            } else {
+                                list.push(w);
+                            }
+                            screenTiledWindows[sName] = list;
+
+                            osdCall.notify("Snapped: " + target.title, "preferences-system-windows");
+                        }
+                    }
+                    overlayDialog.hideOverlay();
+                    currentDraggingWindow = null;
+                    retileNow();
+                }
+            });
+        }
+
+        if (w.minimizedChanged) {
+            w.minimizedChanged.connect(function() {
+                retileNow();
+            });
+        }
+
+        if (w.fullScreenChanged) {
+            w.fullScreenChanged.connect(function() {
+                retileNow();
+            });
+        }
+
+        if (w.maximizedAboutToChange) {
+            w.maximizedAboutToChange.connect(function(mode) {
+                if (isArranging) return;
+                var wid = getWindowId(w);
+                if (mode === 0) {
+                    floatingWindows[wid] = false;
+                    delete preTiledWindows[wid];
+                    retileNow();
+                }
+            });
+        }
+    }
+
+    // =========================================================================
+    // 8. Workspace Global Event Handling & Cooperative Unmaximize
+    // =========================================================================
+    Connections {
+        target: Workspace
+
+        // Automatic cooperative state transition for maximized windows
+        function onWindowActivated(activeWin) {
+            if (!activeWin || !activeWin.normalWindow || !config.enableTiling || isArranging) return;
+            if (!isWindowOnCurrentDesktop(activeWin)) return;
+
+            var s = activeWin.output || getScreenForPos(activeWin.frameGeometry);
+            var tiled = getTileableWindows(s);
+
+            if (tiled.length > 1) {
+                var changed = false;
+                for (var i = 0; i < tiled.length; i++) {
+                    var tw = tiled[i];
+                    if (tw !== activeWin && tw.maximizeMode !== 0) {
+                        if (typeof tw.setMaximize === "function") {
+                            tw.setMaximize(false, false);
+                        }
+                        var wid = getWindowId(tw);
+                        floatingWindows[wid] = false;
+                        delete preTiledWindows[wid];
+                        changed = true;
+                        log("Unmaximized window to cooperate: " + tw.caption);
+                    }
+                }
+                if (changed) {
+                    retileNow();
+                }
+            }
+        }
+
+        function onWindowAdded(w) {
+            if (!w || !w.normalWindow || !w.managed) return;
+            hookWindow(w);
+
+            if (config.tileNewWindows) {
+                var s = w.output || getScreenForPos(w.frameGeometry);
+                var tiled = getTileableWindows(s);
+                if (tiled.length > 1) {
+                    for (var i = 0; i < tiled.length; i++) {
+                        if (tiled[i].maximizeMode !== 0) {
+                            if (typeof tiled[i].setMaximize === "function") {
+                                tiled[i].setMaximize(false, false);
+                            }
+                            var wid = getWindowId(tiled[i]);
+                            floatingWindows[wid] = false;
+                            delete preTiledWindows[wid];
+                        }
+                    }
+                }
+                retileNow();
+            }
+        }
+
+        function onWindowRemoved(w) {
+            if (!w) return;
+            var wid = getWindowId(w);
+            delete floatingWindows[wid];
+            delete preTiledWindows[wid];
+            retileNow();
+        }
+
+        function onCurrentDesktopChanged() {
+            retileNow();
+        }
+
+        function onScreensChanged() {
+            retileNow();
+        }
+    }
+
+    // =========================================================================
+    // 9. Window Actions & Keyboard Navigation
+    // =========================================================================
     function toggleTiling() {
         config.enableTiling = !config.enableTiling;
-        osdCall.notify(config.enableTiling ? "Tiling Enabled" : "Tiling Disabled (Floating)", "preferences-desktop-virtual");
+        osdCall.notify(config.enableTiling ? "Tiling Enabled" : "Tiling Disabled", "preferences-desktop-virtual");
         if (config.enableTiling) {
             retileNow();
         }
     }
 
-    // Toggle active window between floating and tiled
     function toggleActiveFloating() {
         var w = Workspace.activeWindow;
         if (!w) return;
 
-        var wid = w.internalId ? w.internalId.toString() : (w.caption + w.resourceClass);
+        var wid = getWindowId(w);
         var currentlyFloating = floatingWindows[wid] === true;
         floatingWindows[wid] = !currentlyFloating;
+        delete preTiledWindows[wid];
 
         osdCall.notify(floatingWindows[wid] ? "Window Floating" : "Window Tiled", "preferences-system-windows");
         retileNow();
     }
 
-    // Window navigation & manipulation
     function focusWindow(forward) {
         var windows = getTileableWindows(Workspace.activeScreen);
         if (windows.length <= 1) return;
@@ -384,7 +988,9 @@ Item {
     }
 
     function swapWindow(forward) {
-        var windows = getTileableWindows(Workspace.activeScreen);
+        var s = Workspace.activeScreen;
+        var sName = getScreenName(s);
+        var windows = screenTiledWindows[sName] || getTileableWindows(s);
         if (windows.length <= 1) return;
 
         var currentIdx = windows.indexOf(Workspace.activeWindow);
@@ -392,10 +998,10 @@ Item {
 
         var targetIdx = forward ? ((currentIdx + 1) % windows.length) : ((currentIdx - 1 + windows.length) % windows.length);
 
-        var targetWin = windows[targetIdx];
-        var currentGeom = Workspace.activeWindow.frameGeometry;
-        Workspace.activeWindow.frameGeometry = targetWin.frameGeometry;
-        targetWin.frameGeometry = currentGeom;
+        var temp = windows[currentIdx];
+        windows[currentIdx] = windows[targetIdx];
+        windows[targetIdx] = temp;
+        screenTiledWindows[sName] = windows;
 
         retileNow();
     }
@@ -412,49 +1018,9 @@ Item {
         retileNow();
     }
 
-    // Connections to Workspace events
-    Connections {
-        target: Workspace
-
-        function onWindowAdded(window) {
-            if (!window || !window.normalWindow || !window.managed) return;
-            log("Window added: " + window.caption + " (" + window.resourceClass + ")");
-
-            hookWindow(window);
-
-            if (config.tileNewWindows) {
-                retileNow();
-            }
-        }
-
-        function onWindowRemoved(window) {
-            if (!window) return;
-            var wid = window.internalId ? window.internalId.toString() : (window.caption + window.resourceClass);
-            delete floatingWindows[wid];
-            retileNow();
-        }
-
-        function onCurrentDesktopChanged() {
-            log("Desktop switched to: " + Workspace.currentDesktop);
-            retileNow();
-        }
-
-        function onScreensChanged() {
-            log("Screens configuration changed");
-            retileNow();
-        }
-    }
-
-    // ==========================================
-    // Native Plasma Global Keyboard Shortcuts
-    // ==========================================
-
-    ShortcutHandler {
-        name: "Tessera: Toggle Tiling"
-        text: "Tessera: Toggle Tiling"
-        sequence: "Meta+Shift+T"
-        onActivated: root.toggleTiling()
-    }
+    // =========================================================================
+    // 10. Global Keyboard Shortcuts (100% Ctrl-Based, Zero Meta)
+    // =========================================================================
 
     ShortcutHandler {
         name: "Tessera: Next Layout"
@@ -471,77 +1037,88 @@ Item {
     }
 
     ShortcutHandler {
+        name: "Tessera: Toggle Tiling"
+        text: "Tessera: Toggle Tiling"
+        sequence: "Ctrl+Shift+T"
+        onActivated: root.toggleTiling()
+    }
+
+    ShortcutHandler {
         name: "Tessera: Toggle Window Floating"
         text: "Tessera: Toggle Window Floating"
-        sequence: "Meta+Shift+F"
+        sequence: "Ctrl+Shift+F"
         onActivated: root.toggleActiveFloating()
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Next Window"
         text: "Tessera: Focus Next Window"
-        sequence: "Meta+J"
+        sequence: "Ctrl+Shift+J"
         onActivated: root.focusWindow(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Previous Window"
         text: "Tessera: Focus Previous Window"
-        sequence: "Meta+K"
+        sequence: "Ctrl+Shift+K"
         onActivated: root.focusWindow(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Swap Window Forward"
         text: "Tessera: Swap Window Forward"
-        sequence: "Meta+Shift+J"
+        sequence: "Ctrl+Alt+J"
         onActivated: root.swapWindow(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Swap Window Backward"
         text: "Tessera: Swap Window Backward"
-        sequence: "Meta+Shift+K"
+        sequence: "Ctrl+Alt+K"
         onActivated: root.swapWindow(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Increase Master Ratio"
         text: "Tessera: Increase Master Ratio"
-        sequence: "Meta+L"
+        sequence: "Ctrl+Shift+L"
         onActivated: root.adjustMasterRatio(0.05)
     }
 
     ShortcutHandler {
         name: "Tessera: Decrease Master Ratio"
         text: "Tessera: Decrease Master Ratio"
-        sequence: "Meta+H"
+        sequence: "Ctrl+Shift+H"
         onActivated: root.adjustMasterRatio(-0.05)
     }
 
     ShortcutHandler {
         name: "Tessera: Increase Master Count"
         text: "Tessera: Increase Master Count"
-        sequence: "Meta+I"
+        sequence: "Ctrl+Shift+I"
         onActivated: root.adjustMasterCount(1)
     }
 
     ShortcutHandler {
         name: "Tessera: Decrease Master Count"
         text: "Tessera: Decrease Master Count"
-        sequence: "Meta+U"
+        sequence: "Ctrl+Shift+D"
         onActivated: root.adjustMasterCount(-1)
     }
 
     ShortcutHandler {
         name: "Tessera: Retile Current Workspace"
         text: "Tessera: Retile Current Workspace"
-        sequence: "Meta+Shift+R"
-        onActivated: root.retileNow()
+        sequence: "Ctrl+Shift+R"
+        onActivated: {
+            root.loadConfig();
+            root.retileNow();
+        }
     }
 
     Component.onCompleted: {
-        log("Tessera KWin 6 Declarative Extension Initializing...");
+        log("Tessera Declarative Extension loaded with KZones-Style Visual Snap Overlay");
         loadConfig();
+        retileNow();
     }
 }

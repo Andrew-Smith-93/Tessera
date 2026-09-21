@@ -6,34 +6,11 @@
 var RuleEngine = (function () {
     "use strict";
 
-    // Standard floating window classes and patterns (dialogs, utilities, game popups)
+    // Only Tessera Control Center itself is floated by default to allow configuring settings
     var defaultFloatPatterns = [
-        "krunner",
-        "kcalc",
-        "systemsettings",
-        "pavucontrol",
-        "plasma-desktop",
-        "plasmashell",
-        "spectacle",
-        "kdialog",
-        "ksplashqml",
-        "polkit-kde-authentication-agent-1",
-        "org.kde.polkit-kde-authentication-agent-1",
-        "pinentry",
-        "1password",
-        "bitwarden",
-        "steam",
-        "steamwebhelper",
-        "steam_app",
-        "lutris",
-        "heroic",
-        "gamescope",
         "tessera",
         "tessera-settings",
-        "tessera_settings.py",
-        "file-roller",
-        "ark",
-        "gwenview"
+        "tessera_settings.py"
     ];
 
     /**
@@ -45,15 +22,15 @@ var RuleEngine = (function () {
         // Must be a managed window by KWin
         if (!window.managed) return true;
 
-        // Must be a normal window (skip docks, desktop, splash, notifications, toolbars)
+        // Must be a normal window (skip docks, desktop wallpaper, notifications)
         if (!window.normalWindow) return true;
 
-        // Skip non-normal windows (panels, desktop wallpaper, notifications, menus)
+        // Skip desktop wallpaper, docks/panels, splash screens, notifications
         if (window.desktopWindow || window.dock || window.splash || window.notification || window.onScreenDisplay) {
             return true;
         }
 
-        // Skip utility popups and override-redirect style windows
+        // Skip popup menus and tooltips (transient context menus)
         if (window.popupMenu || window.tooltip || window.specialWindow) {
             return true;
         }
@@ -62,24 +39,14 @@ var RuleEngine = (function () {
     }
 
     /**
-     * Determine if a window should float by default
+     * Determine if a window should float by default.
+     * Everything tiles by default unless matched by Tessera Control Center, custom rules, or user filter.
      */
     function shouldFloat(window, userFilterString, customRulesJson) {
         if (isIgnored(window)) return true;
 
         // Fullscreen windows manage their own bounds
         if (window.fullScreen) return true;
-
-        // Dialogs or transient windows float by default
-        if (window.dialog || window.transient) return true;
-
-        // If window has fixed maximum size equal to minimum size (e.g. calculator, small utility)
-        if (window.minSize && window.maxSize &&
-            window.minSize.width > 0 &&
-            window.minSize.width === window.maxSize.width &&
-            window.minSize.height === window.maxSize.height) {
-            return true;
-        }
 
         var resClass = (window.resourceClass || "").toString().toLowerCase();
         var resName = (window.resourceName || "").toString().toLowerCase();

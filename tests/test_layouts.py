@@ -30,13 +30,21 @@ class TestTessera(unittest.TestCase):
         self.assertEqual(cm.config.get("defaultLayout"), "master-stack")
         self.assertGreaterEqual(cm.config.get("gapInner"), 0)
         self.assertGreaterEqual(cm.config.get("gapOuter"), 0)
+        # Verify no user apps are auto-floated (tile everything period)
+        float_filter = cm.config.get("floatFilter", "")
+        self.assertNotIn("systemsettings", float_filter)
+        self.assertNotIn("pavucontrol", float_filter)
+        self.assertNotIn("kcalc", float_filter)
 
-    def test_presets_apply(self):
+    def test_config_save_and_reload(self):
         cm = config_manager.ConfigManager()
-        presets = ["hyprland", "i3_classic", "amethyst", "ultrawide", "zero_gap"]
-        for p in presets:
-            res = cm.apply_preset(p)
-            self.assertTrue(res, f"Preset {p} failed to apply")
+        cm.config["gapOuter"] = 20
+        cm.config["gapInner"] = 15
+        cm.save()
+
+        cm2 = config_manager.ConfigManager()
+        self.assertEqual(cm2.config.get("gapOuter"), 20)
+        self.assertEqual(cm2.config.get("gapInner"), 15)
 
     def test_manifest_structure(self):
         manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../metadata.json"))
@@ -44,7 +52,8 @@ class TestTessera(unittest.TestCase):
             meta = json.load(f)
         self.assertIn("KPlugin", meta)
         self.assertEqual(meta["KPlugin"]["Id"], "tessera")
-        self.assertEqual(meta["X-Plasma-API"], "javascript")
+        self.assertEqual(meta["X-Plasma-API"], "declarativescript")
+        self.assertEqual(meta["X-Plasma-MainScript"], "ui/main.qml")
 
 if __name__ == "__main__":
     unittest.main()

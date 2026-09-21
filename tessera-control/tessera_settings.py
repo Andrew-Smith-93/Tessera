@@ -206,6 +206,10 @@ class TesseraControlWindow(QMainWindow):
         self.cfg_mgr = ConfigManager()
         self.layout_cards = {}
 
+        self.auto_sync_timer = QTimer(self)
+        self.auto_sync_timer.setSingleShot(True)
+        self.auto_sync_timer.timeout.connect(self.save_and_apply)
+
         self.init_ui()
         self.load_settings_into_ui()
 
@@ -246,7 +250,6 @@ class TesseraControlWindow(QMainWindow):
         self.tabs.addTab(self.create_rules_tab(), "🎯 Window Rules")
         self.tabs.addTab(self.create_nvidia_tab(), "⚡ NVIDIA & Performance")
         self.tabs.addTab(self.create_shortcuts_tab(), "⌨️ Shortcuts")
-        self.tabs.addTab(self.create_presets_tab(), "✨ Presets")
 
         main_vbox.addWidget(self.tabs)
 
@@ -409,20 +412,24 @@ class TesseraControlWindow(QMainWindow):
         self.inner_gap_val.setText(f"{val} px")
         self.cfg_mgr.config["gapInner"] = val
         self.refresh_preview()
+        self.auto_sync_timer.start(120)
 
     def on_outer_gap_changed(self, val):
         self.outer_gap_val.setText(f"{val} px")
         self.cfg_mgr.config["gapOuter"] = val
         self.refresh_preview()
+        self.auto_sync_timer.start(120)
 
     def on_master_ratio_changed(self, val):
         self.master_ratio_val.setText(f"{val}%")
         self.cfg_mgr.config["masterRatio"] = val / 100.0
         self.refresh_preview()
+        self.auto_sync_timer.start(120)
 
     def on_master_count_changed(self, val):
         self.cfg_mgr.config["masterCount"] = val
         self.refresh_preview()
+        self.auto_sync_timer.start(120)
 
     def refresh_preview(self):
         self.preview_widget.update_params(
@@ -621,28 +628,30 @@ class TesseraControlWindow(QMainWindow):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
-        lbl = QLabel("Native Plasma 6 Global Shortcuts:")
+        lbl = QLabel("Native Plasma 6 Global Shortcuts (All Ctrl-Based):")
         lbl.setFont(QFont("SansSerif", 11, QFont.Bold))
         layout.addWidget(lbl)
 
-        table = QTableWidget(11, 2)
+        shortcuts = [
+            ("Toggle Tiling Globally", "Ctrl + Shift + T"),
+            ("Cycle to Next Layout", "Ctrl + Space"),
+            ("Cycle to Previous Layout", "Ctrl + Shift + Space"),
+            ("Toggle Active Window Floating", "Ctrl + Shift + F"),
+            ("Focus Next Window", "Ctrl + Shift + J  /  Ctrl + Down"),
+            ("Focus Previous Window", "Ctrl + Shift + K  /  Ctrl + Up"),
+            ("Swap Window Forward", "Ctrl + Alt + J  /  Ctrl + Alt + Down"),
+            ("Swap Window Backward", "Ctrl + Alt + K  /  Ctrl + Alt + Up"),
+            ("Expand Master Ratio", "Ctrl + Shift + L  /  Ctrl + Right"),
+            ("Shrink Master Ratio", "Ctrl + Shift + H  /  Ctrl + Left"),
+            ("Increase Master Count", "Ctrl + Shift + I"),
+            ("Decrease Master Count", "Ctrl + Shift + D"),
+            ("Force Retile Workspace", "Ctrl + Shift + R")
+        ]
+
+        table = QTableWidget(len(shortcuts), 2)
         table.setHorizontalHeaderLabels(["Action", "Keybinding"])
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-
-        shortcuts = [
-            ("Toggle Tiling Globally", "Meta + Shift + T"),
-            ("Cycle to Next Layout", "Ctrl + Space"),
-            ("Cycle to Previous Layout", "Ctrl + Shift + Space"),
-            ("Toggle Active Window Floating", "Meta + Shift + F"),
-            ("Focus Next Window", "Meta + J  /  Meta + Down"),
-            ("Focus Previous Window", "Meta + K  /  Meta + Up"),
-            ("Swap Window Forward", "Meta + Shift + J"),
-            ("Swap Window Backward", "Meta + Shift + K"),
-            ("Expand Master Ratio", "Meta + L  /  Meta + Right"),
-            ("Shrink Master Ratio", "Meta + H  /  Meta + Left"),
-            ("Force Retile Workspace", "Meta + Shift + R")
-        ]
 
         for idx, (act, sc) in enumerate(shortcuts):
             table.setItem(idx, 0, QTableWidgetItem(act))
@@ -655,45 +664,6 @@ class TesseraControlWindow(QMainWindow):
         hint.setStyleSheet("color: #6c757d; font-size: 8.5pt;")
         layout.addWidget(hint)
         return tab
-
-    # -------------------------------------------------------------
-    # TAB 7: Presets
-    # -------------------------------------------------------------
-    def create_presets_tab(self):
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-
-        lbl = QLabel("One-Click Configuration Presets:")
-        lbl.setFont(QFont("SansSerif", 11, QFont.Bold))
-        layout.addWidget(lbl)
-
-        presets = [
-            ("hyprland", "🌀 Hyprland Aesthetic", "Binary Split (BSP/Dwindle), 8px inner gaps, 12px outer gaps, snappy debounce."),
-            ("i3_classic", "🪟 i3 / Sway Classic", "Master-Stack, compact 4px gaps, 50% split ratio, minimal margins."),
-            ("amethyst", "🍎 macOS Amethyst", "Master-Stack, 10px inner gaps, 14px outer gaps, 55% master ratio."),
-            ("ultrawide", "🖥️ Ultrawide Productivity", "Master-Stack, 65% primary pane, 2 masters, 10px gaps for 21:9 or 32:9 monitors."),
-            ("zero_gap", "⚡ Zero Gap Hacker", "Master-Stack, 0px gaps, maximized screen estate.")
-        ]
-
-        for pid, p_title, p_desc in presets:
-            box = QGroupBox(p_title)
-            b_layout = QHBoxLayout(box)
-            b_desc = QLabel(p_desc)
-            b_desc.setWordWrap(True)
-            b_desc.setStyleSheet("color: #a0a6ad;")
-            b_btn = QPushButton("Apply Preset")
-            b_btn.clicked.connect(lambda checked, p=pid: self.apply_preset_action(p))
-            b_layout.addWidget(b_desc, 3)
-            b_layout.addWidget(b_btn, 1)
-            layout.addWidget(box)
-
-        layout.addStretch()
-        return tab
-
-    def apply_preset_action(self, preset_id):
-        if self.cfg_mgr.apply_preset(preset_id):
-            self.load_settings_into_ui()
-            self.set_status(f"Preset '{preset_id}' loaded and applied!")
 
     # -------------------------------------------------------------
     # State Management & Actions
@@ -754,6 +724,8 @@ class TesseraControlWindow(QMainWindow):
         self.save_and_apply()
         try:
             subprocess.run(["qdbus6", "org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"], check=False)
+            subprocess.run(["qdbus6", "org.kde.kglobalaccel", "/component/kwin",
+                            "org.kde.kglobalaccel.Component.invokeShortcut", "Tessera: Retile Current Workspace"], check=False)
             self.set_status("✓ Retile command sent to KWin.")
         except Exception as e:
             self.set_status(f"Error communicating with KWin: {e}")
