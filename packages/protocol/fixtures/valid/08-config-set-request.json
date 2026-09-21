@@ -1,0 +1,13 @@
+{
+  "protocol": "tessera.ipc",
+  "version": "1.0",
+  "id": "req-config-set-01",
+  "type": "request",
+  "method": "config.set",
+  "params": {
+    "config": {
+      "gapInner": 12,
+      "gapOuter": 16
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "protocol": "tessera.ipc",
+  "version": "1.0",
+  "id": "evt-cfg-01",
+  "type": "event",
+  "event": "config.changed",
+  "data": {
+    "config": {
+      "enableTiling": true,
+      "defaultLayout": "master-stack",
+      "gapInner": 12,
+      "gapOuter": 16
+    }
+  }
+}

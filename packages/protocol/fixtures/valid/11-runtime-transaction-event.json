@@ -1,0 +1,22 @@
+{
+  "protocol": "tessera.ipc",
+  "version": "1.0",
+  "id": "evt-tx-01",
+  "type": "event",
+  "event": "runtime.transactionCommitted",
+  "data": {
+    "transaction": {
+      "epoch": 4,
+      "tick": 120,
+      "reasons": ["WindowDiscovered"],
+      "affectedScreens": ["HDMI-A-1"],
+      "operations": [
+        {
+          "windowId": "win-1",
+          "targetRect": { "x": 10, "y": 10, "width": 946, "height": 1060 }
+        }
+      ],
+      "skippedWrites": 0
+    }
+  }
+}

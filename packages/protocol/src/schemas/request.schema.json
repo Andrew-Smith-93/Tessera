@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tessera.wm/schemas/v1/request.json",
+  "title": "TesseraProtocolRequest",
+  "type": "object",
+  "required": ["protocol", "version", "id", "type", "method"],
+  "properties": {
+    "protocol": { "type": "string", "const": "tessera.ipc" },
+    "version": { "type": "string", "const": "1.0" },
+    "id": { "type": "string", "minLength": 1 },
+    "type": { "type": "string", "const": "request" },
+    "method": { "type": "string", "minLength": 1 },
+    "params": { "type": "object" }
+  },
+  "additionalProperties": false
+}

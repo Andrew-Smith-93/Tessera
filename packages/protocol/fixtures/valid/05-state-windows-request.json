@@ -1,0 +1,7 @@
+{
+  "protocol": "tessera.ipc",
+  "version": "1.0",
+  "id": "req-windows-01",
+  "type": "request",
+  "method": "state.getRetainedWindows"
+}

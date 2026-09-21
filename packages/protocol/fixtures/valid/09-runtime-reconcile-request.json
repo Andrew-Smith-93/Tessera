@@ -1,0 +1,10 @@
+{
+  "protocol": "tessera.ipc",
+  "version": "1.0",
+  "id": "req-reconcile-01",
+  "type": "request",
+  "method": "runtime.reconcile",
+  "params": {
+    "forceScreenId": "HDMI-A-1"
+  }
+}

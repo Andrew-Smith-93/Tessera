@@ -295,3 +295,68 @@ Any subsequent convergence or refactoring MUST preserve the following runtime in
 6. **X11 Echo Suppression**: Programmatic frameGeometry assignments must suppress feedback loops to prevent compositor stutter and oscillation.
 7. **KZones-Style 60 FPS Overlay**: Live mouse-tracking preview cards with visual drop feedback.
 8. **Native DBus OSD & Master HUD**: Clean user feedback upon layout switching and master adjustments.
+
+---
+
+## 11. Cold-Path IPC Protocol V1 (Phase 4)
+
+Phase 4 defines the authoritative, versioned cold-path IPC protocol connecting external components (CLI, configuration GUI, future companion daemon, plugins) to the Tessera runtime:
+
+### Protocol Identity & Framing
+- **Protocol**: `"tessera.ipc"`
+- **Version**: `"1.0"`
+- **Transport Framing**: Length-prefixed streaming byte frames `[4-byte big-endian length uint32][UTF-8 JSON payload]`.
+- **Maximum Frame Size**: 16 MB (`16,777,216` bytes). Frames declaring a larger length header are rejected immediately before allocation (`FRAME_TOO_LARGE`).
+- **Zero-Length & Malformed Frames**: Zero-length frames and invalid UTF-8/JSON syntax are rejected with typed `DECODE_ERROR`.
+
+### Strict Cold-Path Guarantee
+- The IPC protocol is restricted to asynchronous, low-frequency inspection and administrative control (CLI queries, settings configuration, trace inspection).
+- Zero IPC frames sit on the KWin window management hot path. Window addition, removal, and geometry changes never block on IPC requests.
+
+### Envelope Structure
+Every message adheres to a strictly validated envelope:
+```json
+{
+  "protocol": "tessera.ipc",
+  "version": "1.0",
+  "id": "<unique-uuid-or-id>",
+  "type": "request" | "response" | "event"
+}
+```
+- **Request**: `{ "method": string, "params"?: object }`
+- **Response**: `{ "replyTo": string, "ok": boolean, "result"?: any, "error"?: { "code": string, "message": string, "details"?: any } }`
+- **Event**: `{ "event": string, "data": any }`
+
+### Capabilities & Handshake Negotiation
+All client interactions begin with a mandatory handshake:
+- **Handshake Method**: `system.hello`
+  - Parameters: `{ "clientName": string, "clientVersion": string, "requestedCapabilities"?: string[] }`
+  - Response: `{ "serverName": "tessera-runtime", "serverVersion": string, "protocolVersion": "1.0", "capabilities": string[] }`
+- **V1 Capabilities**:
+  - `state.inspect`: Read retained screens, windows, screen orders, and runtime diagnostics.
+  - `config.mutate`: Mutate global or per-screen configuration (`config.set`).
+  - `runtime.control`: Trigger explicit reconciliation transactions (`runtime.reconcile`).
+  - `trace.inspect`: Read and clear execution trace history (`trace.dump`, `trace.clear`).
+- **Enforcement**: Methods invoked without negotiating their required capability immediately return `CAPABILITY_NOT_NEGOTIATED`.
+
+### Methods & Events Catalog
+- **Methods**:
+  - `system.hello`: Capability negotiation and server handshake.
+  - `state.getRetainedScreens`: Returns serializable retained screens.
+  - `state.getRetainedWindows`: Returns serializable retained windows (subject to identity redaction).
+  - `state.getScreenOrder`: Returns ordered window IDs and persistent slots for an output.
+  - `config.get` / `config.set`: Query and update runtime coordinator configuration.
+  - `runtime.reconcile`: Trigger programmatic reconciliation pass for dirty or forced screens.
+  - `runtime.getDiagnostics`: Query live coordinator counters (events, writes, transactions, echoes).
+  - `trace.dump` / `trace.clear`: Inspect and reset trace recorder history.
+- **Events**:
+  - `runtime.ready`: Broadcast when runtime initialization completes.
+  - `runtime.stateChanged`: Broadcast when screen states or dirty scopes change.
+  - `runtime.transactionCommitted`: Broadcast with the full serializable reconciliation transaction.
+  - `runtime.topologyChanged`: Broadcast when screen additions or removals alter topology.
+  - `config.changed`: Broadcast when configuration mutations take effect.
+
+### In-Memory Reference Endpoint & Fuzz Verification
+- **Reference Endpoints**: Provided via `ReferenceServer` and `ReferenceClient` in `@tessera/protocol`. Supports direct async in-memory dispatch as well as full wire-level serialization round-trips over byte streams.
+- **Deterministic Fuzz Testing**: Byte stream and envelope object fuzzing using Mulberry32 PRNG (seeds 42 and 12345) running 5,000 iterations each to guarantee crash resilience.
+- **Package Archive Isolation**: Protocol schemas, fixtures, and tests reside in `packages/protocol` and are strictly excluded from the release `.kwinscript` bundle.

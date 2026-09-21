@@ -1,0 +1,7 @@
+{
+  "protocol": "other.ipc",
+  "version": "1.0",
+  "id": "bad-01",
+  "type": "request",
+  "method": "state.getRetainedScreens"
+}

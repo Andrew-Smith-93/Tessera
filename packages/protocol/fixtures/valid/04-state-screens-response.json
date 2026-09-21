@@ -1,0 +1,24 @@
+{
+  "protocol": "tessera.ipc",
+  "version": "1.0",
+  "id": "resp-screens-01",
+  "type": "response",
+  "replyTo": "req-screens-01",
+  "ok": true,
+  "result": {
+    "screens": [
+      {
+        "outputId": "HDMI-A-1",
+        "name": "HDMI-A-1",
+        "geometry": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+        "usableArea": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+        "activeLayout": "master-stack",
+        "masterCount": 1,
+        "masterRatio": 0.5,
+        "gaps": { "inner": 8, "outer": 10 },
+        "orderedWindowIds": ["win-1"],
+        "persistentOrder": ["win-1"]
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "protocol": "tessera.ipc",
+  "version": "1.0",
+  "id": "bad-05",
+  "type": "request"
+}

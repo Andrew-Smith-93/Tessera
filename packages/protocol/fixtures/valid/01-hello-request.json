@@ -1,0 +1,12 @@
+{
+  "protocol": "tessera.ipc",
+  "version": "1.0",
+  "id": "req-hello-01",
+  "type": "request",
+  "method": "system.hello",
+  "params": {
+    "clientName": "tessera-cli",
+    "clientVersion": "1.0.0",
+    "requestedCapabilities": ["state.inspect", "config.mutate", "runtime.control", "trace.inspect"]
+  }
+}
