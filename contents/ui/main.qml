@@ -37,6 +37,10 @@ Item {
     property var floatingWindows: ({})   // windowId -> boolean (manual float)
     property var preTiledWindows: ({})   // windowId -> boolean (single-window snap)
     property var screenTiledWindows: ({}) // screenName -> array of windows
+    property var savedTiledGeometries: ({}) // windowId -> Qt.rect
+    property var savedMinimGeometries: ({}) // windowId -> Qt.rect
+    property var wasDraggingMaximized: ({}) // windowId -> boolean
+    property var persistentScreenOrder: ({}) // screenName -> array of windowIds
     property var currentLayoutList: ["master-stack", "bsp", "columns", "rows", "monocle", "floating"]
     property bool isArranging: false
     property var currentDraggingWindow: null
@@ -241,30 +245,43 @@ Item {
             var wScreen = w.output || getScreenForPos(w.frameGeometry);
             if (sName && getScreenName(wScreen) !== sName) continue;
 
-            if (config.ignoreMinimized && w.minimized) continue;
-
             var wid = getWindowId(w);
             if (floatingWindows[wid] === true) continue;
+
+            if (config.ignoreMinimized && w.minimized) continue;
 
             tileables.push(w);
         }
 
-        // Maintain consistent window order
-        var existing = screenTiledWindows[sName] || [];
-        var ordered = [];
-        for (var e = 0; e < existing.length; e++) {
-            if (tileables.indexOf(existing[e]) !== -1) {
-                ordered.push(existing[e]);
-            }
-        }
-        for (var t = 0; t < tileables.length; t++) {
-            if (ordered.indexOf(tileables[t]) === -1) {
-                ordered.push(tileables[t]);
+        // Maintain persistent slot order per screen so windows NEVER swap on minimize/restore!
+        var persistentOrder = persistentScreenOrder[sName] || [];
+        var newOrder = [];
+
+        // 1. First keep existing persistent order for active tileable windows
+        for (var p = 0; p < persistentOrder.length; p++) {
+            var pWid = persistentOrder[p];
+            for (var t = 0; t < tileables.length; t++) {
+                if (getWindowId(tileables[t]) === pWid) {
+                    newOrder.push(tileables[t]);
+                    break;
+                }
             }
         }
 
-        screenTiledWindows[sName] = ordered;
-        return ordered;
+        // 2. Add any brand-new windows that weren't in persistentOrder yet
+        for (var t2 = 0; t2 < tileables.length; t2++) {
+            if (newOrder.indexOf(tileables[t2]) === -1) {
+                newOrder.push(tileables[t2]);
+                var tWid = getWindowId(tileables[t2]);
+                if (persistentOrder.indexOf(tWid) === -1) {
+                    persistentOrder.push(tWid);
+                }
+            }
+        }
+
+        persistentScreenOrder[sName] = persistentOrder;
+        screenTiledWindows[sName] = newOrder;
+        return newOrder;
     }
 
     // =========================================================================
@@ -289,16 +306,6 @@ Item {
 
                 var windows = getTileableWindows(screen);
                 if (windows.length === 0) continue;
-
-                // Handle single pre-tiled or single regular window
-                if (windows.length === 1) {
-                    var singleWin = windows[0];
-                    var swid = getWindowId(singleWin);
-                    if (preTiledWindows[swid] === true) {
-                        // Preserves user's manual half / quarter snap geometry
-                        continue;
-                    }
-                }
 
                 var sName = getScreenName(screen);
                 var effectiveRatio = screenMasterRatios[sName] !== undefined ? screenMasterRatios[sName] : config.masterRatio;
@@ -338,9 +345,23 @@ Item {
 
                     if (win === currentDraggingWindow) continue;
 
-                    if (typeof win.setMaximize === "function") {
-                        win.setMaximize(false, false);
+                    var wid = getWindowId(win);
+                    savedTiledGeometries[wid] = Qt.rect(r.x, r.y, r.width, r.height);
+
+                    // If the window is currently MAXIMIZED:
+                    if (win.maximizeMode !== 0) {
+                        // Allow the window to stay maximized peacefully!
+                        // The background windows are tiled cleanly in their zones.
+                        // Its designated tiled slot in the active layout is tracked in
+                        // savedTiledGeometries[wid], so when it unmaximizes it goes right to where it needs to go!
+                        continue;
                     }
+
+                    // Single pre-tiled window preservation
+                    if (windows.length === 1 && preTiledWindows[wid] === true) {
+                        continue;
+                    }
+
                     win.frameGeometry = Qt.rect(r.x, r.y, r.width, r.height);
                 }
             }
@@ -389,7 +410,12 @@ Item {
 
         function computeZones(w) {
             var screen = w ? (w.output || getScreenForPos(w.frameGeometry)) : Workspace.activeScreen;
-            var area = Workspace.clientArea(KWin.MaximizeArea, screen, Workspace.currentDesktop);
+            computeZonesForScreen(screen);
+        }
+
+        function computeZonesForScreen(screen) {
+            var scr = screen || Workspace.activeScreen;
+            var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
             activeScreenGeom = area;
 
             var go = config.gapOuter;
@@ -520,6 +546,14 @@ Item {
         }
 
         function updateHover(cursorPos) {
+            if (!cursorPos) return;
+
+            var curScreen = getScreenForPos({x: cursorPos.x, y: cursorPos.y, width: 1, height: 1});
+            var curArea = Workspace.clientArea(KWin.MaximizeArea, curScreen, Workspace.currentDesktop);
+            if (curArea && activeScreenGeom && (curArea.x !== activeScreenGeom.x || curArea.y !== activeScreenGeom.y)) {
+                computeZonesForScreen(curScreen);
+            }
+
             var matchedIndex = -1;
 
             // 1. Check corner quarters first (higher priority in corners)
@@ -804,7 +838,26 @@ Item {
             w.interactiveMoveResizeStarted.connect(function() {
                 if (w.move && checkFilter(w)) {
                     currentDraggingWindow = w;
-                    log("Drag started: " + w.caption);
+                    var wid = getWindowId(w);
+                    if (w.maximizeMode !== 0) {
+                        wasDraggingMaximized[wid] = true;
+                        if (typeof w.setMaximize === "function") {
+                            w.setMaximize(false, false);
+                        }
+                        var curPos = Workspace.cursorPos;
+                        var targetW = 800;
+                        var targetH = 600;
+                        if (savedTiledGeometries[wid] && savedTiledGeometries[wid].width > 100) {
+                            targetW = savedTiledGeometries[wid].width;
+                            targetH = savedTiledGeometries[wid].height;
+                        }
+                        var newX = Math.round(curPos.x - (targetW / 2));
+                        var newY = Math.max(0, curPos.y - 15);
+                        w.frameGeometry = Qt.rect(newX, newY, targetW, targetH);
+                    } else {
+                        wasDraggingMaximized[wid] = false;
+                    }
+                    log("Drag started: " + w.caption + (wasDraggingMaximized[wid] ? " (from maximized)" : ""));
                     overlayDialog.showOverlay(w);
                 }
             });
@@ -853,9 +906,9 @@ Item {
                 }
                 if (currentDraggingWindow === w) {
                     log("Drag finished: " + w.caption);
+                    var wid = getWindowId(w);
                     var target = overlayDialog.finishDrag();
                     if (target) {
-                        var wid = getWindowId(w);
                         if (target.type === "maximize") {
                             if (typeof w.setMaximize === "function") {
                                 w.setMaximize(true, true);
@@ -886,9 +939,31 @@ Item {
                             }
                             screenTiledWindows[sName] = list;
 
+                            // Keep persistentScreenOrder in sync
+                            var pOrder = persistentScreenOrder[sName] || [];
+                            var newPOrder = [];
+                            for (var pi = 0; pi < pOrder.length; pi++) {
+                                if (pOrder[pi] !== wid) newPOrder.push(pOrder[pi]);
+                            }
+                            if (target.slotIndex === 0) {
+                                newPOrder.unshift(wid);
+                            } else {
+                                newPOrder.push(wid);
+                            }
+                            persistentScreenOrder[sName] = newPOrder;
+
+                            savedTiledGeometries[wid] = Qt.rect(target.targetRect.x, target.targetRect.y, target.targetRect.width, target.targetRect.height);
+
                             osdCall.notify("Snapped: " + target.title, "preferences-system-windows");
                         }
+                    } else {
+                        // Dropped outside any snap zone
+                        if (wasDraggingMaximized[wid]) {
+                            floatingWindows[wid] = false;
+                            delete preTiledWindows[wid];
+                        }
                     }
+                    delete wasDraggingMaximized[wid];
                     overlayDialog.hideOverlay();
                     currentDraggingWindow = null;
                     retileNow();
@@ -898,6 +973,17 @@ Item {
 
         if (w.minimizedChanged) {
             w.minimizedChanged.connect(function() {
+                var wid = getWindowId(w);
+                if (w.minimized) {
+                    savedMinimGeometries[wid] = Qt.rect(w.frameGeometry.x, w.frameGeometry.y, w.frameGeometry.width, w.frameGeometry.height);
+                } else {
+                    // Window was restored from minimize!
+                    // Restore its saved tiled slot geometry immediately
+                    if (savedTiledGeometries[wid]) {
+                        var g = savedTiledGeometries[wid];
+                        w.frameGeometry = Qt.rect(g.x, g.y, g.width, g.height);
+                    }
+                }
                 retileNow();
             });
         }
@@ -915,6 +1001,21 @@ Item {
                 if (mode === 0) {
                     floatingWindows[wid] = false;
                     delete preTiledWindows[wid];
+                }
+            });
+        }
+
+        if (w.maximizedChanged) {
+            w.maximizedChanged.connect(function() {
+                if (isArranging) return;
+                var wid = getWindowId(w);
+                if (w.maximizeMode === 0) {
+                    floatingWindows[wid] = false;
+                    delete preTiledWindows[wid];
+                    if (savedTiledGeometries[wid]) {
+                        var target = savedTiledGeometries[wid];
+                        w.frameGeometry = Qt.rect(target.x, target.y, target.width, target.height);
+                    }
                     retileNow();
                 }
             });
@@ -927,33 +1028,8 @@ Item {
     Connections {
         target: Workspace
 
-        // Automatic cooperative state transition for maximized windows
         function onWindowActivated(activeWin) {
-            if (!activeWin || !activeWin.normalWindow || !config.enableTiling || isArranging) return;
-            if (!isWindowOnCurrentDesktop(activeWin)) return;
-
-            var s = activeWin.output || getScreenForPos(activeWin.frameGeometry);
-            var tiled = getTileableWindows(s);
-
-            if (tiled.length > 1) {
-                var changed = false;
-                for (var i = 0; i < tiled.length; i++) {
-                    var tw = tiled[i];
-                    if (tw.maximizeMode !== 0) {
-                        if (typeof tw.setMaximize === "function") {
-                            tw.setMaximize(false, false);
-                        }
-                        var wid = getWindowId(tw);
-                        floatingWindows[wid] = false;
-                        delete preTiledWindows[wid];
-                        changed = true;
-                        log("Unmaximized window to cooperate: " + tw.caption);
-                    }
-                }
-                if (changed) {
-                    retileNow();
-                }
-            }
+            // Keep window activation clean without forcefully crushing maximized windows
         }
 
         function onWindowAdded(w) {
@@ -961,20 +1037,6 @@ Item {
             hookWindow(w);
 
             if (config.tileNewWindows) {
-                var s = w.output || getScreenForPos(w.frameGeometry);
-                var tiled = getTileableWindows(s);
-                if (tiled.length > 1) {
-                    for (var i = 0; i < tiled.length; i++) {
-                        if (tiled[i].maximizeMode !== 0) {
-                            if (typeof tiled[i].setMaximize === "function") {
-                                tiled[i].setMaximize(false, false);
-                            }
-                            var wid = getWindowId(tiled[i]);
-                            floatingWindows[wid] = false;
-                            delete preTiledWindows[wid];
-                        }
-                    }
-                }
                 retileNow();
             }
         }
@@ -984,6 +1046,20 @@ Item {
             var wid = getWindowId(w);
             delete floatingWindows[wid];
             delete preTiledWindows[wid];
+            delete savedTiledGeometries[wid];
+            delete savedMinimGeometries[wid];
+            delete wasDraggingMaximized[wid];
+
+            // Remove from persistentScreenOrder across all screens
+            for (var sName in persistentScreenOrder) {
+                var pList = persistentScreenOrder[sName] || [];
+                var filtered = [];
+                for (var i = 0; i < pList.length; i++) {
+                    if (pList[i] !== wid) filtered.push(pList[i]);
+                }
+                persistentScreenOrder[sName] = filtered;
+            }
+
             retileNow();
         }
 
@@ -1049,6 +1125,13 @@ Item {
         windows[currentIdx] = windows[targetIdx];
         windows[targetIdx] = temp;
         screenTiledWindows[sName] = windows;
+
+        // Keep persistentScreenOrder in sync with the swap!
+        var newPOrder = [];
+        for (var i = 0; i < windows.length; i++) {
+            newPOrder.push(getWindowId(windows[i]));
+        }
+        persistentScreenOrder[sName] = newPOrder;
 
         retileNow();
     }
