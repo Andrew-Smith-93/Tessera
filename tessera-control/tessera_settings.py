@@ -432,13 +432,14 @@ class TesseraControlWindow(QMainWindow):
         self.auto_sync_timer.start(120)
 
     def refresh_preview(self):
-        self.preview_widget.update_params(
-            self.cfg_mgr.config.get("defaultLayout", "master-stack"),
-            self.cfg_mgr.config.get("gapInner", 8),
-            self.cfg_mgr.config.get("gapOuter", 10),
-            self.cfg_mgr.config.get("masterRatio", 0.55),
-            self.cfg_mgr.config.get("masterCount", 1)
-        )
+        dl = self.cfg_mgr.config.get("defaultLayout", "master-stack")
+        gi = self.cfg_mgr.config.get("gapInner", 8)
+        go = self.cfg_mgr.config.get("gapOuter", 10)
+        mr = self.cfg_mgr.config.get("masterRatio", 0.55)
+        mc = self.cfg_mgr.config.get("masterCount", 1)
+        self.preview_widget.update_params(dl, gi, go, mr, mc)
+        if hasattr(self, 'anim_preview_widget'):
+            self.anim_preview_widget.update_params(dl, gi, go, mr, mc)
 
     # -------------------------------------------------------------
     # TAB 3: Workspaces
@@ -578,48 +579,133 @@ class TesseraControlWindow(QMainWindow):
     # -------------------------------------------------------------
     def create_nvidia_tab(self):
         tab = QWidget()
-        layout = QVBoxLayout(tab)
+        layout = QHBoxLayout(tab)
+        layout.setSpacing(16)
 
-        grp = QGroupBox("NVIDIA Proprietary Driver & Compositor Optimizations")
+        left_vbox = QVBoxLayout()
+
+        grp = QGroupBox("Performance & Hardware Tuning (NVIDIA Optimized)")
         g_layout = QVBoxLayout(grp)
+        g_layout.setSpacing(12)
 
         lbl_desc = QLabel(
             "Tessera includes dedicated geometry pipeline tuning specifically for NVIDIA Pascal/Turing/Ampere/Ada "
             "GPUs on KDE Plasma 6 (X11 & Wayland) to eliminate resize flicker, frame drops, and latency."
         )
         lbl_desc.setWordWrap(True)
-        lbl_desc.setStyleSheet("color: #a0a6ad; margin-bottom: 10px;")
+        lbl_desc.setStyleSheet("color: #a0a6ad; margin-bottom: 6px;")
         g_layout.addWidget(lbl_desc)
 
-        # Debounce slider
-        db_box = QHBoxLayout()
-        db_label = QLabel("GPU Redraw Debounce:")
-        self.debounce_val = QLabel("60 ms")
-        self.debounce_val.setStyleSheet("color: #3daee9; font-weight: bold;")
-        self.debounce_slider = QSlider(Qt.Horizontal)
-        self.debounce_slider.setRange(20, 200)
-        self.debounce_slider.setValue(60)
-        self.debounce_slider.valueChanged.connect(self.on_debounce_changed)
-        db_box.addWidget(db_label)
-        db_box.addWidget(self.debounce_slider)
-        db_box.addWidget(self.debounce_val)
-        g_layout.addLayout(db_box)
+        # Polling rate / responsiveness slider
+        resp_box = QVBoxLayout()
+        r_top = QHBoxLayout()
+        r_label = QLabel("Cursor Tracking & Snap Responsiveness:")
+        r_label.setFont(QFont("SansSerif", 10, QFont.Bold))
+        self.polling_val = QLabel("16 ms (60 FPS)")
+        self.polling_val.setStyleSheet("color: #3daee9; font-weight: bold;")
+        r_top.addWidget(r_label)
+        r_top.addStretch()
+        r_top.addWidget(self.polling_val)
+        resp_box.addLayout(r_top)
 
-        self.smooth_resize_chk = QCheckBox("Smooth Animated Geometry (Uncheck for instant tear-free commit on NVIDIA X11)")
-        self.smooth_resize_chk.setChecked(False)
-        g_layout.addWidget(self.smooth_resize_chk)
+        self.polling_slider = QSlider(Qt.Horizontal)
+        self.polling_slider.setRange(8, 60)
+        self.polling_slider.setValue(16)
+        self.polling_slider.valueChanged.connect(self.on_polling_changed)
+        resp_box.addWidget(self.polling_slider)
 
-        self.osd_chk = QCheckBox("Show Native Plasma OSD when changing layouts or tiling states")
+        r_hint = QLabel("Controls overlay refresh frequency when dragging windows. Lower = smoother tracking (16 ms is optimal for 60Hz+).")
+        r_hint.setStyleSheet("color: #6c757d; font-size: 8.5pt;")
+        r_hint.setWordWrap(True)
+        resp_box.addWidget(r_hint)
+        g_layout.addLayout(resp_box)
+
+        # Window Movement Animations Group
+        anim_grp = QGroupBox("Window Movement Animations")
+        a_layout = QVBoxLayout(anim_grp)
+        a_layout.setSpacing(10)
+
+        a_top = QHBoxLayout()
+        a_lbl = QLabel("Animation Style:")
+        self.anim_mode_combo = QComboBox()
+        self.anim_mode_combo.addItem("Off (Instant & Tear-Free)", "off")
+        self.anim_mode_combo.addItem("Smooth Slide (Linear)", "slide")
+        self.anim_mode_combo.addItem("Gentle Ease-Out (Cubic)", "ease_out")
+        self.anim_mode_combo.addItem("Dynamic Spring (Back-Out)", "spring")
+        self.anim_mode_combo.currentIndexChanged.connect(self.on_animation_changed)
+        a_top.addWidget(a_lbl)
+        a_top.addWidget(self.anim_mode_combo, 1)
+        a_layout.addLayout(a_top)
+
+        d_box = QHBoxLayout()
+        d_lbl = QLabel("Animation Duration:")
+        self.anim_dur_val = QLabel("200 ms")
+        self.anim_dur_val.setStyleSheet("color: #3daee9; font-weight: bold;")
+        self.anim_dur_slider = QSlider(Qt.Horizontal)
+        self.anim_dur_slider.setRange(80, 500)
+        self.anim_dur_slider.setValue(200)
+        self.anim_dur_slider.valueChanged.connect(self.on_animation_changed)
+        d_box.addWidget(d_lbl)
+        d_box.addWidget(self.anim_dur_slider, 1)
+        d_box.addWidget(self.anim_dur_val)
+        a_layout.addLayout(d_box)
+
+        self.test_anim_btn = QPushButton("▶ Test Movement Animation")
+        self.test_anim_btn.clicked.connect(self.test_window_animation)
+        a_layout.addWidget(self.test_anim_btn)
+
+        g_layout.addWidget(anim_grp)
+
+        self.osd_chk = QCheckBox("Show Native Plasma OSD when changing layouts or tiling states (On by default)")
         self.osd_chk.setChecked(True)
+        self.osd_chk.toggled.connect(lambda: self.auto_sync_timer.start(120))
         g_layout.addWidget(self.osd_chk)
 
-        layout.addWidget(grp)
-        layout.addStretch()
+        left_vbox.addWidget(grp)
+        left_vbox.addStretch()
+        layout.addLayout(left_vbox, 1)
+
+        # Right side: Dedicated animation preview!
+        right_vbox = QVBoxLayout()
+        r_title = QLabel("MOTION & ANIMATION PREVIEW")
+        r_title.setFont(QFont("SansSerif", 10, QFont.Bold))
+        r_title.setStyleSheet("color: #3daee9;")
+        right_vbox.addWidget(r_title)
+
+        self.anim_preview_widget = LiveDesktopPreview()
+        right_vbox.addWidget(self.anim_preview_widget, 1)
+
+        anim_hint = QLabel("Select an animation curve above and click 'Test Movement Animation' to preview how windows transition.")
+        anim_hint.setStyleSheet("color: #6c757d; font-size: 8.5pt;")
+        anim_hint.setWordWrap(True)
+        right_vbox.addWidget(anim_hint)
+
+        layout.addLayout(right_vbox, 1)
         return tab
 
-    def on_debounce_changed(self, val):
-        self.debounce_val.setText(f"{val} ms")
-        self.cfg_mgr.config["nvidiaDebounceMs"] = val
+    def on_polling_changed(self, val):
+        fps = round(1000 / val) if val > 0 else 60
+        self.polling_val.setText(f"{val} ms ({fps} FPS)")
+        self.cfg_mgr.config["overlayPollingMs"] = val
+        self.auto_sync_timer.start(120)
+
+    def on_animation_changed(self):
+        mode = self.anim_mode_combo.currentData()
+        dur = self.anim_dur_slider.value()
+        self.anim_dur_val.setText(f"{dur} ms")
+        self.cfg_mgr.config["animationMode"] = mode
+        self.cfg_mgr.config["animationDurationMs"] = dur
+        self.preview_widget.set_animation_settings(mode, dur)
+        self.anim_preview_widget.set_animation_settings(mode, dur)
+        self.auto_sync_timer.start(120)
+
+    def test_window_animation(self):
+        mode = self.anim_mode_combo.currentData()
+        dur = self.anim_dur_slider.value()
+        self.anim_preview_widget.set_animation_settings(mode, dur)
+        self.anim_preview_widget.test_animation()
+        self.preview_widget.set_animation_settings(mode, dur)
+        self.preview_widget.test_animation()
 
     # -------------------------------------------------------------
     # TAB 6: Shortcuts Cheatsheet
@@ -628,23 +714,30 @@ class TesseraControlWindow(QMainWindow):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
-        lbl = QLabel("Native Plasma 6 Global Shortcuts (All Ctrl-Based):")
+        lbl = QLabel("Native Plasma 6 Global Shortcuts (All Ctrl-Based, Left-Hand Optimized):")
         lbl.setFont(QFont("SansSerif", 11, QFont.Bold))
         layout.addWidget(lbl)
 
         shortcuts = [
-            ("Toggle Tiling Globally", "Ctrl + Shift + T"),
+            ("Toggle Zone Overlay (KZones-Style)", "Ctrl + Shift + C"),
             ("Cycle to Next Layout", "Ctrl + Space"),
             ("Cycle to Previous Layout", "Ctrl + Shift + Space"),
+            ("Toggle Tiling Globally", "Ctrl + Shift + T"),
             ("Toggle Active Window Floating", "Ctrl + Shift + F"),
-            ("Focus Next Window", "Ctrl + Shift + J  /  Ctrl + Down"),
-            ("Focus Previous Window", "Ctrl + Shift + K  /  Ctrl + Up"),
-            ("Swap Window Forward", "Ctrl + Alt + J  /  Ctrl + Alt + Down"),
-            ("Swap Window Backward", "Ctrl + Alt + K  /  Ctrl + Alt + Up"),
-            ("Expand Master Ratio", "Ctrl + Shift + L  /  Ctrl + Right"),
-            ("Shrink Master Ratio", "Ctrl + Shift + H  /  Ctrl + Left"),
+            ("Focus Left Window (WASD)", "Ctrl + Shift + A"),
+            ("Focus Right Window (WASD)", "Ctrl + Shift + D"),
+            ("Focus Up Window (WASD)", "Ctrl + Shift + W"),
+            ("Focus Down Window (WASD)", "Ctrl + Shift + S"),
+            ("Swap Window Left (Counter-Clockwise)", "Ctrl + Shift + Q"),
+            ("Swap Window Right (Clockwise)", "Ctrl + Shift + E"),
+            ("Focus Next Window (Vim)", "Ctrl + Shift + J"),
+            ("Focus Previous Window (Vim)", "Ctrl + Shift + K"),
+            ("Swap Window Forward (Vim)", "Ctrl + Alt + J"),
+            ("Swap Window Backward (Vim)", "Ctrl + Alt + K"),
+            ("Expand Master Ratio", "Ctrl + Shift + L"),
+            ("Shrink Master Ratio", "Ctrl + Shift + H"),
             ("Increase Master Count", "Ctrl + Shift + I"),
-            ("Decrease Master Count", "Ctrl + Shift + D"),
+            ("Decrease Master Count", "Ctrl + Shift + O"),
             ("Force Retile Workspace", "Ctrl + Shift + R")
         ]
 
@@ -679,8 +772,18 @@ class TesseraControlWindow(QMainWindow):
         self.outer_gap_slider.setValue(cfg.get("gapOuter", 10))
         self.master_ratio_slider.setValue(int(cfg.get("masterRatio", 0.55) * 100))
         self.master_count_spin.setValue(cfg.get("masterCount", 1))
-        self.debounce_slider.setValue(cfg.get("nvidiaDebounceMs", 60))
-        self.smooth_resize_chk.setChecked(cfg.get("smoothResize", False))
+
+        self.polling_slider.setValue(cfg.get("overlayPollingMs", 16))
+        anim_mode = cfg.get("animationMode", "off")
+        idx = self.anim_mode_combo.findData(anim_mode)
+        if idx >= 0:
+            self.anim_mode_combo.setCurrentIndex(idx)
+        anim_dur = cfg.get("animationDurationMs", 200)
+        self.anim_dur_slider.setValue(anim_dur)
+
+        self.anim_preview_widget.set_animation_settings(anim_mode, anim_dur)
+        self.preview_widget.set_animation_settings(anim_mode, anim_dur)
+
         self.osd_chk.setChecked(cfg.get("showOsd", True))
         self.tile_new_chk.setChecked(cfg.get("tileNewWindows", True))
         self.ignore_minimized_chk.setChecked(cfg.get("ignoreMinimized", True))
@@ -705,8 +808,9 @@ class TesseraControlWindow(QMainWindow):
         cfg["gapOuter"] = self.outer_gap_slider.value()
         cfg["masterRatio"] = self.master_ratio_slider.value() / 100.0
         cfg["masterCount"] = self.master_count_spin.value()
-        cfg["nvidiaDebounceMs"] = self.debounce_slider.value()
-        cfg["smoothResize"] = self.smooth_resize_chk.isChecked()
+        cfg["overlayPollingMs"] = self.polling_slider.value()
+        cfg["animationMode"] = self.anim_mode_combo.currentData()
+        cfg["animationDurationMs"] = self.anim_dur_slider.value()
         cfg["showOsd"] = self.osd_chk.isChecked()
         cfg["tileNewWindows"] = self.tile_new_chk.isChecked()
         cfg["ignoreMinimized"] = self.ignore_minimized_chk.isChecked()

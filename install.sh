@@ -46,10 +46,17 @@ ln -sf "$SCRIPT_DIR/bin/tessera-settings" "$BIN_DIR/tessera-settings"
 # 6. Register Global Shortcuts in kglobalshortcutsrc
 echo "-> Registering global shortcuts (all Ctrl-based, zero Meta)..."
 if command -v kwriteconfig6 >/dev/null 2>&1; then
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Toggle Zone Overlay" "Ctrl+Shift+C,Ctrl+Shift+C,Tessera: Toggle Zone Overlay"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Toggle Tiling" "Ctrl+Shift+T,Ctrl+Shift+T,Tessera: Toggle Tiling"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Next Layout" "Ctrl+Space,Ctrl+Space,Tessera: Next Layout"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Previous Layout" "Ctrl+Shift+Space,Ctrl+Shift+Space,Tessera: Previous Layout"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Toggle Window Floating" "Ctrl+Shift+F,Ctrl+Shift+F,Tessera: Toggle Window Floating"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Focus Left Window" "Ctrl+Shift+A,Ctrl+Shift+A,Tessera: Focus Left Window"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Focus Right Window" "Ctrl+Shift+D,Ctrl+Shift+D,Tessera: Focus Right Window"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Focus Up Window" "Ctrl+Shift+W,Ctrl+Shift+W,Tessera: Focus Up Window"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Focus Down Window" "Ctrl+Shift+S,Ctrl+Shift+S,Tessera: Focus Down Window"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Swap Left Window" "Ctrl+Shift+Q,Ctrl+Shift+Q,Tessera: Swap Left Window"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Swap Right Window" "Ctrl+Shift+E,Ctrl+Shift+E,Tessera: Swap Right Window"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Focus Next Window" "Ctrl+Shift+J,Ctrl+Shift+J,Tessera: Focus Next Window"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Focus Previous Window" "Ctrl+Shift+K,Ctrl+Shift+K,Tessera: Focus Previous Window"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Swap Window Forward" "Ctrl+Alt+J,Ctrl+Alt+J,Tessera: Swap Window Forward"
@@ -57,7 +64,7 @@ if command -v kwriteconfig6 >/dev/null 2>&1; then
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Increase Master Ratio" "Ctrl+Shift+L,Ctrl+Shift+L,Tessera: Increase Master Ratio"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Decrease Master Ratio" "Ctrl+Shift+H,Ctrl+Shift+H,Tessera: Decrease Master Ratio"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Increase Master Count" "Ctrl+Shift+I,Ctrl+Shift+I,Tessera: Increase Master Count"
-    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Decrease Master Count" "Ctrl+Shift+D,Ctrl+Shift+D,Tessera: Decrease Master Count"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Decrease Master Count" "Ctrl+Shift+O,Ctrl+Shift+O,Tessera: Decrease Master Count"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Retile Current Workspace" "Ctrl+Shift+R,Ctrl+Shift+R,Tessera: Retile Current Workspace"
     systemctl --user restart plasma-kglobalaccel.service 2>/dev/null || true
 fi

@@ -82,6 +82,7 @@ Item {
         config.tileNewWindows = KWin.readConfig("tileNewWindows", true);
         config.showOsd = KWin.readConfig("showOsd", true);
         config.nvidiaDebounceMs = KWin.readConfig("nvidiaDebounceMs", 60);
+        config.overlayPollingMs = KWin.readConfig("overlayPollingMs", 16);
         config.smoothResize = KWin.readConfig("smoothResize", false);
         config.ignoreMinimized = KWin.readConfig("ignoreMinimized", true);
         config.floatFilter = KWin.readConfig("floatFilter", "tessera,tessera-settings,tessera_settings.py");
@@ -132,20 +133,35 @@ Item {
         return desk ? (desk.id || desk.name || desk.toString()) : "default";
     }
 
-    function getActiveLayout() {
-        var key = getCurrentDesktopKey();
-        return desktopLayouts[key] || config.defaultLayout || "master-stack";
+    property var screenLayouts: ({})      // screenName:desktopKey -> layoutName
+    property var screenMasterRatios: ({}) // screenName -> master ratio
+
+    function getLayoutKey(screen) {
+        var scr = screen || Workspace.activeScreen;
+        var sName = getScreenName(scr);
+        var deskKey = getCurrentDesktopKey();
+        return sName + ":" + deskKey;
     }
 
-    function setActiveLayout(layoutName) {
-        var key = getCurrentDesktopKey();
-        desktopLayouts[key] = layoutName;
-        osdCall.notify("Layout: " + layoutName.toUpperCase(), "preferences-desktop-virtual");
+    function getActiveLayout(screen) {
+        var scr = screen || Workspace.activeScreen;
+        var key = getLayoutKey(scr);
+        return screenLayouts[key] || desktopLayouts[getCurrentDesktopKey()] || config.defaultLayout || "master-stack";
+    }
+
+    function setActiveLayout(layoutName, screen) {
+        var scr = screen || Workspace.activeScreen;
+        var key = getLayoutKey(scr);
+        screenLayouts[key] = layoutName;
+        desktopLayouts[getCurrentDesktopKey()] = layoutName;
+        var sLabel = scr ? (scr.name || "Screen") : "Screen";
+        osdCall.notify(sLabel + " Layout: " + layoutName.toUpperCase(), "preferences-desktop-virtual");
         retileNow();
     }
 
     function cycleLayout(forward) {
-        var current = getActiveLayout();
+        var scr = Workspace.activeScreen;
+        var current = getActiveLayout(scr);
         var idx = currentLayoutList.indexOf(current);
         if (idx === -1) idx = 0;
 
@@ -154,7 +170,7 @@ Item {
         } else {
             idx = (idx - 1 + currentLayoutList.length) % currentLayoutList.length;
         }
-        setActiveLayout(currentLayoutList[idx]);
+        setActiveLayout(currentLayoutList[idx], scr);
     }
 
     // =========================================================================
@@ -260,12 +276,6 @@ Item {
 
         try {
             var screens = Workspace.screens || [Workspace.activeScreen];
-            var layoutName = getActiveLayout();
-
-            if (layoutName === "floating") {
-                isArranging = false;
-                return;
-            }
 
             for (var s = 0; s < screens.length; s++) {
                 var screen = screens[s];
@@ -273,6 +283,9 @@ Item {
 
                 var area = Workspace.clientArea(KWin.MaximizeArea, screen, Workspace.currentDesktop);
                 if (!area || area.width <= 0 || area.height <= 0) continue;
+
+                var layoutName = getActiveLayout(screen);
+                if (layoutName === "floating") continue;
 
                 var windows = getTileableWindows(screen);
                 if (windows.length === 0) continue;
@@ -287,10 +300,13 @@ Item {
                     }
                 }
 
+                var sName = getScreenName(screen);
+                var effectiveRatio = screenMasterRatios[sName] !== undefined ? screenMasterRatios[sName] : config.masterRatio;
+
                 var options = {
                     gapInner: config.gapInner,
                     gapOuter: config.gapOuter,
-                    masterRatio: config.masterRatio,
+                    masterRatio: effectiveRatio,
                     masterCount: config.masterCount
                 };
 
@@ -593,10 +609,10 @@ Item {
             id: overlayContainer
             anchors.fill: parent
 
-            // 30ms timer for continuous hover tracking without lag
+            // Cursor tracking & snap refresh rate (16ms = smooth 60 FPS)
             Timer {
                 id: overlayTimer
-                interval: 30
+                interval: config.overlayPollingMs || 16
                 running: overlayDialog.visible
                 repeat: true
                 onTriggered: {
@@ -798,12 +814,43 @@ Item {
             w.interactiveMoveResizeStepped.connect(function() {
                 if (overlayDialog.visible && currentDraggingWindow === w) {
                     overlayDialog.updateHover(Workspace.cursorPos);
+                } else if (w.resize && checkFilter(w)) {
+                    // On-the-fly desktop master resizing!
+                    var scr = w.output || getScreenForPos(w.frameGeometry);
+                    var sName = getScreenName(scr);
+                    var tiled = getTileableWindows(scr);
+                    if (tiled.length > 1 && tiled[0] === w && getActiveLayout(scr) === "master-stack") {
+                        var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
+                        var usableW = area.width - (config.gapOuter * 2);
+                        if (usableW > 0) {
+                            var liveRatio = Math.max(0.20, Math.min(0.80, w.frameGeometry.width / usableW));
+                            screenMasterRatios[sName] = Math.round(liveRatio * 100) / 100;
+                            retileNow();
+                        }
+                    }
                 }
             });
         }
 
         if (w.interactiveMoveResizeFinished) {
             w.interactiveMoveResizeFinished.connect(function() {
+                if (w.resize && checkFilter(w)) {
+                    var scr = w.output || getScreenForPos(w.frameGeometry);
+                    var sName = getScreenName(scr);
+                    var tiled = getTileableWindows(scr);
+                    if (tiled.length > 1 && tiled[0] === w && getActiveLayout(scr) === "master-stack") {
+                        var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
+                        var usableW = area.width - (config.gapOuter * 2);
+                        if (usableW > 0) {
+                            var newRatio = Math.max(0.20, Math.min(0.80, w.frameGeometry.width / usableW));
+                            newRatio = Math.round(newRatio * 100) / 100;
+                            screenMasterRatios[sName] = newRatio;
+                            config.masterRatio = newRatio;
+                            log("Desktop on-the-fly master ratio updated to " + Math.round(newRatio * 100) + "% for screen " + sName);
+                            retileNow();
+                        }
+                    }
+                }
                 if (currentDraggingWindow === w) {
                     log("Drag finished: " + w.caption);
                     var target = overlayDialog.finishDrag();
@@ -892,7 +939,7 @@ Item {
                 var changed = false;
                 for (var i = 0; i < tiled.length; i++) {
                     var tw = tiled[i];
-                    if (tw !== activeWin && tw.maximizeMode !== 0) {
+                    if (tw.maximizeMode !== 0) {
                         if (typeof tw.setMaximize === "function") {
                             tw.setMaximize(false, false);
                         }
@@ -1018,9 +1065,24 @@ Item {
         retileNow();
     }
 
+    function toggleOverlay() {
+        if (overlayDialog.visible) {
+            overlayDialog.hideOverlay();
+        } else {
+            overlayDialog.showOverlay(Workspace.activeWindow);
+        }
+    }
+
     // =========================================================================
-    // 10. Global Keyboard Shortcuts (100% Ctrl-Based, Zero Meta)
+    // 10. Global Keyboard Shortcuts (100% Ctrl-Based, Left-Hand Optimized)
     // =========================================================================
+
+    ShortcutHandler {
+        name: "Tessera: Toggle Zone Overlay"
+        text: "Tessera: Toggle Zone Overlay"
+        sequence: "Ctrl+Shift+C"
+        onActivated: root.toggleOverlay()
+    }
 
     ShortcutHandler {
         name: "Tessera: Next Layout"
@@ -1048,6 +1110,49 @@ Item {
         text: "Tessera: Toggle Window Floating"
         sequence: "Ctrl+Shift+F"
         onActivated: root.toggleActiveFloating()
+    }
+
+    // Left-Hand Directional Navigation (WASD)
+    ShortcutHandler {
+        name: "Tessera: Focus Left Window"
+        text: "Tessera: Focus Left Window"
+        sequence: "Ctrl+Shift+A"
+        onActivated: root.focusWindow(false)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Focus Right Window"
+        text: "Tessera: Focus Right Window"
+        sequence: "Ctrl+Shift+D"
+        onActivated: root.focusWindow(true)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Focus Up Window"
+        text: "Tessera: Focus Up Window"
+        sequence: "Ctrl+Shift+W"
+        onActivated: root.focusWindow(false)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Focus Down Window"
+        text: "Tessera: Focus Down Window"
+        sequence: "Ctrl+Shift+S"
+        onActivated: root.focusWindow(true)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Swap Left Window"
+        text: "Tessera: Swap Left Window"
+        sequence: "Ctrl+Shift+Q"
+        onActivated: root.swapWindow(false)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Swap Right Window"
+        text: "Tessera: Swap Right Window"
+        sequence: "Ctrl+Shift+E"
+        onActivated: root.swapWindow(true)
     }
 
     ShortcutHandler {
@@ -1102,7 +1207,7 @@ Item {
     ShortcutHandler {
         name: "Tessera: Decrease Master Count"
         text: "Tessera: Decrease Master Count"
-        sequence: "Ctrl+Shift+D"
+        sequence: "Ctrl+Shift+O"
         onActivated: root.adjustMasterCount(-1)
     }
 

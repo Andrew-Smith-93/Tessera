@@ -21,6 +21,9 @@ DEFAULT_CONFIG = {
     "tileNewWindows": True,
     "showOsd": True,
     "nvidiaDebounceMs": 60,
+    "overlayPollingMs": 16,
+    "animationMode": "off",
+    "animationDurationMs": 200,
     "smoothResize": False,
     "ignoreMinimized": True,
     "floatFilter": "tessera,tessera-settings,tessera_settings.py",
@@ -81,6 +84,9 @@ class ConfigManager:
             write_val("masterRatio", self.config.get("masterRatio", 0.55))
             write_val("masterCount", self.config.get("masterCount", 1), "int")
             write_val("nvidiaDebounceMs", self.config.get("nvidiaDebounceMs", 60), "int")
+            write_val("overlayPollingMs", self.config.get("overlayPollingMs", 16), "int")
+            write_val("animationMode", self.config.get("animationMode", "off"))
+            write_val("animationDurationMs", self.config.get("animationDurationMs", 200), "int")
             write_val("smoothResize", "true" if self.config.get("smoothResize") else "false", "bool")
             write_val("showOsd", "true" if self.config.get("showOsd") else "false", "bool")
             write_val("floatFilter", self.config.get("floatFilter", "tessera,tessera-settings,tessera_settings.py"))

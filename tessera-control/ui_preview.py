@@ -1,12 +1,12 @@
 """
 Live Desktop Preview Widget
 Renders an interactive miniature desktop preview reflecting the chosen layout,
-inner gaps, outer gaps, and master ratios in real time.
+inner gaps, outer gaps, master ratios, and animated window movements in real time.
 """
 
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtGui import QPainter, QColor, QPen, QBrush, QFont
-from PyQt5.QtCore import Qt, QRect
+from PyQt5.QtCore import Qt, QRect, QVariantAnimation, QEasingCurve
 
 class LiveDesktopPreview(QWidget):
     def __init__(self, parent=None):
@@ -19,6 +19,32 @@ class LiveDesktopPreview(QWidget):
         self.master_count = 1
         self.window_count = 3
 
+        self.animation_mode = "off"
+        self.animation_duration = 200
+
+        self.current_rects = []
+        self.start_rects = []
+        self.target_rects = []
+
+        self.anim = QVariantAnimation(self)
+        self.anim.setStartValue(0.0)
+        self.anim.setEndValue(1.0)
+        self.anim.valueChanged.connect(self.on_anim_step)
+
+    def set_animation_settings(self, mode, duration_ms):
+        self.animation_mode = mode or "off"
+        self.animation_duration = max(50, min(600, duration_ms or 200))
+        self.anim.setDuration(self.animation_duration)
+
+        if self.animation_mode == "slide":
+            self.anim.setEasingCurve(QEasingCurve.Linear)
+        elif self.animation_mode == "ease_out":
+            self.anim.setEasingCurve(QEasingCurve.OutCubic)
+        elif self.animation_mode == "spring":
+            self.anim.setEasingCurve(QEasingCurve.OutBack)
+        else:
+            self.anim.setEasingCurve(QEasingCurve.Linear)
+
     def update_params(self, layout_type, gap_inner, gap_outer, master_ratio, master_count, window_count=3):
         self.layout_type = layout_type
         self.gap_inner = gap_inner
@@ -26,35 +52,67 @@ class LiveDesktopPreview(QWidget):
         self.master_ratio = master_ratio
         self.master_count = master_count
         self.window_count = window_count
+
+        new_rects = self.compute_rects()
+
+        if self.animation_mode == "off" or not self.current_rects:
+            self.current_rects = [QRect(r) for r in new_rects]
+            self.target_rects = [QRect(r) for r in new_rects]
+            self.update()
+        else:
+            self.start_rects = [QRect(r) for r in self.current_rects]
+            self.target_rects = [QRect(r) for r in new_rects]
+
+            # Match lengths if counts changed
+            while len(self.start_rects) < len(self.target_rects):
+                self.start_rects.append(QRect(self.target_rects[len(self.start_rects)]))
+            while len(self.start_rects) > len(self.target_rects):
+                self.start_rects.pop()
+
+            self.anim.stop()
+            self.anim.setDuration(self.animation_duration)
+            self.anim.start()
+
+    def on_anim_step(self, val):
+        progress = float(val)
+        interpolated = []
+        for i in range(min(len(self.start_rects), len(self.target_rects))):
+            s = self.start_rects[i]
+            t = self.target_rects[i]
+            x = int(s.x() + (t.x() - s.x()) * progress)
+            y = int(s.y() + (t.y() - s.y()) * progress)
+            w = int(s.width() + (t.width() - s.width()) * progress)
+            h = int(s.height() + (t.height() - s.height()) * progress)
+            interpolated.append(QRect(x, y, max(10, w), max(10, h)))
+        self.current_rects = interpolated
         self.update()
 
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+    def test_animation(self):
+        """Simulates window movement to preview the selected animation mode."""
+        if not self.target_rects:
+            self.compute_rects()
 
-        w = self.width()
-        h = self.height()
+        # Swap window positions temporarily to trigger motion animation
+        if len(self.target_rects) >= 2:
+            swapped = list(self.target_rects)
+            swapped[0], swapped[1] = swapped[1], swapped[0]
+            self.start_rects = [QRect(r) for r in self.current_rects]
+            self.target_rects = swapped
+            self.anim.stop()
+            self.anim.setDuration(self.animation_duration)
+            self.anim.start()
 
-        # Draw outer monitor bezel
-        painter.setBrush(QBrush(QColor(24, 28, 36)))
-        painter.setPen(QPen(QColor(50, 56, 68), 2))
-        painter.drawRoundedRect(4, 4, w - 8, h - 8, 8, 8)
-
-        # Draw miniature panel / dock at bottom
+    def compute_rects(self):
+        w = self.width() if self.width() > 50 else 280
+        h = self.height() if self.height() > 50 else 180
         panel_h = 14
-        painter.setBrush(QBrush(QColor(18, 20, 26, 220)))
-        painter.setPen(Qt.NoPen)
-        painter.drawRect(6, h - panel_h - 6, w - 12, panel_h)
 
-        # Working area for windows
         screen_x = 10
         screen_y = 10
         screen_w = w - 20
         screen_h = h - panel_h - 22
 
-        # Scale gaps to preview dimensions
         scale_x = screen_w / 1920.0
-        scale_y = screen_h / 1080.0
         scaled_outer = max(2, int(self.gap_outer * scale_x * 2.5))
         scaled_inner = max(2, int(self.gap_inner * scale_x * 2.5))
 
@@ -64,7 +122,7 @@ class LiveDesktopPreview(QWidget):
         client_h = screen_h - (scaled_outer * 2)
 
         if client_w <= 10 or client_h <= 10:
-            return
+            return []
 
         rects = []
         count = self.window_count
@@ -75,11 +133,7 @@ class LiveDesktopPreview(QWidget):
             else:
                 m_w = int(client_w * self.master_ratio) - (scaled_inner // 2)
                 s_w = client_w - m_w - scaled_inner
-
-                # Master window
                 rects.append(QRect(client_x, client_y, m_w, client_h))
-
-                # Stack windows
                 stack_count = count - 1
                 stack_h = (client_h - (scaled_inner * (stack_count - 1))) // stack_count
                 for s in range(stack_count):
@@ -113,13 +167,35 @@ class LiveDesktopPreview(QWidget):
         elif self.layout_type == "monocle":
             rects.append(QRect(client_x, client_y, client_w, client_h))
 
-        else: # Floating preview
+        else: # Floating
             rects.append(QRect(client_x + 10, client_y + 10, int(client_w * 0.55), int(client_h * 0.6)))
             rects.append(QRect(client_x + 35, client_y + 35, int(client_w * 0.55), int(client_h * 0.6)))
 
-        # Draw the calculated mock windows
+        return rects
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+
+        # Monitor bezel
+        painter.setBrush(QBrush(QColor(24, 28, 36)))
+        painter.setPen(QPen(QColor(50, 56, 68), 2))
+        painter.drawRoundedRect(4, 4, w - 8, h - 8, 8, 8)
+
+        # Miniature panel at bottom
+        panel_h = 14
+        painter.setBrush(QBrush(QColor(18, 20, 26, 220)))
+        painter.setPen(Qt.NoPen)
+        painter.drawRect(6, h - panel_h - 6, w - 12, panel_h)
+
+        # Draw windows (use current_rects if populated, else compute)
+        rects = self.current_rects if self.current_rects else self.compute_rects()
+
         window_colors = [
-            QColor(60, 110, 210, 190),  # Primary accent / Active window
+            QColor(60, 110, 210, 190),  # Master / active
             QColor(42, 54, 75, 170),
             QColor(38, 48, 66, 170),
             QColor(34, 44, 60, 170)
@@ -134,7 +210,7 @@ class LiveDesktopPreview(QWidget):
             painter.setPen(QPen(QColor(80, 140, 240) if idx == 0 else QColor(70, 85, 115), 1.5))
             painter.drawRoundedRect(r, 4, 4)
 
-            # Draw miniature titlebar
+            # Miniature titlebar
             tb_h = max(6, int(r.height() * 0.15))
             painter.setBrush(QBrush(QColor(0, 0, 0, 40)))
             painter.setPen(Qt.NoPen)
