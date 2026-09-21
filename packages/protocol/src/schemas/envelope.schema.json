@@ -3,59 +3,133 @@
   "$id": "https://tessera.wm/schemas/v1/envelope.json",
   "title": "TesseraProtocolEnvelope",
   "type": "object",
-  "required": ["protocol", "version", "id", "type"],
+  "required": [
+    "protocol",
+    "majorVersion",
+    "minorVersion",
+    "kind",
+    "id"
+  ],
   "properties": {
     "protocol": {
       "type": "string",
       "const": "tessera.ipc"
     },
-    "version": {
+    "majorVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "minorVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "kind": {
       "type": "string",
-      "const": "1.0"
+      "enum": [
+        "request",
+        "response",
+        "event"
+      ]
     },
     "id": {
       "type": "string",
       "minLength": 1
     },
-    "type": {
-      "type": "string",
-      "enum": ["request", "response", "event"]
+    "metadata": {
+      "type": "object"
     }
   },
   "oneOf": [
     {
       "properties": {
-        "type": { "const": "request" },
-        "method": { "type": "string", "minLength": 1 },
-        "params": { "type": "object" }
+        "kind": {
+          "const": "request"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "system.hello",
+            "state.getSnapshot",
+            "state.getDiagnostics",
+            "state.getCapabilities",
+            "config.get",
+            "config.validatePatch",
+            "config.applyPatch",
+            "runtime.requestReconcile",
+            "runtime.setLayout",
+            "runtime.setMasterCount",
+            "runtime.setMasterRatio",
+            "runtime.setWindowFloating",
+            "runtime.getVersion",
+            "trace.getRecent",
+            "trace.clearRecent"
+          ]
+        },
+        "params": {
+          "type": "object"
+        }
       },
-      "required": ["method"]
+      "required": [
+        "method"
+      ]
     },
     {
       "properties": {
-        "type": { "const": "response" },
-        "replyTo": { "type": "string", "minLength": 1 },
-        "ok": { "type": "boolean" },
+        "kind": {
+          "const": "response"
+        },
+        "replyTo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ok": {
+          "type": "boolean"
+        },
         "result": {},
         "error": {
           "type": "object",
-          "required": ["code", "message"],
+          "required": [
+            "code",
+            "message"
+          ],
           "properties": {
-            "code": { "type": "string", "minLength": 1 },
-            "message": { "type": "string" },
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string"
+            },
             "details": {}
           }
         }
       },
-      "required": ["replyTo", "ok"]
+      "required": [
+        "replyTo",
+        "ok"
+      ]
     },
     {
       "properties": {
-        "type": { "const": "event" },
-        "event": { "type": "string", "minLength": 1 },
+        "kind": {
+          "const": "event"
+        },
+        "event": {
+          "type": "string",
+          "enum": [
+            "runtime.ready",
+            "runtime.stateChanged",
+            "runtime.transactionCommitted",
+            "runtime.configurationChanged",
+            "runtime.capabilitiesChanged",
+            "runtime.warning"
+          ]
+        },
         "data": {}
       },
-      "required": ["event"]
+      "required": [
+        "event"
+      ]
     }
   ]
 }

@@ -2,7 +2,6 @@
   "protocol": "tessera.ipc",
   "majorVersion": 1,
   "minorVersion": 0,
-  "kind": "response",
-  "id": "bad-07",
-  "replyTo": "req-1"
+  "kind": "request",
+  "method": "state.getSnapshot"
 }

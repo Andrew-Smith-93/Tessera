@@ -1,8 +1,8 @@
 {
   "protocol": "tessera.ipc",
   "majorVersion": 1,
-  "minorVersion": 0,
+  "minorVersion": 99,
   "kind": "request",
-  "id": "",
+  "id": "bad-03",
   "method": "state.getSnapshot"
 }

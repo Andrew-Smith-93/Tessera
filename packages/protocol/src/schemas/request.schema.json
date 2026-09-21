@@ -3,14 +3,61 @@
   "$id": "https://tessera.wm/schemas/v1/request.json",
   "title": "TesseraProtocolRequest",
   "type": "object",
-  "required": ["protocol", "version", "id", "type", "method"],
+  "required": [
+    "protocol",
+    "majorVersion",
+    "minorVersion",
+    "kind",
+    "id",
+    "method"
+  ],
   "properties": {
-    "protocol": { "type": "string", "const": "tessera.ipc" },
-    "version": { "type": "string", "const": "1.0" },
-    "id": { "type": "string", "minLength": 1 },
-    "type": { "type": "string", "const": "request" },
-    "method": { "type": "string", "minLength": 1 },
-    "params": { "type": "object" }
+    "protocol": {
+      "type": "string",
+      "const": "tessera.ipc"
+    },
+    "majorVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "minorVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "kind": {
+      "type": "string",
+      "const": "request"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "system.hello",
+        "state.getSnapshot",
+        "state.getDiagnostics",
+        "state.getCapabilities",
+        "config.get",
+        "config.validatePatch",
+        "config.applyPatch",
+        "runtime.requestReconcile",
+        "runtime.setLayout",
+        "runtime.setMasterCount",
+        "runtime.setMasterRatio",
+        "runtime.setWindowFloating",
+        "runtime.getVersion",
+        "trace.getRecent",
+        "trace.clearRecent"
+      ]
+    },
+    "params": {
+      "type": "object"
+    },
+    "metadata": {
+      "type": "object"
+    }
   },
   "additionalProperties": false
 }

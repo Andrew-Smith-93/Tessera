@@ -1,6 +1,13 @@
 import {
   PROTOCOL_NAME,
-  PROTOCOL_VERSION,
+  PROTOCOL_MAJOR_VERSION,
+  PROTOCOL_MINOR_VERSION,
+  MAX_FRAME_SIZE,
+  MAX_NESTING_DEPTH,
+  MAX_STRING_LENGTH,
+  MAX_ARRAY_LENGTH,
+  MAX_OUTSTANDING_REQUESTS,
+  MAX_SUBSCRIPTION_COUNT,
   ProtocolErrorCode,
   V1_CAPABILITIES,
   type ProtocolCapability,
@@ -9,16 +16,26 @@ import {
   type ProtocolEvent,
   type HelloParams,
   type HelloResult,
+  type ResourceLimits,
   type ProtocolRetainedScreen,
   type ProtocolRetainedWindow,
-  type GetScreenOrderParams,
-  type GetScreenOrderResult,
-  type ConfigSetParams,
-  type ConfigSetResult,
-  type RuntimeReconcileParams,
-  type RuntimeReconcileResult,
-  type TraceDumpParams,
-  type TraceDumpResult
+  type StateSnapshotResult,
+  type StateDiagnosticsResult,
+  type StateCapabilitiesResult,
+  type ConfigGetResult,
+  type ConfigValidatePatchResult,
+  type ConfigApplyPatchParams,
+  type RuntimeRequestReconcileParams,
+  type RuntimeSetLayoutParams,
+  type RuntimeSetMasterCountParams,
+  type RuntimeSetMasterRatioParams,
+  type RuntimeSetWindowFloatingParams,
+  type RuntimeCommandAckResult,
+  type RuntimeVersionResult,
+  type TraceGetRecentParams,
+  type TraceGetRecentResult,
+  type TraceClearRecentResult,
+  type ProtocolTransaction
 } from "./types.js";
 import { createProtocolError, ProtocolError } from "./errors.js";
 import { validateMethodParams } from "./validator.js";
@@ -33,13 +50,29 @@ export interface CoordinatorRuntimeTarget {
   getConfig?(): any;
   updateConfig?(config: any): void;
   getTraceRecorder?(): any;
+  setLayout?(outputId: string, layout: string): void;
+  setMasterCount?(outputId: string, count: number): void;
+  setMasterRatio?(outputId: string, ratio: number): void;
+  setWindowFloating?(windowId: string, floating: boolean): void;
 }
 
 export interface ServerSession {
+  clientId: string;
   clientName?: string;
   clientVersion?: string;
+  negotiatedMajor: number;
+  negotiatedMinor: number;
   negotiatedCapabilities: Set<string>;
   helloCompleted: boolean;
+  decoder: StreamingFrameDecoder;
+}
+
+export interface QueuedCommand {
+  id: string;
+  method: string;
+  params: Record<string, unknown>;
+  idempotencyKey?: string;
+  clientId: string;
 }
 
 export class ReferenceServer {
@@ -47,30 +80,146 @@ export class ReferenceServer {
   private readonly serverVersion: string;
   private readonly eventListeners: Array<(event: ProtocolEvent, frameBytes: Uint8Array) => void> = [];
   private readonly sessions = new Map<string, ServerSession>();
-  private readonly decoder = new StreamingFrameDecoder();
+
+  private currentRevision = 1;
+  private nextRevision = 1;
+  private commandQueue: QueuedCommand[] = [];
+  private idempotencyStore = new Map<string, RuntimeCommandAckResult>();
+
+  // Deterministic monotonic sequence counters
+  private responseSeq = 0;
+  private eventSeq = 0;
+  private commandSeq = 0;
+  private tick = 0;
 
   constructor(runtime: CoordinatorRuntimeTarget, options?: { serverVersion?: string }) {
     this.runtime = runtime;
     this.serverVersion = options?.serverVersion ?? "1.0.0";
   }
 
-  private getOrCreateSession(clientId = "default"): ServerSession {
+  public getSession(clientId: string): ServerSession {
     let session = this.sessions.get(clientId);
     if (!session) {
       session = {
+        clientId,
+        negotiatedMajor: 0,
+        negotiatedMinor: 0,
         negotiatedCapabilities: new Set(),
-        helloCompleted: false
+        helloCompleted: false,
+        decoder: new StreamingFrameDecoder() // Dedicated decoder per client session
       };
       this.sessions.set(clientId, session);
     }
     return session;
   }
 
+  public removeSession(clientId: string): void {
+    this.sessions.delete(clientId);
+  }
+
+  public getCurrentRevision(): number {
+    return this.currentRevision;
+  }
+
+  public getPendingCommandCount(): number {
+    return this.commandQueue.length;
+  }
+
+  /**
+   * Advances the runtime state: processes all queued commands in FIFO order,
+   * performs reconciliation, updates revision, and emits transactions.
+   */
+  public advance(): { processedCommands: number; transaction: ProtocolTransaction | null } {
+    this.tick++;
+    const count = this.commandQueue.length;
+    let forceReconcile = false;
+
+    while (this.commandQueue.length > 0) {
+      const cmd = this.commandQueue.shift()!;
+      switch (cmd.method) {
+        case "config.applyPatch": {
+          const patch = (cmd.params.patch ?? {}) as Record<string, unknown>;
+          if (this.runtime.updateConfig) {
+            this.runtime.updateConfig(patch);
+          }
+          forceReconcile = true;
+          this.emitEvent("runtime.configurationChanged", {
+            config: this.runtime.getConfig ? this.runtime.getConfig() : {},
+            revision: this.nextRevision
+          });
+          break;
+        }
+
+        case "runtime.setLayout": {
+          if (this.runtime.setLayout) {
+            this.runtime.setLayout(cmd.params.outputId as string, cmd.params.layout as string);
+          }
+          forceReconcile = true;
+          break;
+        }
+
+        case "runtime.setMasterCount": {
+          if (this.runtime.setMasterCount) {
+            this.runtime.setMasterCount(cmd.params.outputId as string, cmd.params.count as number);
+          }
+          forceReconcile = true;
+          break;
+        }
+
+        case "runtime.setMasterRatio": {
+          if (this.runtime.setMasterRatio) {
+            this.runtime.setMasterRatio(cmd.params.outputId as string, cmd.params.ratio as number);
+          }
+          forceReconcile = true;
+          break;
+        }
+
+        case "runtime.setWindowFloating": {
+          if (this.runtime.setWindowFloating) {
+            this.runtime.setWindowFloating(cmd.params.windowId as string, cmd.params.floating as boolean);
+          }
+          forceReconcile = true;
+          break;
+        }
+
+        case "runtime.requestReconcile": {
+          forceReconcile = true;
+          break;
+        }
+      }
+    }
+
+    this.currentRevision = this.nextRevision;
+
+    let transaction: ProtocolTransaction | null = null;
+    if (forceReconcile) {
+      const tx = this.runtime.reconcile();
+      if (tx) {
+        transaction = {
+          epoch: tx.epoch,
+          tick: this.tick,
+          reasons: [...tx.reasons],
+          affectedScreens: [...tx.affectedScreens],
+          operations: tx.operations.map((op: any) => ({
+            windowId: op.windowId,
+            targetRect: { ...op.targetRect },
+            previousRect: op.previousRect ? { ...op.previousRect } : undefined
+          })),
+          skippedWrites: tx.skippedWrites
+        };
+
+        this.emitEvent("runtime.transactionCommitted", { transaction });
+      }
+    }
+
+    return { processedCommands: count, transaction };
+  }
+
   /**
    * Dispatches a typed ProtocolRequest and returns a ProtocolResponse.
    */
   public async handleRequest(request: ProtocolRequest, clientId = "default"): Promise<ProtocolResponse> {
-    const session = this.getOrCreateSession(clientId);
+    const session = this.getSession(clientId);
 
     // 1. Handle system.hello (handshake)
     if (request.method === "system.hello") {
@@ -80,8 +229,40 @@ export class ReferenceServer {
       }
 
       const params = (request.params ?? {}) as unknown as HelloParams;
+
+      // Check major version compatibility
+      const minMajor = params.minMajor ?? PROTOCOL_MAJOR_VERSION;
+      const maxMajor = params.maxMajor ?? PROTOCOL_MAJOR_VERSION;
+      if (minMajor > PROTOCOL_MAJOR_VERSION || maxMajor < PROTOCOL_MAJOR_VERSION) {
+        return this.createErrorResponse(
+          request.id,
+          createProtocolError(
+            ProtocolErrorCode.UNSUPPORTED_MAJOR_VERSION,
+            `Client requested major version range [${minMajor}..${maxMajor}], server supports ${PROTOCOL_MAJOR_VERSION}`
+          )
+        );
+      }
+
+      // Check minor version compatibility
+      const minMinor = params.minMinor ?? 0;
+      const maxMinor = params.maxMinor ?? 0;
+      if (minMinor > PROTOCOL_MINOR_VERSION) {
+        return this.createErrorResponse(
+          request.id,
+          createProtocolError(
+            ProtocolErrorCode.UNSUPPORTED_MINOR_VERSION,
+            `Client requested minimum minor version ${minMinor}, server supports up to ${PROTOCOL_MINOR_VERSION}`
+          )
+        );
+      }
+
+      // Negotiate highest mutually supported minor version
+      const negotiatedMinor = Math.min(maxMinor, PROTOCOL_MINOR_VERSION);
+
+      // Negotiate capabilities
       const requested = new Set(params.requestedCapabilities ?? V1_CAPABILITIES);
       const granted: string[] = [];
+      session.negotiatedCapabilities.clear();
 
       for (const cap of V1_CAPABILITIES) {
         if (requested.has(cap)) {
@@ -92,13 +273,27 @@ export class ReferenceServer {
 
       session.clientName = params.clientName;
       session.clientVersion = params.clientVersion;
+      session.negotiatedMajor = PROTOCOL_MAJOR_VERSION;
+      session.negotiatedMinor = negotiatedMinor;
       session.helloCompleted = true;
+
+      const limits: ResourceLimits = {
+        maxFrameSize: MAX_FRAME_SIZE,
+        maxNestingDepth: MAX_NESTING_DEPTH,
+        maxStringLength: MAX_STRING_LENGTH,
+        maxArrayLength: MAX_ARRAY_LENGTH,
+        maxOutstandingRequests: MAX_OUTSTANDING_REQUESTS,
+        maxSubscriptionCount: MAX_SUBSCRIPTION_COUNT
+      };
 
       const helloResult: HelloResult = {
         serverName: "tessera-runtime",
         serverVersion: this.serverVersion,
-        protocolVersion: PROTOCOL_VERSION,
-        capabilities: granted
+        negotiatedMajor: PROTOCOL_MAJOR_VERSION,
+        negotiatedMinor,
+        capabilities: granted,
+        maxFrameSize: MAX_FRAME_SIZE,
+        limits
       };
 
       return this.createSuccessResponse(request.id, helloResult);
@@ -119,7 +314,10 @@ export class ReferenceServer {
     // 3. Dispatch specific V1 methods
     try {
       switch (request.method) {
-        case "state.getRetainedScreens": {
+        case "state.getSnapshot": {
+          const cfg = this.runtime.getConfig ? this.runtime.getConfig() : {};
+          const shouldRedact = Boolean(cfg.redactIdentities);
+
           const screens: ProtocolRetainedScreen[] = this.runtime.getRetainedScreens().map(s => ({
             outputId: s.outputId,
             name: s.name,
@@ -132,16 +330,15 @@ export class ReferenceServer {
             orderedWindowIds: [...s.orderedWindowIds],
             persistentOrder: [...s.persistentOrder]
           }));
-          return this.createSuccessResponse(request.id, { screens });
-        }
-
-        case "state.getRetainedWindows": {
-          const cfg = this.runtime.getConfig ? this.runtime.getConfig() : {};
-          const shouldRedact = Boolean(cfg.redactIdentities);
 
           const windows: ProtocolRetainedWindow[] = this.runtime.getRetainedWindows().map(w => ({
             id: w.id,
+            title: shouldRedact ? undefined : w.title,
             resourceClass: shouldRedact ? "[REDACTED]" : w.resourceClass,
+            resourceName: shouldRedact ? "[REDACTED]" : w.resourceName,
+            appId: shouldRedact ? "[REDACTED]" : w.appId,
+            desktopFileName: shouldRedact ? "[REDACTED]" : w.desktopFileName,
+            role: shouldRedact ? "[REDACTED]" : w.role,
             outputId: w.outputId,
             classification: w.classification,
             tileable: w.tileable,
@@ -155,104 +352,144 @@ export class ReferenceServer {
             preMinimizeGeometry: w.preMinimizeGeometry ? { ...w.preMinimizeGeometry } : null,
             outputAffinity: w.outputAffinity
           }));
-          return this.createSuccessResponse(request.id, { windows });
+
+          const diag = this.runtime.getDiagnostics();
+          const result: StateSnapshotResult = {
+            revision: this.currentRevision,
+            screens,
+            windows,
+            config: { ...cfg },
+            diagnostics: { ...diag }
+          };
+          return this.createSuccessResponse(request.id, result);
         }
 
-        case "state.getScreenOrder": {
-          const validation = validateMethodParams("state.getScreenOrder", request.params);
-          if (!validation.valid && validation.error) {
-            return this.createErrorResponse(request.id, validation.error);
-          }
-          const params = (request.params ?? {}) as unknown as GetScreenOrderParams;
-          const screen = this.runtime.getRetainedScreen(params.outputId);
-          if (!screen) {
-            return this.createErrorResponse(
-              request.id,
-              createProtocolError(
-                ProtocolErrorCode.INVALID_PARAMS,
-                `Screen with outputId "${params.outputId}" not found`
-              )
-            );
-          }
-          const result: GetScreenOrderResult = {
-            outputId: screen.outputId,
-            orderedWindowIds: [...screen.orderedWindowIds],
-            persistentOrder: [...screen.persistentOrder]
+        case "state.getDiagnostics": {
+          const diag = this.runtime.getDiagnostics();
+          const result: StateDiagnosticsResult = {
+            diagnostics: { ...diag }
+          };
+          return this.createSuccessResponse(request.id, result);
+        }
+
+        case "state.getCapabilities": {
+          const result: StateCapabilitiesResult = {
+            capabilities: [...V1_CAPABILITIES],
+            adapterCapabilities: 0x3ff // All AdapterCapabilities
           };
           return this.createSuccessResponse(request.id, result);
         }
 
         case "config.get": {
-          const config = this.runtime.getConfig ? this.runtime.getConfig() : {};
-          return this.createSuccessResponse(request.id, { config: { ...config } });
-        }
-
-        case "config.set": {
-          const validation = validateMethodParams("config.set", request.params);
-          if (!validation.valid && validation.error) {
-            return this.createErrorResponse(request.id, validation.error);
-          }
-          const params = (request.params ?? {}) as unknown as ConfigSetParams;
-          if (this.runtime.updateConfig) {
-            this.runtime.updateConfig(params.config);
-          }
-          const appliedResult: ConfigSetResult = {
-            success: true,
-            applied: { ...params.config }
-          };
-          return this.createSuccessResponse(request.id, appliedResult);
-        }
-
-        case "runtime.reconcile": {
-          const params = (request.params ?? {}) as unknown as RuntimeReconcileParams;
-          const tx = this.runtime.reconcile(params.forceScreenId);
-          const result: RuntimeReconcileResult = {
-            transaction: tx
-              ? {
-                  epoch: tx.epoch,
-                  reasons: [...tx.reasons],
-                  affectedScreens: [...tx.affectedScreens],
-                  operations: tx.operations.map((op: any) => ({
-                    windowId: op.windowId,
-                    targetRect: { ...op.targetRect },
-                    previousRect: op.previousRect ? { ...op.previousRect } : undefined
-                  })),
-                  skippedWrites: tx.skippedWrites
-                }
-              : null
+          const cfg = this.runtime.getConfig ? this.runtime.getConfig() : {};
+          const result: ConfigGetResult = {
+            config: { ...cfg },
+            revision: this.currentRevision
           };
           return this.createSuccessResponse(request.id, result);
         }
 
-        case "runtime.getDiagnostics": {
-          const diagnostics = this.runtime.getDiagnostics();
-          return this.createSuccessResponse(request.id, { diagnostics: { ...diagnostics } });
+        case "config.validatePatch": {
+          const validation = validateMethodParams("config.validatePatch", request.params);
+          if (!validation.valid && validation.error) {
+            return this.createErrorResponse(request.id, validation.error);
+          }
+          const result: ConfigValidatePatchResult = { valid: true };
+          return this.createSuccessResponse(request.id, result);
         }
 
-        case "trace.dump": {
-          const params = (request.params ?? {}) as unknown as TraceDumpParams;
+        case "config.applyPatch": {
+          const validation = validateMethodParams("config.applyPatch", request.params);
+          if (!validation.valid && validation.error) {
+            return this.createErrorResponse(request.id, validation.error);
+          }
+          const p = (request.params ?? {}) as unknown as ConfigApplyPatchParams;
+          return this.enqueueCommand("config.applyPatch", p as unknown as Record<string, unknown>, request.id, clientId);
+        }
+
+        case "runtime.requestReconcile": {
+          const p = (request.params ?? {}) as unknown as RuntimeRequestReconcileParams;
+          return this.enqueueCommand("runtime.requestReconcile", p as unknown as Record<string, unknown>, request.id, clientId);
+        }
+
+        case "runtime.setLayout": {
+          const validation = validateMethodParams("runtime.setLayout", request.params);
+          if (!validation.valid && validation.error) {
+            return this.createErrorResponse(request.id, validation.error);
+          }
+          const p = (request.params ?? {}) as unknown as RuntimeSetLayoutParams;
+          return this.enqueueCommand("runtime.setLayout", p as unknown as Record<string, unknown>, request.id, clientId);
+        }
+
+        case "runtime.setMasterCount": {
+          const validation = validateMethodParams("runtime.setMasterCount", request.params);
+          if (!validation.valid && validation.error) {
+            return this.createErrorResponse(request.id, validation.error);
+          }
+          const p = (request.params ?? {}) as unknown as RuntimeSetMasterCountParams;
+          return this.enqueueCommand("runtime.setMasterCount", p as unknown as Record<string, unknown>, request.id, clientId);
+        }
+
+        case "runtime.setMasterRatio": {
+          const validation = validateMethodParams("runtime.setMasterRatio", request.params);
+          if (!validation.valid && validation.error) {
+            return this.createErrorResponse(request.id, validation.error);
+          }
+          const p = (request.params ?? {}) as unknown as RuntimeSetMasterRatioParams;
+          return this.enqueueCommand("runtime.setMasterRatio", p as unknown as Record<string, unknown>, request.id, clientId);
+        }
+
+        case "runtime.setWindowFloating": {
+          const validation = validateMethodParams("runtime.setWindowFloating", request.params);
+          if (!validation.valid && validation.error) {
+            return this.createErrorResponse(request.id, validation.error);
+          }
+          const p = (request.params ?? {}) as unknown as RuntimeSetWindowFloatingParams;
+          return this.enqueueCommand("runtime.setWindowFloating", p as unknown as Record<string, unknown>, request.id, clientId);
+        }
+
+        case "runtime.getVersion": {
+          const result: RuntimeVersionResult = {
+            engineVersion: this.serverVersion,
+            protocolMajor: PROTOCOL_MAJOR_VERSION,
+            protocolMinor: PROTOCOL_MINOR_VERSION
+          };
+          return this.createSuccessResponse(request.id, result);
+        }
+
+        case "trace.getRecent": {
           const recorder = this.runtime.getTraceRecorder ? this.runtime.getTraceRecorder() : null;
-          let entries = recorder ? recorder.getEntries() : [];
+          if (!recorder || !recorder.isEnabled()) {
+            return this.createErrorResponse(
+              request.id,
+              createProtocolError(ProtocolErrorCode.TRACE_DISABLED, "Trace recording is disabled on this runtime")
+            );
+          }
+
+          const params = (request.params ?? {}) as unknown as TraceGetRecentParams;
+          let entries = recorder.getEntries();
           if (params.limit !== undefined && params.limit > 0) {
             entries = entries.slice(-params.limit);
           }
-          const dumpResult: TraceDumpResult = {
+
+          const result: TraceGetRecentResult = {
             entries: entries.map((e: any) => ({
               tick: e.tick ?? 0,
               timestamp: e.timestamp,
               event: { ...e.event }
             }))
           };
-          return this.createSuccessResponse(request.id, dumpResult);
+          return this.createSuccessResponse(request.id, result);
         }
 
-        case "trace.clear": {
+        case "trace.clearRecent": {
           const recorder = this.runtime.getTraceRecorder ? this.runtime.getTraceRecorder() : null;
           let cleared = 0;
           if (recorder && typeof recorder.clear === "function") {
             cleared = recorder.clear();
           }
-          return this.createSuccessResponse(request.id, { cleared });
+          const result: TraceClearRecentResult = { cleared };
+          return this.createSuccessResponse(request.id, result);
         }
 
         default:
@@ -260,7 +497,7 @@ export class ReferenceServer {
             request.id,
             createProtocolError(
               ProtocolErrorCode.UNKNOWN_METHOD,
-              `Method "${request.method}" is not supported by this server`
+              `Method "${request.method}" is not recognized by this protocol server`
             )
           );
       }
@@ -276,14 +513,73 @@ export class ReferenceServer {
   }
 
   /**
+   * Enqueues a mutation command into the asynchronous queue, returning an acknowledgment
+   * without running layout or synchronous mutations.
+   */
+  private enqueueCommand(
+    method: string,
+    params: Record<string, unknown>,
+    requestId: string,
+    clientId: string
+  ): ProtocolResponse {
+    const expectedRevision = typeof params.expectedRevision === "number" ? params.expectedRevision : undefined;
+    const idempotencyKey = typeof params.idempotencyKey === "string" ? params.idempotencyKey : undefined;
+
+    // Idempotency check: replay existing acknowledgment if key was already processed
+    if (idempotencyKey) {
+      const existing = this.idempotencyStore.get(idempotencyKey);
+      if (existing) {
+        return this.createSuccessResponse(requestId, existing);
+      }
+    }
+
+    // Revision conflict check
+    if (expectedRevision !== undefined && expectedRevision !== this.currentRevision) {
+      return this.createErrorResponse(
+        requestId,
+        createProtocolError(
+          ProtocolErrorCode.REVISION_CONFLICT,
+          `Expected revision ${expectedRevision} does not match current state revision ${this.currentRevision}`
+        )
+      );
+    }
+
+    this.commandSeq++;
+    this.nextRevision++;
+    const commandId = `cmd-${this.commandSeq}`;
+
+    this.commandQueue.push({
+      id: commandId,
+      method,
+      params,
+      idempotencyKey,
+      clientId
+    });
+
+    const ack: RuntimeCommandAckResult = {
+      acknowledged: true,
+      commandId,
+      stateRevision: this.nextRevision
+    };
+
+    if (idempotencyKey) {
+      this.idempotencyStore.set(idempotencyKey, ack);
+    }
+
+    return this.createSuccessResponse(requestId, ack);
+  }
+
+  /**
    * Broadcasts an asynchronous protocol event to all subscribers.
    */
   public emitEvent(eventName: string, data: unknown): ProtocolEvent {
+    this.eventSeq++;
     const eventMessage: ProtocolEvent = {
       protocol: PROTOCOL_NAME,
-      version: PROTOCOL_VERSION,
-      id: `evt-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-      type: "event",
+      majorVersion: PROTOCOL_MAJOR_VERSION,
+      minorVersion: PROTOCOL_MINOR_VERSION,
+      id: `evt-${this.eventSeq}`,
+      kind: "event",
       event: eventName,
       data
     };
@@ -312,11 +608,12 @@ export class ReferenceServer {
   }
 
   /**
-   * Wire-level byte processing: decodes frames from byte stream, processes requests,
-   * and returns encoded response frames.
+   * Wire-level byte processing: decodes frames from client-specific byte stream,
+   * processes requests, and returns encoded response frames.
    */
   public async processBytes(chunk: Uint8Array, clientId = "default"): Promise<Uint8Array[]> {
-    const decodedResults = this.decoder.push(chunk);
+    const session = this.getSession(clientId);
+    const decodedResults = session.decoder.push(chunk);
     const outFrames: Uint8Array[] = [];
 
     for (const res of decodedResults) {
@@ -328,7 +625,7 @@ export class ReferenceServer {
       }
 
       const envelope = res.message;
-      if (envelope.type === "request") {
+      if (envelope.kind === "request") {
         const resp = await this.handleRequest(envelope as ProtocolRequest, clientId);
         outFrames.push(encodeFrame(resp));
       }
@@ -338,10 +635,10 @@ export class ReferenceServer {
   }
 
   private getRequiredCapability(method: string): ProtocolCapability | null {
-    if (method.startsWith("state.") || method === "runtime.getDiagnostics" || method === "config.get") {
+    if (method.startsWith("state.") || method === "runtime.getVersion" || method === "config.get") {
       return "state.inspect";
     }
-    if (method === "config.set") {
+    if (method.startsWith("config.")) {
       return "config.mutate";
     }
     if (method.startsWith("runtime.")) {
@@ -354,11 +651,13 @@ export class ReferenceServer {
   }
 
   private createSuccessResponse<T>(replyTo: string, result: T): ProtocolResponse<T> {
+    this.responseSeq++;
     return {
       protocol: PROTOCOL_NAME,
-      version: PROTOCOL_VERSION,
-      id: `resp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-      type: "response",
+      majorVersion: PROTOCOL_MAJOR_VERSION,
+      minorVersion: PROTOCOL_MINOR_VERSION,
+      id: `resp-${this.responseSeq}`,
+      kind: "response",
       replyTo,
       ok: true,
       result
@@ -366,11 +665,13 @@ export class ReferenceServer {
   }
 
   private createErrorResponse(replyTo: string, error: ProtocolError): ProtocolResponse {
+    this.responseSeq++;
     return {
       protocol: PROTOCOL_NAME,
-      version: PROTOCOL_VERSION,
-      id: `resp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-      type: "response",
+      majorVersion: PROTOCOL_MAJOR_VERSION,
+      minorVersion: PROTOCOL_MINOR_VERSION,
+      id: `resp-${this.responseSeq}`,
+      kind: "response",
       replyTo,
       ok: false,
       error: error.toJSON()
@@ -383,11 +684,11 @@ export class ReferenceClient {
   private readonly clientId: string;
   private readonly eventCallbacks = new Map<string, Array<(data: unknown) => void>>();
   private cleanupServerEvents: (() => void) | null = null;
-  private nextRequestId = 1;
+  private requestSeq = 0;
 
-  constructor(server: ReferenceServer, clientId = `client-${Math.random().toString(36).substring(2, 8)}`) {
+  constructor(server: ReferenceServer, clientId?: string) {
     this.server = server;
-    this.clientId = clientId;
+    this.clientId = clientId ?? "client-test";
 
     this.cleanupServerEvents = this.server.onEvent((evt: ProtocolEvent) => {
       const callbacks = this.eventCallbacks.get(evt.event) ?? [];
@@ -405,17 +706,23 @@ export class ReferenceClient {
     const resp = await this.sendRequest<HelloResult>("system.hello", {
       clientName,
       clientVersion,
+      minMajor: 1,
+      maxMajor: 1,
+      minMinor: 0,
+      maxMinor: 0,
       requestedCapabilities
     });
     return resp;
   }
 
   public async sendRequest<TResult>(method: string, params?: unknown): Promise<TResult> {
+    this.requestSeq++;
     const req: ProtocolRequest = {
       protocol: PROTOCOL_NAME,
-      version: PROTOCOL_VERSION,
-      id: `req-${this.nextRequestId++}`,
-      type: "request",
+      majorVersion: PROTOCOL_MAJOR_VERSION,
+      minorVersion: PROTOCOL_MINOR_VERSION,
+      id: `req-${this.requestSeq}`,
+      kind: "request",
       method,
       params: (params as Record<string, unknown>) ?? {}
     };
@@ -434,11 +741,13 @@ export class ReferenceClient {
    * Executes a round-trip using encoded byte framing over the wire simulation.
    */
   public async sendRequestOverWire<TResult>(method: string, params?: unknown): Promise<TResult> {
+    this.requestSeq++;
     const req: ProtocolRequest = {
       protocol: PROTOCOL_NAME,
-      version: PROTOCOL_VERSION,
-      id: `req-${this.nextRequestId++}`,
-      type: "request",
+      majorVersion: PROTOCOL_MAJOR_VERSION,
+      minorVersion: PROTOCOL_MINOR_VERSION,
+      id: `req-${this.requestSeq}`,
+      kind: "request",
       method,
       params: (params as Record<string, unknown>) ?? {}
     };
@@ -452,7 +761,7 @@ export class ReferenceClient {
       throw createProtocolError(ProtocolErrorCode.INTERNAL_ERROR, "Server returned no response frames");
     }
 
-    // Decode response frame on client side
+    // Decode response frame on client side with dedicated client decoder
     const clientDecoder = new StreamingFrameDecoder();
     const decoded = clientDecoder.push(responseFrames[0]);
     if (decoded.length === 0 || !decoded[0].ok) {
@@ -488,5 +797,6 @@ export class ReferenceClient {
       this.cleanupServerEvents = null;
     }
     this.eventCallbacks.clear();
+    this.server.removeSession(this.clientId);
   }
 }

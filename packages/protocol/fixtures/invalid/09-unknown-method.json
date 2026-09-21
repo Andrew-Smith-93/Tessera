@@ -3,6 +3,6 @@
   "majorVersion": 1,
   "minorVersion": 0,
   "kind": "request",
-  "id": "",
-  "method": "state.getSnapshot"
+  "id": "bad-09",
+  "method": "unsupported.arbitraryMethod"
 }

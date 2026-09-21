@@ -118,27 +118,31 @@ export function validateInvariants(
     const screen = screenMap.get(win.outputId);
     if (!screen) continue;
 
-    // Check if the window count on screen exceeds capacity for minimum window dimensions (60px height)
-    const countOnScreen = windows.filter(w => w.outputId === screen.outputId && w.tileable && !w.minimized && !w.fullScreen).length;
-    if (countOnScreen > 0 && screen.usableArea.height / countOnScreen < 60) {
-      continue;
-    }
-
     const u = screen.usableArea;
     const d = win.desiredGeometry;
 
-    // Check bounds with tolerance
-    if (
-      d.x < u.x - tolerance ||
-      d.y < u.y - tolerance ||
-      d.x + d.width > u.x + u.width + tolerance ||
-      d.y + d.height > u.y + u.height + tolerance
-    ) {
+    // Horizontal bounds and top bound must ALWAYS hold, even under vertical saturation
+    if (d.x < u.x - tolerance || d.x + d.width > u.x + u.width + tolerance || d.y < u.y - tolerance) {
       violations.push({
         code: "TILED_GEOMETRY_OUT_OF_BOUNDS",
-        message: `Window ${win.id} desired geometry [${d.x},${d.y},${d.width}x${d.height}] exceeds screen ${screen.outputId} usable area [${u.x},${u.y},${u.width}x${u.height}]`,
+        message: `Window ${win.id} desired geometry [${d.x},${d.y},${d.width}x${d.height}] exceeds screen ${screen.outputId} usable area [${u.x},${u.y},${u.width}x${u.height}] horizontally or above top boundary`,
         entityId: win.id
       });
+      continue;
+    }
+
+    // Check vertical overflow: only permitted if screen height cannot accommodate 60px per window
+    const countOnScreen = windows.filter(w => w.outputId === screen.outputId && w.tileable && !w.minimized && !w.fullScreen).length;
+    const isVerticallySaturated = countOnScreen > 0 && screen.usableArea.height / countOnScreen < 60;
+
+    if (d.y + d.height > u.y + u.height + tolerance) {
+      if (!isVerticallySaturated) {
+        violations.push({
+          code: "TILED_GEOMETRY_OUT_OF_BOUNDS",
+          message: `Window ${win.id} desired geometry [${d.x},${d.y},${d.width}x${d.height}] exceeds screen ${screen.outputId} usable area [${u.x},${u.y},${u.width}x${u.height}] vertically`,
+          entityId: win.id
+        });
+      }
     }
   }
 
@@ -217,18 +221,22 @@ export function validateInvariants(
       w => w.outputId === screen.outputId && w.tileable && !w.minimized && !w.fullScreen && w.desiredGeometry
     );
 
-    // If the number of windows exceeds available vertical space for minimum window size (60px),
-    // minimum size clamping in the solver intentionally overlaps windows.
-    const minHeightNeeded = 60;
-    if (tileableOnScreen.length > 0 && screen.usableArea.height / tileableOnScreen.length < minHeightNeeded) {
-      continue;
-    }
+    const isVerticallySaturated = tileableOnScreen.length > 0 && screen.usableArea.height / tileableOnScreen.length < 60;
 
     for (let i = 0; i < tileableOnScreen.length; i++) {
       for (let j = i + 1; j < tileableOnScreen.length; j++) {
         const w1 = tileableOnScreen[i];
         const w2 = tileableOnScreen[j];
-        if (rectsOverlap(w1.desiredGeometry!, w2.desiredGeometry!, tolerance)) {
+        const r1 = w1.desiredGeometry!;
+        const r2 = w2.desiredGeometry!;
+        if (rectsOverlap(r1, r2, tolerance)) {
+          // Narrow tolerance: only permit vertical overlap if both windows share the same column
+          // (horizontal span matches) AND vertical capacity is saturated (< 60px per window).
+          const isSameColumn = Math.abs(r1.x - r2.x) <= tolerance && Math.abs(r1.width - r2.width) <= tolerance;
+          if (isVerticallySaturated && isSameColumn) {
+            continue;
+          }
+
           violations.push({
             code: "TILED_WINDOWS_OVERLAP",
             message: `Windows ${w1.id} and ${w2.id} overlap in non-overlapping layout ${screen.activeLayout} on screen ${screen.outputId}`,

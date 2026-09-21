@@ -3,14 +3,50 @@
   "$id": "https://tessera.wm/schemas/v1/event.json",
   "title": "TesseraProtocolEvent",
   "type": "object",
-  "required": ["protocol", "version", "id", "type", "event"],
+  "required": [
+    "protocol",
+    "majorVersion",
+    "minorVersion",
+    "kind",
+    "id",
+    "event"
+  ],
   "properties": {
-    "protocol": { "type": "string", "const": "tessera.ipc" },
-    "version": { "type": "string", "const": "1.0" },
-    "id": { "type": "string", "minLength": 1 },
-    "type": { "type": "string", "const": "event" },
-    "event": { "type": "string", "minLength": 1 },
-    "data": {}
+    "protocol": {
+      "type": "string",
+      "const": "tessera.ipc"
+    },
+    "majorVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "minorVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "kind": {
+      "type": "string",
+      "const": "event"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event": {
+      "type": "string",
+      "enum": [
+        "runtime.ready",
+        "runtime.stateChanged",
+        "runtime.transactionCommitted",
+        "runtime.configurationChanged",
+        "runtime.capabilitiesChanged",
+        "runtime.warning"
+      ]
+    },
+    "data": {},
+    "metadata": {
+      "type": "object"
+    }
   },
   "additionalProperties": false
 }

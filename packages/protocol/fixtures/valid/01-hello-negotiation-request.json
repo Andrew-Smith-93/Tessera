@@ -1,12 +1,17 @@
 {
   "protocol": "tessera.ipc",
-  "version": "1.0",
-  "id": "req-hello-01",
-  "type": "request",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "request",
+  "id": "req-hello-1",
   "method": "system.hello",
   "params": {
     "clientName": "tessera-cli",
     "clientVersion": "1.0.0",
+    "minMajor": 1,
+    "maxMajor": 1,
+    "minMinor": 0,
+    "maxMinor": 0,
     "requestedCapabilities": ["state.inspect", "config.mutate", "runtime.control", "trace.inspect"]
   }
 }

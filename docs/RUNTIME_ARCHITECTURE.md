@@ -303,60 +303,97 @@ Any subsequent convergence or refactoring MUST preserve the following runtime in
 Phase 4 defines the authoritative, versioned cold-path IPC protocol connecting external components (CLI, configuration GUI, future companion daemon, plugins) to the Tessera runtime:
 
 ### Protocol Identity & Framing
-- **Protocol**: `"tessera.ipc"`
-- **Version**: `"1.0"`
-- **Transport Framing**: Length-prefixed streaming byte frames `[4-byte big-endian length uint32][UTF-8 JSON payload]`.
+- **Protocol Namespace**: `"tessera.ipc"`
+- **Major Version**: `1`
+- **Minor Version**: `0`
+- **Version Negotiation**: `system.hello` negotiates the mutually supported version range. Unsupported major versions return `UNSUPPORTED_MAJOR_VERSION`, and unsupported minor versions return `UNSUPPORTED_MINOR_VERSION`.
+- **Transport Framing**: Transport-independent streaming byte frames: `[4-byte big-endian length uint32][UTF-8 JSON payload]`.
 - **Maximum Frame Size**: 16 MB (`16,777,216` bytes). Frames declaring a larger length header are rejected immediately before allocation (`FRAME_TOO_LARGE`).
 - **Zero-Length & Malformed Frames**: Zero-length frames and invalid UTF-8/JSON syntax are rejected with typed `DECODE_ERROR`.
+- **Stream Finalization**: Trailing partial frames at stream termination are detected via `finalize()` and reported as `DECODE_ERROR`.
 
-### Strict Cold-Path Guarantee
-- The IPC protocol is restricted to asynchronous, low-frequency inspection and administrative control (CLI queries, settings configuration, trace inspection).
-- Zero IPC frames sit on the KWin window management hot path. Window addition, removal, and geometry changes never block on IPC requests.
+### Strict Cold-Path Guarantee & Asynchronous Command Queue
+- The IPC protocol is strictly cold-path. Zero IPC frames sit on the KWin window management hot path.
+- Mutation requests (`config.applyPatch`, `runtime.requestReconcile`, `runtime.setLayout`, `runtime.setMasterCount`, `runtime.setMasterRatio`, `runtime.setWindowFloating`) return immediate acknowledgements containing state revisions and command IDs.
+- Commands are enqueued into an internal FIFO asynchronous command queue. No layout computation or coordinator write occurs synchronously during protocol decoding.
+- Work executes only when the runtime advances (`advance()` / `flushCommandQueue()`).
+- Idempotent execution is guaranteed via optional `idempotencyKey` parameter.
+- Stale mutations specifying an outdated `expectedRevision` are rejected with `REVISION_CONFLICT`.
+
+### Security and Resource Limits
+- `MAX_FRAME_SIZE`: 16 MB (16,777,216 bytes)
+- `MAX_NESTING_DEPTH`: 32 levels
+- `MAX_STRING_LENGTH`: 65,536 characters
+- `MAX_ARRAY_LENGTH`: 10,000 items
+- `MAX_OUTSTANDING_REQUESTS`: 1,000
+- `MAX_SUBSCRIPTION_COUNT`: 100
 
 ### Envelope Structure
 Every message adheres to a strictly validated envelope:
 ```json
 {
   "protocol": "tessera.ipc",
-  "version": "1.0",
-  "id": "<unique-uuid-or-id>",
-  "type": "request" | "response" | "event"
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "request" | "response" | "event",
+  "id": "<opaque-string-id>",
+  "metadata": {}
 }
 ```
 - **Request**: `{ "method": string, "params"?: object }`
 - **Response**: `{ "replyTo": string, "ok": boolean, "result"?: any, "error"?: { "code": string, "message": string, "details"?: any } }`
 - **Event**: `{ "event": string, "data": any }`
 
+### Complete Redaction Policy
+When identity redaction is enabled (`redactIdentities = true`) or in default diagnostics/trace dumps:
+- `title`: omitted or redacted
+- `resourceClass`: `"[REDACTED]"`
+- `resourceName`: `"[REDACTED]"`
+- `appId`: `"[REDACTED]"`
+- `desktopFileName`: `"[REDACTED]"`
+- `role`: `"[REDACTED]"`
+
 ### Capabilities & Handshake Negotiation
 All client interactions begin with a mandatory handshake:
 - **Handshake Method**: `system.hello`
-  - Parameters: `{ "clientName": string, "clientVersion": string, "requestedCapabilities"?: string[] }`
-  - Response: `{ "serverName": "tessera-runtime", "serverVersion": string, "protocolVersion": "1.0", "capabilities": string[] }`
+  - Parameters: `{ "clientName": string, "clientVersion": string, "minMajor"?: number, "maxMajor"?: number, "minMinor"?: number, "maxMinor"?: number, "requestedCapabilities"?: string[] }`
+  - Response: `{ "serverName": "tessera-runtime", "serverVersion": string, "negotiatedMajor": 1, "negotiatedMinor": 0, "capabilities": string[], "maxFrameSize": 16777216, "limits": object }`
 - **V1 Capabilities**:
-  - `state.inspect`: Read retained screens, windows, screen orders, and runtime diagnostics.
-  - `config.mutate`: Mutate global or per-screen configuration (`config.set`).
-  - `runtime.control`: Trigger explicit reconciliation transactions (`runtime.reconcile`).
-  - `trace.inspect`: Read and clear execution trace history (`trace.dump`, `trace.clear`).
-- **Enforcement**: Methods invoked without negotiating their required capability immediately return `CAPABILITY_NOT_NEGOTIATED`.
+  - `state.inspect`: Read retained state snapshot, diagnostics, and capabilities.
+  - `config.mutate`: Validate and apply configuration patches.
+  - `runtime.control`: Enqueue layout reconciliations and runtime layout/master adjustments.
+  - `trace.inspect`: Read and clear execution trace history.
+- **Enforcement**: Methods invoked without negotiating their required capability return `CAPABILITY_NOT_NEGOTIATED`.
 
-### Methods & Events Catalog
+### Methods, Events & Error Codes Catalog
 - **Methods**:
-  - `system.hello`: Capability negotiation and server handshake.
-  - `state.getRetainedScreens`: Returns serializable retained screens.
-  - `state.getRetainedWindows`: Returns serializable retained windows (subject to identity redaction).
-  - `state.getScreenOrder`: Returns ordered window IDs and persistent slots for an output.
-  - `config.get` / `config.set`: Query and update runtime coordinator configuration.
-  - `runtime.reconcile`: Trigger programmatic reconciliation pass for dirty or forced screens.
-  - `runtime.getDiagnostics`: Query live coordinator counters (events, writes, transactions, echoes).
-  - `trace.dump` / `trace.clear`: Inspect and reset trace recorder history.
+  - `system.hello`: Capability and version handshake.
+  - `state.getSnapshot`: Returns retained screens, windows, configuration, and diagnostics.
+  - `state.getDiagnostics`: Query live coordinator event/transaction counters.
+  - `state.getCapabilities`: Query supported protocol and adapter capabilities.
+  - `config.get`: Returns current active configuration and revision.
+  - `config.validatePatch`: Validates proposed configuration patch against known keys and types.
+  - `config.applyPatch`: Enqueues configuration mutation with optional `expectedRevision` and `idempotencyKey`.
+  - `runtime.requestReconcile`: Enqueues reconciliation pass for forced or dirty screens.
+  - `runtime.setLayout`: Enqueues layout algorithm change for target output.
+  - `runtime.setMasterCount`: Enqueues master count adjustment.
+  - `runtime.setMasterRatio`: Enqueues master split ratio adjustment.
+  - `runtime.setWindowFloating`: Enqueues manual floating mode toggle.
+  - `runtime.getVersion`: Returns runtime engine version and protocol numbers.
+  - `trace.getRecent`: Inspect recent execution trace history (returns `TRACE_DISABLED` if inactive).
+  - `trace.clearRecent`: Clears recent trace history.
 - **Events**:
   - `runtime.ready`: Broadcast when runtime initialization completes.
   - `runtime.stateChanged`: Broadcast when screen states or dirty scopes change.
   - `runtime.transactionCommitted`: Broadcast with the full serializable reconciliation transaction.
-  - `runtime.topologyChanged`: Broadcast when screen additions or removals alter topology.
-  - `config.changed`: Broadcast when configuration mutations take effect.
+  - `runtime.configurationChanged`: Broadcast when configuration mutations take effect.
+  - `runtime.capabilitiesChanged`: Broadcast when available capabilities update.
+  - `runtime.warning`: Broadcast on recoverable non-fatal runtime warnings.
+- **Error Codes**:
+  `INVALID_ENVELOPE`, `UNSUPPORTED_MAJOR_VERSION`, `UNSUPPORTED_MINOR_VERSION`, `CAPABILITY_NOT_NEGOTIATED`, `UNKNOWN_METHOD`, `INVALID_PAYLOAD`, `FRAME_TOO_LARGE`, `CONFIG_VALIDATION_FAILED`, `REVISION_CONFLICT`, `WINDOW_NOT_FOUND`, `OUTPUT_NOT_FOUND`, `TRACE_DISABLED`, `INTERNAL_ERROR`, `DECODE_ERROR`.
 
 ### In-Memory Reference Endpoint & Fuzz Verification
-- **Reference Endpoints**: Provided via `ReferenceServer` and `ReferenceClient` in `@tessera/protocol`. Supports direct async in-memory dispatch as well as full wire-level serialization round-trips over byte streams.
-- **Deterministic Fuzz Testing**: Byte stream and envelope object fuzzing using Mulberry32 PRNG (seeds 42 and 12345) running 5,000 iterations each to guarantee crash resilience.
+- **Reference Endpoints**: Provided via `ReferenceServer` and `ReferenceClient` in `@tessera/protocol`. Dedicated `StreamingFrameDecoder` per client session prevents state corruption between concurrent connections.
+- **Deterministic Fuzz Testing**: Byte stream and envelope object fuzzing using Mulberry32 PRNG (seeds 42 and 12345) running 5,000 iterations each to guarantee crash resilience. Zero wall-clock or non-deterministic PRNG.
 - **Package Archive Isolation**: Protocol schemas, fixtures, and tests reside in `packages/protocol` and are strictly excluded from the release `.kwinscript` bundle.
+

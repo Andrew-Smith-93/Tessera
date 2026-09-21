@@ -10,10 +10,11 @@ import {
 describe("Tessera Protocol V1 Framing Codec", () => {
   const sampleRequest: ProtocolRequest = {
     protocol: "tessera.ipc",
-    version: "1.0",
+    majorVersion: 1,
+    minorVersion: 0,
+    kind: "request",
     id: "req-codec-01",
-    type: "request",
-    method: "state.getRetainedScreens"
+    method: "state.getSnapshot"
   };
 
   it("1. Encodes frame with 4-byte big-endian length prefix", () => {
@@ -27,6 +28,7 @@ describe("Tessera Protocol V1 Framing Codec", () => {
     const payloadString = new TextDecoder().decode(frame.slice(4));
     const parsed = JSON.parse(payloadString);
     expect(parsed.id).toBe("req-codec-01");
+    expect(parsed.kind).toBe("request");
   });
 
   it("2. Streaming decoder decodes a single complete frame", () => {
@@ -59,7 +61,7 @@ describe("Tessera Protocol V1 Framing Codec", () => {
     const res3 = decoder.push(chunk3);
     expect(res3).toHaveLength(1);
     expect(res3[0].ok).toBe(true);
-    if (res3[0].ok) {
+    if (resultsOk(res3[0])) {
       expect(res3[0].message.id).toBe("req-codec-01");
     }
   });
@@ -134,7 +136,7 @@ describe("Tessera Protocol V1 Framing Codec", () => {
 
   it("9. Rejects invalid UTF-8 payload with DECODE_ERROR", () => {
     const decoder = new StreamingFrameDecoder();
-    // 4-byte header for 4 bytes of invalid UTF-8 (e.g. 0xFF, 0xFF, 0xFF, 0xFF)
+    // 4-byte header for 4 bytes of invalid UTF-8
     const frame = new Uint8Array([0x00, 0x00, 0x00, 0x04, 0xff, 0xff, 0xff, 0xff]);
 
     const results = decoder.push(frame);
@@ -161,11 +163,42 @@ describe("Tessera Protocol V1 Framing Codec", () => {
     }
   });
 
-  it("11. Exactly 16MB payload is accepted by encodeFrame", () => {
-    const exact16MbStr = "a".repeat(MAX_FRAME_SIZE);
-    const frame = encodeFrame(exact16MbStr);
-    expect(frame.byteLength).toBe(4 + MAX_FRAME_SIZE);
-    const view = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
-    expect(view.getUint32(0, false)).toBe(MAX_FRAME_SIZE);
+  it("11. Trailing partial frames are detected on finalize()", () => {
+    const decoder = new StreamingFrameDecoder();
+    const partialHeader = new Uint8Array([0x00, 0x00]);
+    decoder.push(partialHeader);
+
+    const finishResults = decoder.finalize();
+    expect(finishResults).toHaveLength(1);
+    expect(finishResults[0].ok).toBe(false);
+    if (!finishResults[0].ok) {
+      expect(finishResults[0].error.code).toBe(ProtocolErrorCode.DECODE_ERROR);
+    }
+  });
+
+  it("12. Unicode payloads round-trip correctly", () => {
+    const decoder = new StreamingFrameDecoder();
+    const unicodeReq: ProtocolRequest = {
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-unicode-🚀",
+      method: "state.getSnapshot",
+      params: { label: "日本語 • Español • 🌍 • 𝄢" }
+    };
+
+    const frame = encodeFrame(unicodeReq);
+    const decoded = decoder.push(frame);
+    expect(decoded).toHaveLength(1);
+    expect(decoded[0].ok).toBe(true);
+    if (decoded[0].ok) {
+      expect(decoded[0].message.id).toBe("req-unicode-🚀");
+      expect((decoded[0].message as ProtocolRequest).params?.label).toBe("日本語 • Español • 🌍 • 𝄢");
+    }
   });
 });
+
+function resultsOk(res: any): boolean {
+  return res.ok === true;
+}

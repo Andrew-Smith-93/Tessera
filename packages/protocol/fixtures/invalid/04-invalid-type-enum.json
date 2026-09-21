@@ -1,7 +1,0 @@
-{
-  "protocol": "tessera.ipc",
-  "version": "1.0",
-  "id": "bad-04",
-  "type": "notification",
-  "method": "state.getRetainedScreens"
-}

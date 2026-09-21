@@ -1,6 +1,0 @@
-{
-  "protocol": "tessera.ipc",
-  "version": "1.0",
-  "type": "request",
-  "method": "state.getRetainedScreens"
-}

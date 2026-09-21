@@ -3,10 +3,18 @@
   "$id": "https://tessera.wm/schemas/v1/error.json",
   "title": "TesseraProtocolError",
   "type": "object",
-  "required": ["code", "message"],
+  "required": [
+    "code",
+    "message"
+  ],
   "properties": {
-    "code": { "type": "string", "minLength": 1 },
-    "message": { "type": "string" },
+    "code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message": {
+      "type": "string"
+    },
     "details": {}
   },
   "additionalProperties": false

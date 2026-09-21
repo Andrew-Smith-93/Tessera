@@ -1,7 +1,0 @@
-{
-  "protocol": "tessera.ipc",
-  "version": "1.0",
-  "id": "req-config-get-01",
-  "type": "request",
-  "method": "config.get"
-}

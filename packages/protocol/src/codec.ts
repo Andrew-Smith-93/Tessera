@@ -48,7 +48,7 @@ export function encodeFrame(payload: ProtocolEnvelope | string): Uint8Array {
 }
 
 /**
- * Streaming byte decoder that processes fragmented and multi-frame chunks.
+ * Transport-independent streaming byte decoder that processes fragmented and multi-frame chunks.
  */
 export class StreamingFrameDecoder {
   private buffer: Uint8Array = new Uint8Array(0);
@@ -104,7 +104,7 @@ export class StreamingFrameDecoder {
       // Check if full frame has arrived
       const totalFrameLength = 4 + payloadLength;
       if (this.buffer.byteLength < totalFrameLength) {
-        // Need more bytes to complete frame
+        // Incomplete frame; wait for subsequent chunks
         break;
       }
 
@@ -160,6 +160,26 @@ export class StreamingFrameDecoder {
     }
 
     return results;
+  }
+
+  /**
+   * Finalizes the stream and returns any trailing error if unconsumed bytes remain.
+   */
+  public finalize(): FrameDecodeResult[] {
+    if (this.buffer.byteLength > 0) {
+      const remainingBytes = this.buffer.byteLength;
+      this.buffer = new Uint8Array(0);
+      return [
+        {
+          ok: false,
+          error: createProtocolError(
+            ProtocolErrorCode.DECODE_ERROR,
+            `Stream terminated with ${remainingBytes} trailing unconsumed bytes (incomplete frame)`
+          )
+        }
+      ];
+    }
+    return [];
   }
 
   /**

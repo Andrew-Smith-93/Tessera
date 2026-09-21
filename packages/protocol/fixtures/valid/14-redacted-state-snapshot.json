@@ -1,0 +1,36 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "response",
+  "id": "resp-redacted",
+  "replyTo": "req-snap-redacted",
+  "ok": true,
+  "result": {
+    "revision": 1,
+    "screens": [],
+    "windows": [
+      {
+        "id": "win-private",
+        "resourceClass": "[REDACTED]",
+        "resourceName": "[REDACTED]",
+        "appId": "[REDACTED]",
+        "desktopFileName": "[REDACTED]",
+        "role": "[REDACTED]",
+        "outputId": "HDMI-A-1",
+        "classification": "tiled",
+        "tileable": true,
+        "minimized": false,
+        "fullScreen": false,
+        "noBorder": false,
+        "maximizeMode": 0,
+        "isManualFloating": false,
+        "frameGeometry": { "x": 0, "y": 0, "width": 100, "height": 100 },
+        "desiredGeometry": null,
+        "preMinimizeGeometry": null
+      }
+    ],
+    "config": {},
+    "diagnostics": {}
+  }
+}

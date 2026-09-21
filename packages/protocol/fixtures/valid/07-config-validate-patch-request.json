@@ -1,0 +1,14 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "request",
+  "id": "req-cfg-val-1",
+  "method": "config.validatePatch",
+  "params": {
+    "patch": {
+      "gapInner": 12,
+      "gapOuter": 16
+    }
+  }
+}

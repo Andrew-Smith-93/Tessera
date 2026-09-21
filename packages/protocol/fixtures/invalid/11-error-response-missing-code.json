@@ -1,8 +1,9 @@
 {
   "protocol": "tessera.ipc",
-  "version": "1.0",
-  "id": "bad-10",
-  "type": "response",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "response",
+  "id": "bad-11",
   "replyTo": "req-1",
   "ok": false,
   "error": {

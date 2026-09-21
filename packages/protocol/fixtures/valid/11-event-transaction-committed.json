@@ -1,14 +1,15 @@
 {
   "protocol": "tessera.ipc",
-  "version": "1.0",
-  "id": "evt-tx-01",
-  "type": "event",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "event",
+  "id": "evt-tx-1",
   "event": "runtime.transactionCommitted",
   "data": {
     "transaction": {
-      "epoch": 4,
-      "tick": 120,
-      "reasons": ["WindowDiscovered"],
+      "epoch": 2,
+      "tick": 45,
+      "reasons": ["WindowAdded"],
       "affectedScreens": ["HDMI-A-1"],
       "operations": [
         {

@@ -13,6 +13,7 @@ import {
   TRACE_SCHEMA_VERSION,
   type TraceFixture
 } from "../src/index.js";
+import { validateInvariants } from "../src/invariants.js";
 import { runCli } from "../src/cli.js";
 import { RuntimeCoordinator, TraceRecorder, LogicalClock } from "@tessera/kwin-adapter";
 
@@ -399,4 +400,84 @@ describe("Phase 3 Runtime Simulator & Trace Replay", () => {
     expect(res.invariants.passed).toBe(false);
     expect(res.invariants.violations.some(v => v.code === "TILED_GEOMETRY_OUT_OF_BOUNDS")).toBe(true);
   });
+
+  it("28. Invariant validation rejects horizontal out-of-bounds even under vertical saturation", () => {
+    const screens = [
+      {
+        outputId: "HDMI-A-1",
+        name: "HDMI-A-1",
+        geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+        usableArea: { x: 0, y: 0, width: 1920, height: 1080 },
+        activeLayout: "master-stack",
+        masterCount: 1,
+        masterRatio: 0.5,
+        gaps: { inner: 0, outer: 0 },
+        orderedWindowIds: Array.from({ length: 25 }, (_, i) => `w-${i}`),
+        persistentOrder: Array.from({ length: 25 }, (_, i) => `w-${i}`)
+      }
+    ];
+
+    // 25 windows: usableArea.height (1080) / 25 = 43.2 < 60px (vertically saturated)
+    // One window is placed at x = 2000 (exceeds usableArea.width 1920 horizontally)
+    const windows = Array.from({ length: 25 }, (_, i) => ({
+      id: `w-${i}`,
+      resourceClass: "app",
+      outputId: "HDMI-A-1",
+      classification: "tiled",
+      tileable: true,
+      minimized: false,
+      fullScreen: false,
+      noBorder: false,
+      maximizeMode: 0,
+      isManualFloating: false,
+      frameGeometry: { x: i === 0 ? 2000 : 0, y: 0, width: 960, height: 60 },
+      desiredGeometry: { x: i === 0 ? 2000 : 0, y: 0, width: 960, height: 60 },
+      preMinimizeGeometry: null
+    }));
+
+    const result = validateInvariants(screens, windows, []);
+    expect(result.passed).toBe(false);
+    expect(result.violations.some(v => v.code === "TILED_GEOMETRY_OUT_OF_BOUNDS")).toBe(true);
+  });
+
+  it("29. Invariant validation rejects cross-column overlap even under vertical saturation", () => {
+    const screens = [
+      {
+        outputId: "HDMI-A-1",
+        name: "HDMI-A-1",
+        geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+        usableArea: { x: 0, y: 0, width: 1920, height: 1080 },
+        activeLayout: "master-stack",
+        masterCount: 1,
+        masterRatio: 0.5,
+        gaps: { inner: 0, outer: 0 },
+        orderedWindowIds: Array.from({ length: 25 }, (_, i) => `w-${i}`),
+        persistentOrder: Array.from({ length: 25 }, (_, i) => `w-${i}`)
+      }
+    ];
+
+    // 25 windows (vertically saturated):
+    // w-0 is master at x=0, width=960.
+    // w-1 is stack window placed overlapping horizontally at x=500, width=960 (cross-column overlap)
+    const windows = Array.from({ length: 25 }, (_, i) => ({
+      id: `w-${i}`,
+      resourceClass: "app",
+      outputId: "HDMI-A-1",
+      classification: "tiled",
+      tileable: true,
+      minimized: false,
+      fullScreen: false,
+      noBorder: false,
+      maximizeMode: 0,
+      isManualFloating: false,
+      frameGeometry: { x: i === 1 ? 500 : (i === 0 ? 0 : 960), y: 0, width: 960, height: 60 },
+      desiredGeometry: { x: i === 1 ? 500 : (i === 0 ? 0 : 960), y: 0, width: 960, height: 60 },
+      preMinimizeGeometry: null
+    }));
+
+    const result = validateInvariants(screens, windows, []);
+    expect(result.passed).toBe(false);
+    expect(result.violations.some(v => v.code === "TILED_WINDOWS_OVERLAP")).toBe(true);
+  });
 });
+

@@ -1,8 +1,0 @@
-{
-  "protocol": "tessera.ipc",
-  "version": "1.0",
-  "id": "bad-09",
-  "type": "request",
-  "method": "config.set",
-  "params": "should-be-an-object"
-}

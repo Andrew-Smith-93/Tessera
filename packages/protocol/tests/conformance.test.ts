@@ -6,7 +6,8 @@ import {
   validateEnvelope,
   validateAgainstSchema,
   encodeFrame,
-  StreamingFrameDecoder
+  StreamingFrameDecoder,
+  ReferenceServer
 } from "../src/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -31,7 +32,7 @@ describe("Tessera Protocol V1 Conformance Fixtures Suite", () => {
 
       // 1. Envelope validation
       const envRes = validateEnvelope(parsed);
-      expect(envRes.valid, `Valid fixture ${file} failed envelope validation`).toBe(true);
+      expect(envRes.valid, `Valid fixture ${file} failed envelope validation: ${envRes.error?.message}`).toBe(true);
 
       // 2. Schema validation
       const schemaRes = validateAgainstSchema(parsed);
@@ -45,12 +46,20 @@ describe("Tessera Protocol V1 Conformance Fixtures Suite", () => {
       expect(decoded[0].ok).toBe(true);
       if (decoded[0].ok) {
         expect(decoded[0].message.id).toBe(parsed.id);
-        expect(decoded[0].message.type).toBe(parsed.type);
+        expect(decoded[0].message.kind).toBe(parsed.kind);
       }
     }
   });
 
-  it("3. Every invalid fixture fails envelope validation or schema check", () => {
+  it("3. Every invalid fixture fails envelope validation, schema check, or endpoint execution", async () => {
+    const mockServer = new ReferenceServer({
+      getRetainedScreens: () => [],
+      getRetainedWindows: () => [],
+      getRetainedScreen: () => null,
+      reconcile: () => null,
+      getDiagnostics: () => ({})
+    });
+
     for (const file of invalidFiles) {
       const filePath = resolve(INVALID_DIR, file);
       const raw = readFileSync(filePath, "utf8");
@@ -65,7 +74,14 @@ describe("Tessera Protocol V1 Conformance Fixtures Suite", () => {
       const envRes = validateEnvelope(parsed);
       const schemaRes = validateAgainstSchema(parsed);
 
-      const failed = !envRes.valid || !schemaRes.valid;
+      let failed = !envRes.valid || !schemaRes.valid;
+      if (!failed && typeof parsed === "object" && parsed !== null && (parsed as any).kind === "request") {
+        const resp = await mockServer.handleRequest(parsed as any, "unnegotiated-session");
+        if (!resp.ok) {
+          failed = true;
+        }
+      }
+
       expect(failed, `Invalid fixture ${file} unexpectedly passed validation`).toBe(true);
     }
   });
