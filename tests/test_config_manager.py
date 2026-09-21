@@ -25,6 +25,7 @@ class MockCommandRunner(CommandRunner):
         self.fail_write_key: Optional[str] = None
         self.fail_readback_key: Optional[str] = None
         self.fail_reconfigure: bool = False
+        self.writes_occurred: int = 0
 
     def find_executable(self, name: str) -> Optional[str]:
         return f"/usr/bin/{name}"
@@ -35,19 +36,23 @@ class MockCommandRunner(CommandRunner):
 
         if tool == "kreadconfig6":
             key = cmd[cmd.index("--key") + 1]
-            if key == self.fail_readback_key:
+            if key == self.fail_readback_key and self.writes_occurred > 0:
                 return CommandResult(0, "corrupted_value", "", cmd)
             val = self.store.get(key, "")
             return CommandResult(0, val, "", cmd)
 
         elif tool == "kwriteconfig6":
             key = cmd[cmd.index("--key") + 1]
+            if "--delete" in cmd:
+                self.store.pop(key, None)
+                return CommandResult(0, "", "", cmd)
             if key == self.fail_write_key:
                 if check:
                     raise CommandError(f"Mock write failure for {key}")
                 return CommandResult(1, "", f"Write failure for {key}", cmd)
             val = cmd[-1]
             self.store[key] = val
+            self.writes_occurred += 1
             return CommandResult(0, "", "", cmd)
 
         elif tool == "qdbus6":
@@ -216,6 +221,75 @@ class TestConfigManager(unittest.TestCase):
 
         # Verify tesserarc was NOT deleted
         self.assertTrue(os.path.exists(self.tesserarc_path))
+
+    def test_apply_absence_preserving_rollback(self):
+        # Key 'gapInner' was initially absent from store
+        self.assertNotIn("gapInner", self.runner.store)
+        mgr = ConfigManager(runner=self.runner, tesserarc_path=self.tesserarc_path)
+        mgr.set_draft_value("gapInner", 14)
+
+        # Trigger readback failure so rollback occurs
+        self.runner.fail_readback_key = "gapInner"
+        ok, err = mgr.apply()
+        self.assertFalse(ok)
+        self.assertIn("Readback verification mismatch", err)
+
+        # Key should NOT remain in store with a default; it should be deleted to preserve absence
+        self.assertNotIn("gapInner", self.runner.store)
+        deleted_keys = [c[c.index("--key") + 1] for c in self.runner.commands_executed if "kwriteconfig6" in c[0] and "--delete" in c]
+        self.assertIn("gapInner", deleted_keys)
+
+    def test_apply_concurrency_conflict_detection(self):
+        self.runner.store["gapInner"] = "8"
+        mgr = ConfigManager(runner=self.runner, tesserarc_path=self.tesserarc_path)
+        mgr.set_draft_value("gapInner", 12)
+
+        # Simulate concurrent modification by external actor
+        self.runner.store["gapInner"] = "14"
+
+        ok, err = mgr.apply()
+        self.assertFalse(ok)
+        self.assertIn("Concurrency conflict", err)
+
+    def test_bounded_workspace_layouts_json_validation(self):
+        # Valid JSON layout spec
+        valid_json = json.dumps({
+            "DP-1//1": {
+                "layout": "primary-stack",
+                "ratio": 0.60,
+                "primaryCount": 2
+            }
+        })
+        ok, norm, err = normalize_and_validate_value("workspaceLayoutsJson", valid_json)
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+        # Legacy layout alias migration within scope data
+        legacy_scope_json = json.dumps({
+            "DP-1//1": {
+                "layout": "master-stack"
+            }
+        })
+        ok, norm, err = normalize_and_validate_value("workspaceLayoutsJson", legacy_scope_json)
+        self.assertTrue(ok)
+        parsed = json.loads(norm)
+        self.assertEqual(parsed["DP-1//1"]["layout"], "primary-stack")
+
+        # Invalid ratio out of bounds
+        invalid_ratio_json = json.dumps({
+            "DP-1//1": {
+                "layout": "primary-stack",
+                "ratio": 0.95
+            }
+        })
+        ok, norm, err = normalize_and_validate_value("workspaceLayoutsJson", invalid_ratio_json)
+        self.assertFalse(ok)
+        self.assertIn("out of bounds", err)
+
+        # Non-dict JSON
+        ok, norm, err = normalize_and_validate_value("workspaceLayoutsJson", "[\"not\", \"a\", \"dict\"]")
+        self.assertFalse(ok)
+        self.assertIn("must be a JSON object", err)
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,6 +44,8 @@ class ConfigManager:
         # In-memory authoritative snapshot and working draft
         self.authoritative_config: Dict[str, Any] = load_canonical_defaults()
         self.draft_config: Dict[str, Any] = copy.deepcopy(self.authoritative_config)
+        self.present_kwin_keys: set = set()
+        self.last_kwin_snapshot_hash: str = ""
 
         # Initial load and one-time migration
         self.load_from_kwinrc()
@@ -61,15 +63,19 @@ class ConfigManager:
     # KWinRC Persistence Layer
     # -------------------------------------------------------------------------
 
-    def _read_kwin_key(self, key: str, val_type: str, default: Any) -> Any:
+    def _read_kwin_key_raw(self, key: str, val_type: str) -> Tuple[bool, Optional[str]]:
         cmd = ["kreadconfig6", "--file", self.kwinrc_file, "--group", KWINRC_GROUP, "--key", key]
         if val_type == "boolean":
             cmd.extend(["--type", "bool"])
         res = self.runner.run(cmd, check=False)
         if not res.ok or not res.stdout:
-            return default
+            return False, None
+        return True, res.stdout.strip()
 
-        raw = res.stdout.strip()
+    def _read_kwin_key(self, key: str, val_type: str, default: Any) -> Any:
+        present, raw = self._read_kwin_key_raw(key, val_type)
+        if not present or raw is None:
+            return default
         ok, norm, err = normalize_and_validate_value(key, raw)
         return norm if ok else default
 
@@ -89,28 +95,51 @@ class ConfigManager:
 
         self.runner.run(cmd, check=True)
 
+    def _delete_kwin_key(self, key: str) -> None:
+        cmd = ["kwriteconfig6", "--file", self.kwinrc_file, "--group", KWINRC_GROUP, "--key", key, "--delete"]
+        self.runner.run(cmd, check=False)
+
+    def _compute_kwin_fingerprint(self) -> str:
+        """Computes a fingerprint of current kwinrc keys for concurrency detection."""
+        entries = []
+        for key in sorted(CANONICAL_PROPERTIES.keys()):
+            spec = CANONICAL_PROPERTIES[key]
+            present, raw = self._read_kwin_key_raw(key, spec["type"])
+            if present and raw is not None:
+                entries.append(f"{key}={raw}")
+        return ";".join(entries)
+
     def load_from_kwinrc(self) -> None:
         """Hydrates authoritative_config from kwinrc without writing anything."""
+        self.present_kwin_keys.clear()
         for key, spec in CANONICAL_PROPERTIES.items():
             default = spec["default"]
             val_type = spec["type"]
 
             # Try canonical key first
-            val = self._read_kwin_key(key, val_type, default)
-
-            # Check legacy aliases if still default
-            if val == default and "legacyAliases" in spec:
-                for alias in spec["legacyAliases"]:
-                    alias_val = self._read_kwin_key(alias, val_type, default)
-                    if alias_val != default:
-                        # Migrate layout alias value if needed
-                        if key == "defaultLayout" and alias_val in LEGACY_LAYOUT_MAP:
-                            alias_val = LEGACY_LAYOUT_MAP[alias_val]
-                        val = alias_val
-                        break
+            present, raw = self._read_kwin_key_raw(key, val_type)
+            if present and raw is not None:
+                self.present_kwin_keys.add(key)
+                ok, norm, err = normalize_and_validate_value(key, raw)
+                val = norm if ok else default
+            else:
+                val = default
+                # Check legacy aliases if absent
+                if "legacyAliases" in spec:
+                    for alias in spec["legacyAliases"]:
+                        a_present, a_raw = self._read_kwin_key_raw(alias, val_type)
+                        if a_present and a_raw is not None:
+                            ok, a_norm, err = normalize_and_validate_value(key, a_raw)
+                            if ok:
+                                if key == "defaultLayout" and a_norm in LEGACY_LAYOUT_MAP:
+                                    a_norm = LEGACY_LAYOUT_MAP[a_norm]
+                                val = a_norm
+                                self.present_kwin_keys.add(alias)
+                                break
 
             self.authoritative_config[key] = val
 
+        self.last_kwin_snapshot_hash = self._compute_kwin_fingerprint()
         self.draft_config = copy.deepcopy(self.authoritative_config)
 
     def _maybe_migrate_tesserarc(self) -> bool:
@@ -243,53 +272,65 @@ class ConfigManager:
                 self.retile_now()
             return True, None
 
-        # 2. Snapshot prior authoritative values
-        snapshot = copy.deepcopy(self.authoritative_config)
+        # 2. Concurrency Conflict Detection
+        current_fingerprint = self._compute_kwin_fingerprint()
+        if self.last_kwin_snapshot_hash and current_fingerprint != self.last_kwin_snapshot_hash:
+            return False, "Concurrency conflict: kwinrc was modified externally since last read. Please reload settings."
 
-        # 3. Write changed values
+        # 3. Snapshot prior authoritative values and key presence
+        snapshot = copy.deepcopy(self.authoritative_config)
+        presence_snapshot = set(self.present_kwin_keys)
+
+        # 4. Write changed values
         written_keys = []
         try:
             for k in dirty_keys:
                 self._write_kwin_key(k, self.draft_config[k])
                 written_keys.append(k)
         except Exception as e:
-            self._rollback(snapshot, written_keys)
+            self._rollback(snapshot, presence_snapshot, written_keys)
             return False, f"Write failed for key '{written_keys[-1] if written_keys else 'unknown'}': {e}"
 
-        # 4. Readback verification
+        # 5. Readback verification
         for k in dirty_keys:
             spec = CANONICAL_PROPERTIES[k]
             read_back = self._read_kwin_key(k, spec["type"], None)
             expected = self.draft_config[k]
             if read_back != expected:
-                self._rollback(snapshot, dirty_keys)
+                self._rollback(snapshot, presence_snapshot, dirty_keys)
                 return False, f"Readback verification mismatch for key '{k}': expected {expected}, read {read_back}"
 
-        # 5. KWin Reconfigure (exactly once)
+        # 6. KWin Reconfigure (exactly once)
         reconfig_res = self.runner.run(
             ["qdbus6", "org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"],
             check=False
         )
         if not reconfig_res.ok:
-            self._rollback(snapshot, dirty_keys)
+            self._rollback(snapshot, presence_snapshot, dirty_keys)
             return False, f"KWin reconfigure failed: {reconfig_res.stderr or 'DBus error'}"
 
-        # 6. Retile if requested (exactly once)
+        # 7. Retile if requested (exactly once)
         if retile:
             retile_ok, retile_err = self.retile_now()
             if not retile_ok:
                 # Configuration was persisted, but retile shortcut failed
                 pass
 
-        # 7. Commit authoritative state
+        # 8. Commit authoritative state and update presence
         self.authoritative_config = copy.deepcopy(self.draft_config)
+        self.present_kwin_keys.update(dirty_keys)
+        self.last_kwin_snapshot_hash = self._compute_kwin_fingerprint()
         return True, None
 
-    def _rollback(self, snapshot: Dict[str, Any], keys_to_restore: List[str]) -> None:
-        """Restores snapshot values to kwinrc on failure."""
+    def _rollback(self, snapshot: Dict[str, Any], presence_snapshot: set, keys_to_restore: List[str]) -> None:
+        """Restores snapshot values or deletes previously absent keys on failure."""
         for k in keys_to_restore:
             try:
-                self._write_kwin_key(k, snapshot[k])
+                if k not in presence_snapshot:
+                    # Key was absent before this transaction; delete it to preserve absence
+                    self._delete_kwin_key(k)
+                else:
+                    self._write_kwin_key(k, snapshot[k])
             except Exception:
                 pass
 

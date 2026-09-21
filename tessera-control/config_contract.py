@@ -175,9 +175,45 @@ def normalize_and_validate_value(key: str, value: Any) -> Tuple[bool, Any, Optio
             if key.endswith("Json"):
                 # Validate JSON parseability
                 try:
-                    json.loads(norm)
+                    parsed = json.loads(norm)
                 except Exception as e:
                     return False, norm, f"Invalid JSON for key '{key}': {e}"
+
+                if key == "workspaceLayoutsJson":
+                    if not isinstance(parsed, dict):
+                        return False, norm, "workspaceLayoutsJson must be a JSON object"
+                    if len(norm) > 65536:
+                        return False, norm, "workspaceLayoutsJson exceeds 64KB size limit"
+                    if len(parsed) > 50:
+                        return False, norm, "workspaceLayoutsJson exceeds maximum of 50 scope entries"
+                    valid_layouts = CANONICAL_PROPERTIES["defaultLayout"]["enum"]
+                    for scope_key, scope_data in parsed.items():
+                        if not isinstance(scope_key, str) or not scope_key:
+                            return False, norm, f"Invalid scope key in workspaceLayoutsJson: {scope_key}"
+                        if not isinstance(scope_data, dict):
+                            return False, norm, f"Scope data for '{scope_key}' must be a dictionary"
+                        if "layout" in scope_data:
+                            lay = scope_data["layout"]
+                            if lay in LEGACY_LAYOUT_MAP:
+                                lay = LEGACY_LAYOUT_MAP[lay]
+                                scope_data["layout"] = lay
+                            if lay not in valid_layouts:
+                                return False, norm, f"Invalid layout '{lay}' in scope '{scope_key}'"
+                        if "ratio" in scope_data:
+                            try:
+                                r = float(scope_data["ratio"])
+                                if r < 0.10 or r > 0.90:
+                                    return False, norm, f"Ratio {r} out of bounds [0.10, 0.90] in scope '{scope_key}'"
+                            except (ValueError, TypeError):
+                                return False, norm, f"Invalid ratio in scope '{scope_key}'"
+                        if "primaryCount" in scope_data:
+                            try:
+                                c = int(scope_data["primaryCount"])
+                                if c < 0 or c > 10:
+                                    return False, norm, f"Primary count {c} out of bounds [0, 10] in scope '{scope_key}'"
+                            except (ValueError, TypeError):
+                                return False, norm, f"Invalid primaryCount in scope '{scope_key}'"
+                    norm = json.dumps(parsed)
             return True, norm, None
 
     except (ValueError, TypeError) as e:
