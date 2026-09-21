@@ -19,6 +19,7 @@ import {
   type WorkspaceLayoutState,
   type WorkspaceScopeKey,
   getWorkspaceScopeKey,
+  GLOBAL_DESKTOP_SCOPE,
   type GeometryOperation,
   type ReconciliationTransaction,
   type CoordinatorConfig,
@@ -88,6 +89,7 @@ export class RuntimeCoordinator {
       primaryRegionCount: effCount,
       masterRatio: effRatio,
       masterCount: effCount,
+      perDesktopLayout: initialConfig?.perDesktopLayout ?? true,
       ignoreMinimized: initialConfig?.ignoreMinimized ?? true,
       gameWindowPolicy: initialConfig?.gameWindowPolicy ?? "floating",
       floatFilter: initialConfig?.floatFilter ?? "tessera,tessera-settings,tessera_settings.py",
@@ -121,6 +123,17 @@ export class RuntimeCoordinator {
     this.invalidateAllScreens("GlobalConfigChanged");
   }
 
+  public getWorkspaceScopeKey(outputId: string, desktopId: string = "1"): WorkspaceScopeKey {
+    return getWorkspaceScopeKey(outputId, desktopId);
+  }
+
+  public getEffectiveDesktopId(desktopId: string = "1"): string {
+    if (this.config.perDesktopLayout === false) {
+      return GLOBAL_DESKTOP_SCOPE;
+    }
+    return desktopId;
+  }
+
   public getRetainedWindow(id: RuntimeWindowId): RetainedWindowState | undefined {
     return this.windows.get(id);
   }
@@ -138,13 +151,14 @@ export class RuntimeCoordinator {
   }
 
   public getOrCreateWorkspace(outputId: string, desktopId: string = "1"): WorkspaceLayoutState {
-    const key = getWorkspaceScopeKey(outputId, desktopId);
+    const effDeskId = this.getEffectiveDesktopId(desktopId);
+    const key = getWorkspaceScopeKey(outputId, effDeskId);
     let ws = this.workspaces.get(key);
     if (!ws) {
       ws = {
         scopeKey: key,
         outputId,
-        desktopId,
+        desktopId: effDeskId,
         activeLayout: this.config.defaultLayout,
         primaryRegionCount: this.config.primaryRegionCount ?? this.config.masterCount,
         primaryRegionRatio: this.config.primaryRegionRatio ?? this.config.masterRatio,
@@ -157,7 +171,8 @@ export class RuntimeCoordinator {
   }
 
   public getWorkspace(outputId: string, desktopId: string = "1"): WorkspaceLayoutState | undefined {
-    return this.workspaces.get(getWorkspaceScopeKey(outputId, desktopId));
+    const effDeskId = this.getEffectiveDesktopId(desktopId);
+    return this.workspaces.get(getWorkspaceScopeKey(outputId, effDeskId));
   }
 
   public getOrCreateScreen(input: NormalizedScreenInput): RetainedScreenState {
@@ -331,6 +346,14 @@ export class RuntimeCoordinator {
         const tileable = classification.classification === "tiled";
         const geom = winInput.frameGeometry || { x: 0, y: 0, width: 800, height: 600 };
 
+        const deskIds = (winInput.desktopIds && winInput.desktopIds.length > 0)
+          ? winInput.desktopIds
+          : [desktopId];
+        const isSticky = Boolean(winInput.onAllDesktops);
+        const activities = (winInput.activities && winInput.activities.length > 0)
+          ? [...winInput.activities]
+          : (winInput.activityId ? [winInput.activityId] : []);
+
         const retained: RetainedWindowState = {
           id: winInput.id,
           resourceClass: winInput.resourceClass || "",
@@ -341,7 +364,10 @@ export class RuntimeCoordinator {
           role: winInput.role || "",
           outputId,
           desktopId,
-          activityId: winInput.activityId,
+          desktopIds: [...deskIds],
+          onAllDesktops: isSticky,
+          activityId: winInput.activityId || (activities[0] || undefined),
+          activities,
           minimized: Boolean(winInput.minimized),
           fullScreen: Boolean(winInput.fullScreen),
           noBorder: Boolean(winInput.noBorder),
@@ -363,10 +389,26 @@ export class RuntimeCoordinator {
 
         this.windows.set(winInput.id, retained);
 
-        // Update scoped workspace slot ordering
-        const ws = this.getOrCreateWorkspace(outputId, desktopId);
-        if (!ws.orderedSlotWindowIds.includes(winInput.id)) {
-          ws.orderedSlotWindowIds.push(winInput.id);
+        // Update scoped workspace slot ordering across all assigned desktops or global scope
+        if (this.config.perDesktopLayout === false) {
+          const ws = this.getOrCreateWorkspace(outputId, GLOBAL_DESKTOP_SCOPE);
+          if (!ws.orderedSlotWindowIds.includes(winInput.id)) {
+            ws.orderedSlotWindowIds.push(winInput.id);
+          }
+        } else if (isSticky) {
+          const scr = this.screens.get(outputId);
+          const activeDesk = scr ? scr.activeDesktopId : desktopId;
+          const ws = this.getOrCreateWorkspace(outputId, activeDesk);
+          if (!ws.orderedSlotWindowIds.includes(winInput.id)) {
+            ws.orderedSlotWindowIds.push(winInput.id);
+          }
+        } else {
+          for (const dId of deskIds) {
+            const ws = this.getOrCreateWorkspace(outputId, dId);
+            if (!ws.orderedSlotWindowIds.includes(winInput.id)) {
+              ws.orderedSlotWindowIds.push(winInput.id);
+            }
+          }
         }
 
         this.markScreenDirty(outputId, "WindowDiscovered");
@@ -376,33 +418,25 @@ export class RuntimeCoordinator {
       case "WindowRemoved": {
         const retained = this.windows.get(event.windowId);
         const outputId = retained ? retained.outputId : undefined;
-        const desktopId = retained ? retained.desktopId : undefined;
         this.windows.delete(event.windowId);
         this.inFlightEchoes.delete(event.windowId);
 
-        // Remove from scoped workspace slot ordering
+        // Remove from all workspace slot orderings
         const affected: string[] = [];
-        if (outputId && desktopId) {
-          const ws = this.getWorkspace(outputId, desktopId);
-          if (ws) {
-            const idx = ws.orderedSlotWindowIds.indexOf(event.windowId);
-            if (idx !== -1) {
-              ws.orderedSlotWindowIds.splice(idx, 1);
+        for (const ws of this.workspaces.values()) {
+          const idx = ws.orderedSlotWindowIds.indexOf(event.windowId);
+          if (idx !== -1) {
+            ws.orderedSlotWindowIds.splice(idx, 1);
+            if (!affected.includes(ws.outputId)) {
+              this.markScreenDirty(ws.outputId, "WindowRemoved");
+              affected.push(ws.outputId);
             }
           }
+        }
+
+        if (outputId && !affected.includes(outputId)) {
           this.markScreenDirty(outputId, "WindowRemoved");
           affected.push(outputId);
-        } else {
-          for (const ws of this.workspaces.values()) {
-            const idx = ws.orderedSlotWindowIds.indexOf(event.windowId);
-            if (idx !== -1) {
-              ws.orderedSlotWindowIds.splice(idx, 1);
-              if (!affected.includes(ws.outputId)) {
-                this.markScreenDirty(ws.outputId, "WindowRemoved");
-                affected.push(ws.outputId);
-              }
-            }
-          }
         }
 
         this.pendingReasons.add("WindowRemoved");
@@ -479,6 +513,9 @@ export class RuntimeCoordinator {
         if (event.updates.isDragging !== undefined) win.isDragging = event.updates.isDragging;
         if (event.updates.isPreTiled !== undefined) win.isPreTiled = event.updates.isPreTiled;
         if (event.updates.outputAffinity !== undefined) win.outputAffinity = event.updates.outputAffinity;
+        if (event.updates.onAllDesktops !== undefined) win.onAllDesktops = event.updates.onAllDesktops;
+        if (event.updates.desktopIds !== undefined) win.desktopIds = [...event.updates.desktopIds];
+        if (event.updates.activities !== undefined) win.activities = [...event.updates.activities];
 
         const screen = this.screens.get(win.outputId);
         const newClassResult = this.classifyWindow({
@@ -515,11 +552,12 @@ export class RuntimeCoordinator {
           win.outputAffinity = event.toOutputId;
         }
 
-        // Clean up ONLY the moved window from old workspace slot ordering
-        const oldWs = this.getWorkspace(event.fromOutputId, deskId);
-        if (oldWs) {
-          const idx = oldWs.orderedSlotWindowIds.indexOf(event.windowId);
-          if (idx !== -1) oldWs.orderedSlotWindowIds.splice(idx, 1);
+        // Clean up from old workspaces on source output
+        for (const ws of this.workspaces.values()) {
+          if (ws.outputId === event.fromOutputId) {
+            const idx = ws.orderedSlotWindowIds.indexOf(event.windowId);
+            if (idx !== -1) ws.orderedSlotWindowIds.splice(idx, 1);
+          }
         }
         const oldScreen = this.screens.get(event.fromOutputId);
         if (oldScreen) {
@@ -527,11 +565,29 @@ export class RuntimeCoordinator {
           this.dirtyScreenIds.add(oldScreen.outputId);
         }
 
-        // Add to new workspace slot ordering
-        const newWs = this.getOrCreateWorkspace(event.toOutputId, deskId);
-        if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
-          newWs.orderedSlotWindowIds.push(event.windowId);
+        // Add to new workspace(s) on target output
+        const targetDesks = (win && win.desktopIds && win.desktopIds.length > 0) ? win.desktopIds : [deskId];
+        if (this.config.perDesktopLayout === false) {
+          const newWs = this.getOrCreateWorkspace(event.toOutputId, GLOBAL_DESKTOP_SCOPE);
+          if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
+            newWs.orderedSlotWindowIds.push(event.windowId);
+          }
+        } else if (win && win.onAllDesktops) {
+          const newScr = this.screens.get(event.toOutputId);
+          const actDesk = newScr ? newScr.activeDesktopId : deskId;
+          const newWs = this.getOrCreateWorkspace(event.toOutputId, actDesk);
+          if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
+            newWs.orderedSlotWindowIds.push(event.windowId);
+          }
+        } else {
+          for (const dId of targetDesks) {
+            const newWs = this.getOrCreateWorkspace(event.toOutputId, dId);
+            if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
+              newWs.orderedSlotWindowIds.push(event.windowId);
+            }
+          }
         }
+
         const newScreen = this.screens.get(event.toOutputId);
         if (newScreen) {
           newScreen.dirtyReasons.add("WindowMovedOutputTarget");
@@ -548,6 +604,8 @@ export class RuntimeCoordinator {
           const oldDeskId = event.fromDesktopId;
           const newDeskId = event.toDesktopId;
           win.desktopId = newDeskId;
+          win.desktopIds = [newDeskId];
+          win.onAllDesktops = false;
 
           const oldWs = this.getWorkspace(win.outputId, oldDeskId);
           if (oldWs) {
@@ -562,6 +620,73 @@ export class RuntimeCoordinator {
 
           this.markScreenDirty(win.outputId, "WindowMovedDesktop");
           return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
+        }
+        return { dirty: false, affectedScreens: [], isEcho: false };
+      }
+
+      case "WindowDesktopsChanged": {
+        const win = this.windows.get(event.windowId);
+        if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
+
+        const newDesks = [...event.desktopIds];
+        const newSticky = event.onAllDesktops !== undefined ? Boolean(event.onAllDesktops) : win.onAllDesktops;
+        win.desktopIds = newDesks;
+        win.onAllDesktops = newSticky;
+        if (newDesks.length > 0) {
+          win.desktopId = newDesks[0];
+        }
+
+        // Reconcile workspace memberships on win.outputId
+        for (const ws of this.workspaces.values()) {
+          if (ws.outputId !== win.outputId) continue;
+          const inMembership = newSticky || newDesks.includes(ws.desktopId) || (!this.config.perDesktopLayout && ws.desktopId === GLOBAL_DESKTOP_SCOPE);
+          const idx = ws.orderedSlotWindowIds.indexOf(event.windowId);
+          if (inMembership && idx === -1) {
+            ws.orderedSlotWindowIds.push(event.windowId);
+          } else if (!inMembership && idx !== -1) {
+            ws.orderedSlotWindowIds.splice(idx, 1);
+          }
+        }
+
+        // Also ensure all new desktops have workspace objects created and populated
+        if (this.config.perDesktopLayout !== false && !newSticky) {
+          for (const dId of newDesks) {
+            const ws = this.getOrCreateWorkspace(win.outputId, dId);
+            if (!ws.orderedSlotWindowIds.includes(event.windowId)) {
+              ws.orderedSlotWindowIds.push(event.windowId);
+            }
+          }
+        }
+
+        this.markScreenDirty(win.outputId, "WindowDesktopsChanged");
+        return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
+      }
+
+      case "WindowActivitiesChanged": {
+        const win = this.windows.get(event.windowId);
+        if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
+        win.activities = [...event.activities];
+        if (event.activities.length > 0) {
+          win.activityId = event.activities[0];
+        }
+        return { dirty: false, affectedScreens: [], isEcho: false };
+      }
+
+      case "ScreenDesktopChanged": {
+        const screen = this.screens.get(event.outputId);
+        if (screen) {
+          screen.activeDesktopId = event.toDesktopId;
+          // Ensure sticky windows participate in the newly active desktop's workspace
+          const targetWs = this.getOrCreateWorkspace(event.outputId, event.toDesktopId);
+          for (const win of this.windows.values()) {
+            if (win.outputId === event.outputId && win.onAllDesktops) {
+              if (!targetWs.orderedSlotWindowIds.includes(win.id)) {
+                targetWs.orderedSlotWindowIds.push(win.id);
+              }
+            }
+          }
+          this.markScreenDirty(event.outputId, "ScreenDesktopChanged");
+          return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
         }
         return { dirty: false, affectedScreens: [], isEcho: false };
       }
@@ -773,7 +898,10 @@ export class RuntimeCoordinator {
 
     for (const win of this.windows.values()) {
       if (win.outputId !== screen.outputId) continue;
-      if (win.desktopId !== desktopId) continue;
+      const belongsToDesktop = this.config.perDesktopLayout === false ||
+        win.onAllDesktops ||
+        (win.desktopIds && win.desktopIds.length > 0 ? win.desktopIds.includes(desktopId) : win.desktopId === desktopId);
+      if (!belongsToDesktop) continue;
       if (!win.tileable) continue;
       if (win.isManualFloating) continue;
       if (this.config.ignoreMinimized && win.minimized) continue;

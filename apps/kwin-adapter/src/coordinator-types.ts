@@ -54,6 +54,8 @@ export function rectEqualsWithTolerance(
   );
 }
 
+export const GLOBAL_DESKTOP_SCOPE = "__global__";
+
 export interface RetainedWindowState {
   readonly id: RuntimeWindowId;
   resourceClass: string;
@@ -64,7 +66,10 @@ export interface RetainedWindowState {
   role: string;
   outputId: string;
   desktopId: string;
+  desktopIds: string[];
+  onAllDesktops: boolean;
   activityId?: string;
+  activities: string[];
   minimized: boolean;
   fullScreen: boolean;
   noBorder: boolean;
@@ -85,10 +90,10 @@ export interface RetainedWindowState {
   outputAffinity?: string;
 }
 
-export type WorkspaceScopeKey = string; // "${outputId}:${desktopId}"
+export type WorkspaceScopeKey = string; // "${encodeURIComponent(outputId)}//${encodeURIComponent(desktopId)}"
 
 export function getWorkspaceScopeKey(outputId: string, desktopId: string = "1"): WorkspaceScopeKey {
-  return `${outputId}:${desktopId}`;
+  return `${encodeURIComponent(outputId)}//${encodeURIComponent(desktopId)}`;
 }
 
 export interface WorkspaceLayoutState {
@@ -147,6 +152,7 @@ export interface CoordinatorConfig {
   primaryRegionCount?: number;
   masterRatio: number;
   masterCount: number;
+  perDesktopLayout?: boolean;
   ignoreMinimized: boolean;
   gameWindowPolicy: GameWindowPolicy;
   floatFilter?: string;
@@ -179,7 +185,10 @@ export interface NormalizedWindowInput {
   role?: string;
   outputId?: string;
   desktopId?: string;
+  desktopIds?: string[];
+  onAllDesktops?: boolean;
   activityId?: string;
+  activities?: string[];
   minimized?: boolean;
   fullScreen?: boolean;
   noBorder?: boolean;
@@ -221,6 +230,9 @@ export type NormalizedEvent =
   | { type: "WindowStateChanged"; windowId: RuntimeWindowId; updates: Partial<NormalizedWindowInput> }
   | { type: "WindowMovedOutput"; windowId: RuntimeWindowId; fromOutputId: string; toOutputId: string }
   | { type: "WindowMovedDesktop"; windowId: RuntimeWindowId; fromDesktopId: string; toDesktopId: string }
+  | { type: "WindowDesktopsChanged"; windowId: RuntimeWindowId; desktopIds: string[]; onAllDesktops?: boolean }
+  | { type: "WindowActivitiesChanged"; windowId: RuntimeWindowId; activities: string[] }
+  | { type: "ScreenDesktopChanged"; outputId: string; toDesktopId: string }
   | { type: "ScreenTopologyChanged"; screens: NormalizedScreenInput[] }
   | { type: "ScreenLayoutChanged"; outputId: string; layout: LayoutAlgorithm; desktopId?: string }
   | { type: "ScreenMasterConfigChanged"; outputId: string; count?: number; ratio?: number; desktopId?: string }

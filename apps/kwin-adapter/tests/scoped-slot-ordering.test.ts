@@ -206,4 +206,100 @@ describe("Scoped Slot Ordering and Runtime Authority", () => {
     expect(zones[blIdx].id).toBe("bottom-left");
     expect(zones[blIdx].slotIndex).toBe(3);
   });
+
+  it("supports windows assigned to multiple virtual desktops without collapsing memberships", () => {
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeWindow("w1", "HDMI-A-1", "1", {
+        desktopIds: ["1", "2"],
+      }),
+    });
+
+    expect(coordinator.getOrCreateWorkspace("HDMI-A-1", "1").orderedSlotWindowIds).toContain("w1");
+    expect(coordinator.getOrCreateWorkspace("HDMI-A-1", "2").orderedSlotWindowIds).toContain("w1");
+  });
+
+  it("handles sticky windows (onAllDesktops) participating across active desktops on the output", () => {
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeWindow("w-sticky", "HDMI-A-1", "1", {
+        onAllDesktops: true,
+      }),
+    });
+
+    expect(coordinator.getOrCreateWorkspace("HDMI-A-1", "1").orderedSlotWindowIds).toContain("w-sticky");
+
+    // Switch active desktop on screen to desktop 2
+    coordinator.ingestEvent({
+      type: "ScreenDesktopChanged",
+      outputId: "HDMI-A-1",
+      toDesktopId: "2",
+    });
+
+    expect(coordinator.getOrCreateWorkspace("HDMI-A-1", "2").orderedSlotWindowIds).toContain("w-sticky");
+  });
+
+  it("updates memberships cleanly when desktop assignments change via WindowDesktopsChanged", () => {
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeWindow("w1", "HDMI-A-1", "1", {
+        desktopIds: ["1", "2"],
+      }),
+    });
+
+    expect(coordinator.getOrCreateWorkspace("HDMI-A-1", "1").orderedSlotWindowIds).toContain("w1");
+    expect(coordinator.getOrCreateWorkspace("HDMI-A-1", "2").orderedSlotWindowIds).toContain("w1");
+
+    // Window moved from desktops [1, 2] to [2, 3]
+    coordinator.ingestEvent({
+      type: "WindowDesktopsChanged",
+      windowId: "w1",
+      desktopIds: ["2", "3"],
+      onAllDesktops: false,
+    });
+
+    expect(coordinator.getOrCreateWorkspace("HDMI-A-1", "1").orderedSlotWindowIds).not.toContain("w1");
+    expect(coordinator.getOrCreateWorkspace("HDMI-A-1", "2").orderedSlotWindowIds).toContain("w1");
+    expect(coordinator.getOrCreateWorkspace("HDMI-A-1", "3").orderedSlotWindowIds).toContain("w1");
+  });
+
+  it("uses a global-scope sentinel when perDesktopLayout is false", () => {
+    const globalCoord = new RuntimeCoordinator({
+      enableTiling: true,
+      defaultLayout: "master-stack",
+      perDesktopLayout: false,
+    });
+    globalCoord.getOrCreateScreen(SCREEN_0);
+
+    globalCoord.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeWindow("w1", "HDMI-A-1", "1"),
+    });
+    globalCoord.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeWindow("w2", "HDMI-A-1", "2"),
+    });
+
+    // When perDesktopLayout is false, both windows share the single global workspace on this screen
+    const globalWs = globalCoord.getOrCreateWorkspace("HDMI-A-1", "__global__");
+    expect(globalWs.orderedSlotWindowIds).toEqual(["w1", "w2"]);
+  });
+
+  it("preserves normalized activity list without accidental first-activity authority", () => {
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeWindow("w1", "HDMI-A-1", "1", {
+        activities: ["activity-alpha", "activity-beta"],
+      }),
+    });
+
+    const retained = coordinator.getRetainedWindow("w1");
+    expect(retained?.activities).toEqual(["activity-alpha", "activity-beta"]);
+  });
+
+  it("generates collision-safe scope keys even when outputId contains colons or delimiters", () => {
+    const key1 = coordinator.getWorkspaceScopeKey("DP-1:0", "1");
+    const key2 = coordinator.getWorkspaceScopeKey("DP-1", "0:1");
+    expect(key1).not.toEqual(key2);
+  });
 });

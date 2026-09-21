@@ -376,6 +376,16 @@ Item {
         }
     }
 
+    function commitWindowGeometry(win, targetRect, reason, epoch) {
+        if (!win || !targetRect) return;
+        var coord = getCoordinator();
+        var wid = getWindowId(win);
+        if (coord) {
+            coord.recordCommand(wid, targetRect, epoch || 0);
+        }
+        win.frameGeometry = Qt.rect(targetRect.x, targetRect.y, targetRect.width, targetRect.height);
+    }
+
     function performReconciliation() {
         if (!config.enableTiling || isArranging) return;
 
@@ -474,13 +484,15 @@ Item {
                     continue;
                 }
 
-                targetWin.frameGeometry = Qt.rect(op.targetRect.x, op.targetRect.y, op.targetRect.width, op.targetRect.height);
+                commitWindowGeometry(targetWin, op.targetRect, "reconciliation", op.epoch);
             }
         } catch (err) {
             log("Reconciliation error: " + err);
         } finally {
             isArranging = false;
         }
+    }
+
     function retileScreen() {
         performReconciliation();
     }
@@ -941,271 +953,7 @@ Item {
         }
     }
 
-    // =========================================================================
-    // 6b. Live Master Windows & Screen Configuration HUD (Testing & On-The-Fly)
-    // =========================================================================
-    PlasmaCore.Dialog {
-        id: masterHudDialog
 
-        title: "Tessera Master Configuration"
-        location: PlasmaCore.Types.Desktop
-        type: PlasmaCore.Dialog.OnScreenDisplay
-        backgroundHints: PlasmaCore.Types.NoBackground
-        flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint | Qt.Popup
-        hideOnWindowDeactivate: false
-        visible: false
-        outputOnly: true
-        width: 440
-        height: 220
-
-        property string screenLabel: "Screen"
-        property int masterCountVal: 1
-        property string layoutVal: "MASTER-STACK"
-        property var targetArea: Qt.rect(0, 0, 1920, 1080)
-
-        function popup(scr, count) {
-            var targetScr = scr || getCurrentTargetScreen();
-            var sName = getScreenName(targetScr);
-            var area = Workspace.clientArea(KWin.MaximizeArea, targetScr, Workspace.currentDesktop);
-            targetArea = area;
-            screenLabel = sName;
-            masterCountVal = count;
-            layoutVal = getActiveLayout(targetScr).toUpperCase();
-
-            x = area.x + Math.floor((area.width - width) / 2);
-            y = area.y + Math.floor((area.height - height) / 2);
-            visible = true;
-
-            hudDismissTimer.restart();
-        }
-
-        mainItem: Rectangle {
-            id: hudRootRect
-            implicitWidth: 440
-            implicitHeight: 220
-            radius: 12
-            color: Qt.rgba(0.09, 0.11, 0.14, 0.95)
-            border.color: "#3daee9"
-            border.width: 2
-
-            Timer {
-                id: hudDismissTimer
-                interval: 2400
-                repeat: false
-                onTriggered: masterHudDialog.visible = false
-            }
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 10
-
-                // Header with Screen Name and Layout
-                RowLayout {
-                    Layout.fillWidth: true
-                    Text {
-                        text: "🖥️ " + masterHudDialog.screenLabel
-                        color: "#3daee9"
-                        font.bold: true
-                        font.pixelSize: 16
-                    }
-                    Item { Layout.fillWidth: true }
-                    Rectangle {
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.25)
-                        radius: 4
-                        implicitWidth: layoutText.implicitWidth + 12
-                        implicitHeight: 22
-                        Text {
-                            id: layoutText
-                            anchors.centerIn: parent
-                            text: masterHudDialog.layoutVal
-                            color: "#ffffff"
-                            font.bold: true
-                            font.pixelSize: 11
-                        }
-                    }
-                }
-
-                // Master Count Value
-                RowLayout {
-                    Layout.alignment: Qt.AlignHCenter
-                    spacing: 10
-                    Text {
-                        text: "Master Windows:"
-                        color: "#cfd6df"
-                        font.pixelSize: 15
-                    }
-                    Rectangle {
-                        color: "#3daee9"
-                        radius: 6
-                        implicitWidth: masterHudDialog.masterCountVal === 0 ? 120 : 36
-                        implicitHeight: 28
-                        Text {
-                            anchors.centerIn: parent
-                            text: masterHudDialog.masterCountVal === 0 ? "0 (Balanced Grid)" : masterHudDialog.masterCountVal.toString()
-                            color: "#000000"
-                            font.bold: true
-                            font.pixelSize: masterHudDialog.masterCountVal === 0 ? 11 : 18
-                        }
-                    }
-                }
-
-                // Mini Layout Preview Diagram (Master-Stack when masterCount > 0)
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 8
-                    visible: masterHudDialog.masterCountVal > 0
-
-                    // Master column box
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.20)
-                        border.color: "#3daee9"
-                        border.width: 1
-                        radius: 6
-
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            spacing: 4
-                            Repeater {
-                                model: Math.min(4, masterHudDialog.masterCountVal)
-                                delegate: Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    color: Qt.rgba(0.24, 0.68, 0.91, 0.40)
-                                    radius: 3
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "Master " + (index + 1)
-                                        color: "#ffffff"
-                                        font.pixelSize: 10
-                                        font.bold: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Stack column box
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(1, 1, 1, 0.06)
-                        border.color: Qt.rgba(1, 1, 1, 0.15)
-                        border.width: 1
-                        radius: 6
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            spacing: 4
-                            Repeater {
-                                model: 2
-                                delegate: Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    color: Qt.rgba(1, 1, 1, 0.10)
-                                    radius: 3
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "Stack " + (index + 1)
-                                        color: "#80ffffff"
-                                        font.pixelSize: 10
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Balanced Grid Preview Diagram (Shown when 0 masters)
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 8
-                    visible: masterHudDialog.masterCountVal === 0
-
-                    // Left End: 2 horizontal splits
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.15)
-                        border.color: "#3daee9"
-                        border.width: 1
-                        radius: 6
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            spacing: 4
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
-                                radius: 3
-                                Text { anchors.centerIn: parent; text: "1 (Left Top)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
-                                radius: 3
-                                Text { anchors.centerIn: parent; text: "2 (Left Btm)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
-                            }
-                        }
-                    }
-
-                    // Center Stack / Column
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.25)
-                        border.color: "#3daee9"
-                        border.width: 1
-                        radius: 6
-                        Text { anchors.centerIn: parent; text: "3 (Center Stack)"; color: "#3daee9"; font.pixelSize: 10; font.bold: true }
-                    }
-
-                    // Right End: 2 horizontal splits
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.15)
-                        border.color: "#3daee9"
-                        border.width: 1
-                        radius: 6
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            spacing: 4
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
-                                radius: 3
-                                Text { anchors.centerIn: parent; text: "4 (Right Top)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
-                                radius: 3
-                                Text { anchors.centerIn: parent; text: "5 (Right Btm)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
-                            }
-                        }
-                    }
-                }
-
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "Ctrl+Shift+I (Increase) / Ctrl+Shift+O (Decrease)"
-                    color: "#8090a0"
-                    font.pixelSize: 10
-                }
-            }
-        }
-    }
 
     // =========================================================================
     // 7. Window Event Hooks
@@ -1224,6 +972,8 @@ Item {
             if (w.maximizedChanged && h.maxChanged) w.maximizedChanged.disconnect(h.maxChanged);
             if (w.noBorderChanged && h.noBorder) w.noBorderChanged.disconnect(h.noBorder);
             if (w.outputChanged && h.output) w.outputChanged.disconnect(h.output);
+            if (w.desktopsChanged && h.desktops) w.desktopsChanged.disconnect(h.desktops);
+            if (w.activitiesChanged && h.activities) w.activitiesChanged.disconnect(h.activities);
         } catch (e) {
             // Ignore if already disconnected or window destroyed
         }
@@ -1260,7 +1010,7 @@ Item {
                     }
                     var newX = Math.round(curPos.x - (targetW / 2));
                     var newY = Math.max(0, curPos.y - 15);
-                    w.frameGeometry = Qt.rect(newX, newY, targetW, targetH);
+                    commitWindowGeometry(w, { x: newX, y: newY, width: targetW, height: targetH }, "drag_start");
                 } else {
                     wasDraggingMaximized[wid] = false;
                 }
@@ -1297,7 +1047,7 @@ Item {
                         if (typeof w.setMaximize === "function") {
                             w.setMaximize(false, false);
                         }
-                        w.frameGeometry = Qt.rect(target.targetRect.x, target.targetRect.y, target.targetRect.width, target.targetRect.height);
+                        commitWindowGeometry(w, target.targetRect, "snap_drop");
                         preTiledWindows[wid] = true;
                         floatingWindows[wid] = false;
                         if (coordinator) {
@@ -1354,7 +1104,7 @@ Item {
                 // Restore its saved tiled slot geometry immediately
                 var g = getSavedTiledGeometry(wid);
                 if (g) {
-                    w.frameGeometry = Qt.rect(g.x, g.y, g.width, g.height);
+                    commitWindowGeometry(w, g, "unminimize");
                 }
             }
             var coord = getCoordinator();
@@ -1412,7 +1162,7 @@ Item {
                 delete preTiledWindows[wid];
                 var target = getSavedTiledGeometry(wid);
                 if (target) {
-                    w.frameGeometry = Qt.rect(target.x, target.y, target.width, target.height);
+                    commitWindowGeometry(w, target, "unmaximize");
                 }
             }
             var evalRes = evaluateWindowTileability(w);
@@ -1432,6 +1182,47 @@ Item {
         var onOutputChanged = function() {
             if (!root || !root.coordinator || isArranging) return;
             scheduleReconcile("WindowOutputChanged");
+        };
+
+        var onDesktopsChanged = function() {
+            if (!root || !root.coordinator || isArranging) return;
+            var wid = getWindowId(w);
+            var coord = getCoordinator();
+            if (coord) {
+                var dIds = [];
+                if (w.desktops) {
+                    for (var dIdx = 0; dIdx < w.desktops.length; dIdx++) {
+                        dIds.push(w.desktops[dIdx].id || String(w.desktops[dIdx]));
+                    }
+                }
+                coord.ingestEvent({
+                    type: "WindowDesktopsChanged",
+                    windowId: wid,
+                    desktopIds: dIds,
+                    onAllDesktops: (w.onAllDesktops === true)
+                });
+            }
+            scheduleReconcile("WindowDesktopsChanged");
+        };
+
+        var onActivitiesChanged = function() {
+            if (!root || !root.coordinator || isArranging) return;
+            var wid = getWindowId(w);
+            var coord = getCoordinator();
+            if (coord) {
+                var acts = [];
+                if (w.activities) {
+                    for (var aIdx = 0; aIdx < w.activities.length; aIdx++) {
+                        acts.push(String(w.activities[aIdx]));
+                    }
+                }
+                coord.ingestEvent({
+                    type: "WindowActivitiesChanged",
+                    windowId: wid,
+                    activities: acts
+                });
+            }
+            scheduleReconcile("WindowActivitiesChanged");
         };
 
         if (w.interactiveMoveResizeStarted) {
@@ -1473,6 +1264,14 @@ Item {
         if (w.outputChanged) {
             hooks.output = onOutputChanged;
             w.outputChanged.connect(onOutputChanged);
+        }
+        if (w.desktopsChanged) {
+            hooks.desktops = onDesktopsChanged;
+            w.desktopsChanged.connect(onDesktopsChanged);
+        }
+        if (w.activitiesChanged) {
+            hooks.activities = onActivitiesChanged;
+            w.activitiesChanged.connect(onActivitiesChanged);
         }
 
         w._tesseraHooks = hooks;
@@ -1675,22 +1474,8 @@ Item {
         }
 
         log("adjustMasterCount delta=" + delta + " target=" + sName + " newCount=" + newCount);
-        masterHudDialog.popup(scr, newCount);
+        osdCall.notify(sName + " Primary Regions: " + newCount, "preferences-system-windows");
         retileNow();
-    }
-
-    function showMasterDialog(targetScreen) {
-        var scr = targetScreen || getCurrentTargetScreen();
-        var sName = getScreenName(scr);
-        var deskKey = getCurrentDesktopKey();
-        var coord = getCoordinator();
-        var curCount = config.masterCount;
-        if (coord) {
-            var ws = coord.getOrCreateWorkspace(sName, deskKey);
-            curCount = ws.primaryRegionCount;
-        }
-        log("showMasterDialog target=" + sName + " curCount=" + curCount);
-        masterHudDialog.popup(scr, curCount);
     }
 
     function toggleOverlay() {
@@ -1725,7 +1510,7 @@ Item {
         var curH = Math.min(w.frameGeometry.height, toArea.height - (config.gapOuter * 2));
         var newX = toArea.x + Math.floor((toArea.width - curW) / 2);
         var newY = toArea.y + Math.floor((toArea.height - curH) / 2);
-        w.frameGeometry = Qt.rect(newX, newY, curW, curH);
+        commitWindowGeometry(w, { x: newX, y: newY, width: curW, height: curH }, "move_screen");
 
         osdCall.notify("Window Moved to " + toName, "preferences-desktop-display");
         retileNow();
@@ -1977,13 +1762,6 @@ Item {
         text: "Tessera: Swap Screen Layouts"
         sequence: "Ctrl+Alt+X"
         onActivated: root.swapScreenLayouts()
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Show Master HUD"
-        text: "Tessera: Show Master HUD"
-        sequence: "Ctrl+Shift+M"
-        onActivated: root.showMasterDialog()
     }
 
     Component.onCompleted: {

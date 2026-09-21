@@ -189,7 +189,9 @@ describe("QML Source Isolation & Legacy Map Audit", () => {
       "maximizedAboutToChange",
       "maximizedChanged",
       "noBorderChanged",
-      "outputChanged"
+      "outputChanged",
+      "desktopsChanged",
+      "activitiesChanged"
     ];
 
     for (const sig of requiredSignals) {
@@ -243,5 +245,32 @@ describe("QML Source Isolation & Legacy Map Audit", () => {
     expect(content).toMatch(/target\.targetRect/);
     expect(content).toMatch(/preTiledWindows\[wid\]\s*=\s*true/);
   });
+
+  it("15. frameGeometry is written exclusively via commitWindowGeometry sink", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+    const lines = content.split("\n");
+    const occurrences: { line: number; text: string }[] = [];
+
+    lines.forEach((line, idx) => {
+      if (line.includes("frameGeometry =") && !line.trim().startsWith("//")) {
+        occurrences.push({ line: idx + 1, text: line.trim() });
+      }
+    });
+
+    expect(occurrences.length).toBe(1);
+    expect(occurrences[0].text).toContain("win.frameGeometry = Qt.rect(targetRect.x, targetRect.y, targetRect.width, targetRect.height)");
+
+    // commitWindowGeometry helper exists and records commands
+    expect(content).toMatch(/function\s+commitWindowGeometry\s*\(\s*win\s*,\s*targetRect\s*,\s*reason\s*,\s*epoch\s*\)/);
+    expect(content).toMatch(/coord\.recordCommand\s*\(\s*wid\s*,\s*targetRect\s*,\s*epoch\s*\|\|\s*0\s*\)/);
+  });
+
+  it("16. masterHudDialog and legacy HUD shortcuts are completely removed from QML", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+    expect(content).not.toMatch(/masterHudDialog/);
+    expect(content).not.toMatch(/showMasterDialog/);
+    expect(content).not.toMatch(/Show Master HUD/);
+  });
 });
+
 
