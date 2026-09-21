@@ -6,7 +6,7 @@
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DIST_DIR="$PROJECT_DIR/dist"
+DIST_DIR="${1:-${DIST_DIR:-$PROJECT_DIR/dist}}"
 VERSION=$(python3 -c "import json; print(json.load(open('$PROJECT_DIR/metadata.json'))['KPlugin']['Version'])")
 PACKAGE_NAME="tessera-v${VERSION}.kwinscript"
 

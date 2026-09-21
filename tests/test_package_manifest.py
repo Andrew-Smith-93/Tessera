@@ -104,34 +104,68 @@ class TestPackageManifest(unittest.TestCase):
         """
         import hashlib
         import subprocess
+        import tempfile
 
         pkg_script = os.path.join(PROJECT_ROOT, "package.sh")
-        out_pkg = os.path.join(DIST_DIR, "tessera-v1.0.1.kwinscript")
 
-        # Build 1
-        res1 = subprocess.run([pkg_script], cwd=PROJECT_ROOT, capture_output=True, text=True)
-        self.assertEqual(res1.returncode, 0, f"Build 1 failed: {res1.stderr}")
-        self.assertTrue(os.path.exists(out_pkg))
-        with open(out_pkg, "rb") as f:
-            data1 = f.read()
-            hash1 = hashlib.sha256(data1).hexdigest()
-        with zipfile.ZipFile(out_pkg, "r") as z1:
-            entries1 = [(info.filename, info.file_size, info.date_time, info.external_attr) for info in z1.infolist()]
+        with tempfile.TemporaryDirectory() as tmp1, tempfile.TemporaryDirectory() as tmp2:
+            out_pkg1 = os.path.join(tmp1, "tessera-v1.0.1.kwinscript")
+            out_pkg2 = os.path.join(tmp2, "tessera-v1.0.1.kwinscript")
 
-        # Small pause and Build 2
-        import time
-        time.sleep(0.1)
-        res2 = subprocess.run([pkg_script], cwd=PROJECT_ROOT, capture_output=True, text=True)
-        self.assertEqual(res2.returncode, 0, f"Build 2 failed: {res2.stderr}")
-        with open(out_pkg, "rb") as f:
-            data2 = f.read()
-            hash2 = hashlib.sha256(data2).hexdigest()
-        with zipfile.ZipFile(out_pkg, "r") as z2:
-            entries2 = [(info.filename, info.file_size, info.date_time, info.external_attr) for info in z2.infolist()]
+            # Build 1
+            res1 = subprocess.run([pkg_script, tmp1], cwd=PROJECT_ROOT, capture_output=True, text=True)
+            self.assertEqual(res1.returncode, 0, f"Build 1 failed: {res1.stderr}")
+            self.assertTrue(os.path.exists(out_pkg1))
+            with open(out_pkg1, "rb") as f:
+                data1 = f.read()
+                hash1 = hashlib.sha256(data1).hexdigest()
+            with zipfile.ZipFile(out_pkg1, "r") as z1:
+                entries1 = [(info.filename, info.file_size, info.date_time, info.external_attr) for info in z1.infolist()]
 
-        self.assertEqual(hash1, hash2, f"Build hashes differed across runs: {hash1} vs {hash2}")
-        self.assertEqual(entries1, entries2, "Archive entry manifests differed across runs")
-        self.assertEqual(len(entries1), 11, f"Expected exactly 11 archive entries, found {len(entries1)}")
+            # Small pause and Build 2
+            import time
+            time.sleep(0.1)
+            res2 = subprocess.run([pkg_script, tmp2], cwd=PROJECT_ROOT, capture_output=True, text=True)
+            self.assertEqual(res2.returncode, 0, f"Build 2 failed: {res2.stderr}")
+            self.assertTrue(os.path.exists(out_pkg2))
+            with open(out_pkg2, "rb") as f:
+                data2 = f.read()
+                hash2 = hashlib.sha256(data2).hexdigest()
+            with zipfile.ZipFile(out_pkg2, "r") as z2:
+                entries2 = [(info.filename, info.file_size, info.date_time, info.external_attr) for info in z2.infolist()]
+
+            self.assertEqual(hash1, hash2, f"Build hashes differed across runs: {hash1} vs {hash2}")
+            self.assertEqual(entries1, entries2, "Archive entry manifests differed across runs")
+            self.assertEqual(len(entries1), 11, f"Expected exactly 11 archive entries, found {len(entries1)}")
+
+    def test_install_script_safety(self):
+        """Verifies install.sh contains shortcut preservation, atomic staging, and no master HUD shortcut."""
+        install_sh = os.path.join(PROJECT_ROOT, "install.sh")
+        with open(install_sh, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Atomic staging
+        self.assertIn("mktemp -d", content)
+        # Preflight
+        self.assertIn("command -v python3", content)
+        # Stable control dir
+        self.assertIn(".local/share/tessera/control", content)
+        # Existing shortcut preservation check
+        self.assertIn("kreadconfig6 --file kglobalshortcutsrc", content)
+        # No Master HUD shortcut registration
+        self.assertNotIn('["Tessera: Show Master HUD"]=', content)
+        # Cleanup of legacy Master HUD shortcut
+        self.assertIn('kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Show Master HUD" --delete', content)
+
+    def test_uninstall_script_safety(self):
+        """Verifies uninstall.sh supports --purge flag and removes stable control dir."""
+        uninstall_sh = os.path.join(PROJECT_ROOT, "uninstall.sh")
+        with open(uninstall_sh, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn("--purge", content)
+        self.assertIn(".local/share/tessera", content)
 
 if __name__ == "__main__":
     unittest.main()
+
