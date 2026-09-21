@@ -19,9 +19,9 @@
 
 ## 2. Package Artifact & Packaging Isolation
 - **Artifact**: `dist/tessera-v1.0.1.kwinscript`
-- **SHA-256**: `7138478686be315153019e39b5d2f07885bb5e0a6c1348d232aeafeb239a3573`
+- **SHA-256**: `3166fe8a481a527fbc1ece50734f38110dae8edd7e841ee07d1bdf5efbeec480`
 - **Package Archive Inspection** (`unzip -Z1 dist/tessera-v1.0.1.kwinscript`):
-  - Exactly 11 entries (4 directories, 7 files):
+  - contains exactly 11 archive entries: seven files and four directory entries:
     - `contents/`
     - `contents/code/`
     - `contents/code/layouts.js`
@@ -157,7 +157,7 @@
 ### Section D: Fullscreen and Maximization (8 Cases)
 | ID | Description | Status | Evidence Source |
 |---|---|---|---|
-| D1 | True fullscreen entry is not fought by tiler | **LIVE PASS** | Controlled live KWin/X11 fullscreen state transition on Konsole: KWin sets `fs=true`, geometry 1920x1080, no conflicting geometry behavior was observed |
+| D1 | True fullscreen entry is not fought by tiler | **LIVE PASS** | Controlled live KWin/X11 fullscreen state transition on terminal-A: KWin sets `fs=true`, geometry 1920x1080, no conflicting geometry behavior was observed |
 | D2 | Fullscreen window fills correct output | **LIVE PASS** | Controlled live KWin/X11 fullscreen state transition: window fills exact output bounds `1920,0 1920x1080` on DP-4 covering panel |
 | D3 | Other outputs remain unaffected | **LIVE PASS** | Controlled live KWin/X11 fullscreen state transition: HDMI-0 windows remain undisturbed at their existing layout slots |
 | D4 | Exiting fullscreen restores logical tiled slot | **LIVE PASS** | Controlled live KWin/X11 fullscreen state transition: exiting fullscreen cleanly restores exact pre-fullscreen geometry `1940,20 932x1040` |
@@ -285,13 +285,17 @@
 3. **Fullscreen (Group 3)**:
    - *"nope it just made it a little bigger. 2. no. 4. yeah."*
    - **Distinction of Evidence**:
-     - The original Electron wrapper application (ChatGPT) did not request true fullscreen (`_NET_WM_STATE_FULLSCREEN`), resulting in an application-level resize rather than a compositor fullscreen transition.
-     - A controlled live KWin/X11 fullscreen state transition was subsequently executed via an explicit X11 client message on a native terminal application (`konsole`) on `DP-4`.
+     - The original Electron wrapper test application (`app-wrapper`) did not request true fullscreen (`_NET_WM_STATE_FULLSCREEN`), resulting in an application-level resize rather than a compositor fullscreen transition.
+     - A controlled live KWin/X11 fullscreen state transition was subsequently executed via an explicit X11 client message on a native terminal test application (`terminal-A`) on `DP-4`.
      - KWin set `fullScreen=true` and expanded the window to `1920,0 1920x1080` (covering panel); Tessera respected that state and no conflicting geometry behavior was observed. Exiting fullscreen cleanly restored the pre-fullscreen logical slot (`1940,20 932x1040`).
      - Application-specific and game-specific fullscreen UX remains covered separately by pending tests (Section G).
 4. **Manual Floating (Group 4)**:
    - Initial run with `Ctrl+Shift+F`: *"grp 4: , no"* (keybinding intercepted by application context).
-   - Test with `Meta+Shift+F`: Active window detached from tiling; remaining single window on HDMI-0 reflowed across the usable display area while the floating window remained freely movable on top.
+   - Test with `Meta+Shift+F`:
+     - Active window (`window-A`) detached from tiling: `currentlyFloating=false -> nextFloating=true`, `coordBefore=false -> coordAfter=true`.
+     - Excluded from tiled geometry operations (`tx.operations` omitted `window-A`); remaining single window on screen reflowed across the usable display area while `window-A` remained freely movable on top without being retiled.
+     - Second toggle: `currentlyFloating=true -> nextFloating=false`, `coordBefore=true -> coordAfter=false`.
+     - Restored to deterministic tiled placement and ordering in persistent screen slots.
 5. **Snap Preview (Group 5)**:
    - *"5. Yes"* (snap overlay preview appears during window drag).
 6. **Multi-Monitor Cross-Screen Drag (Group 6)**:
@@ -304,8 +308,8 @@
 *(Application identifiers and window titles sanitized with generic technical labels)*
 
 ```text
-[Tessera] Drag started: app-A
-[Tessera] Drag finished: app-A
+[Tessera] Drag started
+[Tessera] Drag finished
 [Tessera] Options.configChanged signal detected!
 [Tessera] Config reloaded live: gaps=15/20 ratio=0.5 tiling=true
 [Tessera] Window audit: total=6 managed=true
@@ -336,4 +340,9 @@ The runtime simulator suite comprises:
 3. **Game Acceptance**: Game suite G1–G12 (12 cases) remains pending manual testing with Omega.
 4. **Safety Rollback / Uninstall**: Rollback rehearsal (A8, K4) and uninstallation (K5) safely prepared with timestamped backups but unexecuted live.
 5. **Legacy Fallback UI**: Legacy fallback (J2) has no user-facing toggle; reconciler pipeline remains the authoritative engine.
-6. **Recommendation**: **ACCEPT WITH LIMITATIONS**. Core multi-monitor tiling, cross-screen migration, snap preview, minimize/restore, and script reload lifecycle are live-verified and stable. Edge-case application fullscreen behavior and default floating shortcut collision (`Ctrl+Shift+F`) are documented for Phase 6 refinement.
+6. **Fullscreen Behavior Policy**:
+   - Tessera correctly respects explicit KWin/X11 fullscreen state.
+   - Application-specific shortcuts that do not request fullscreen (such as Electron web wrappers intercepting `F11` internally) are not themselves proof of a Tessera defect, and heuristics should not be added merely for application shortcut non-compliance.
+   - Fullscreen-like and borderless behavior remains governed by observable state, classification rules, and configured policy.
+   - Game-specific fullscreen remains pending Section G.
+7. **Recommendation**: **ACCEPT WITH LIMITATIONS**. Core multi-monitor tiling, cross-screen migration, snap preview, minimize/restore, and script reload lifecycle are live-verified and stable. Edge-case application shortcut collisions are documented for Phase 6 refinement.

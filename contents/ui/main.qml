@@ -544,12 +544,7 @@ Item {
         }
 
         var diag = coord.getDiagnostics();
-        var opSummary = [];
-        for (var oi = 0; oi < tx.operations.length; oi++) {
-            var o = tx.operations[oi];
-            opSummary.push(o.windowId + "@" + o.targetRect.x + "," + o.targetRect.y + " " + o.targetRect.width + "x" + o.targetRect.height);
-        }
-        log("Reconciliation tx: ops=" + tx.operations.length + " [" + opSummary.join("; ") + "] reasons=" + (diag.lastTransactionReasons.join(",") || "none") + " outputs=" + (diag.lastAffectedScreenIds.join(",") || "all") + " totalTx=" + diag.totalReconciliationTransactions + " totalWrites=" + diag.totalGeometryWrites + " skippedWrites=" + diag.skippedIdenticalWrites + " suppressedEchoes=" + diag.suppressedGeometryEchoes + " retainedWins=" + diag.retainedWindowCount + " retainedScreens=" + diag.retainedScreenCount);
+        log("Reconciliation tx: ops=" + tx.operations.length + " reasons=" + (diag.lastTransactionReasons.join(",") || "none") + " outputs=" + (diag.lastAffectedScreenIds.join(",") || "all") + " totalTx=" + diag.totalReconciliationTransactions + " totalWrites=" + diag.totalGeometryWrites + " skippedWrites=" + diag.skippedIdenticalWrites + " suppressedEchoes=" + diag.suppressedGeometryEchoes + " retainedWins=" + diag.retainedWindowCount + " retainedScreens=" + diag.retainedScreenCount);
 
         // 4. Apply only changed geometries with feedback protection
         isArranging = true;
@@ -1432,7 +1427,7 @@ Item {
                 } else {
                     wasDraggingMaximized[wid] = false;
                 }
-                log("Drag started: " + w.caption + (wasDraggingMaximized[wid] ? " (from maximized)" : ""));
+                log("Drag started" + (wasDraggingMaximized[wid] ? " (from maximized)" : ""));
                 if (overlayDialog) overlayDialog.showOverlay(w);
             }
         };
@@ -1447,7 +1442,7 @@ Item {
         var onMoveResizeFinished = function() {
             if (!root || !root.coordinator) return;
             if (currentDraggingWindow === w) {
-                log("Drag finished: " + w.caption);
+                log("Drag finished");
                 var wid = getWindowId(w);
                 var target = overlayDialog ? overlayDialog.finishDrag() : null;
                 if (target) {
@@ -1781,7 +1776,7 @@ Item {
             coordAfter = coord.isManualFloating(wid);
         }
 
-        log("toggleActiveFloating: " + (w.caption || wid) + " [id=" + wid + "] currentlyFloating=" + currentlyFloating + " -> nextFloating=" + nextFloating + ", coordBefore=" + coordBefore + " -> coordAfter=" + coordAfter);
+        log("manual floating: " + currentlyFloating + " -> " + nextFloating + ", coordinator: " + coordBefore + " -> " + coordAfter);
 
         osdCall.notify(nextFloating ? "Window Floating" : "Window Tiled", "preferences-system-windows");
         retileNow();
