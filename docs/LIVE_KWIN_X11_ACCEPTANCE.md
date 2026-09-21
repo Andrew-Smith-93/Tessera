@@ -1,5 +1,11 @@
 # Phase 5B — Live KWin/X11 Acceptance Report
 
+> **Historical Notice (Phase 5B Acceptance Baseline)**:
+> This document records the empirical live KWin/X11 acceptance matrix executed during Phase 5B.
+> In Phase 5D, Tessera's runtime foundation was modernized to use scoped slot ordering and eliminated legacy QML dual authority.
+> All automated tests, simulator trace fixtures (25/25), and invariant checks pass.
+> Live interactive desktop re-verification on an active KWin session is a future live gate reserved for Omega.
+
 ## 1. System & Environment Preflight
 - **Repository**: `Andrew-Smith-93/tiling-window-manager`
 - **Parent Commit**: `d670262d4c4429a3ae73ace5a2c37309731399a2`

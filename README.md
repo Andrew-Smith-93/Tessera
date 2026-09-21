@@ -47,9 +47,9 @@ Most tiling window managers for Linux make huge sacrifices:
 │                                 │       Stack Window 1          │
 │                                 │                               │
 │                                 ├───────────────────────────────┤
-│       Master Window             │       Stack Window 2          │
+│       Primary Window            │       Stack Window 2          │
 │   (Configurable ratio,          │                               │
-│    e.g. 55% / 65%)              ├───────────────────────────────┤
+│    e.g. 50% / 60%)              ├───────────────────────────────┤
 │                                 │       Stack Window 3          │
 │                                 │                               │
 └─────────────────────────────────┴───────────────────────────────┘
@@ -61,14 +61,15 @@ Most tiling window managers for Linux make huge sacrifices:
 ## ✨ Features
 
 - 🏎️ **NVIDIA GPU-Optimized Pipeline**: Hardware geometry debouncing eliminates X11/Wayland repaint storms, visual tearing, and resize stutters on NVIDIA proprietary drivers.
-- 📐 **6 Dynamic Tiling Layouts**:
-  - **Master + Stack**: Dedicated master pane on the left with vertical stack of secondary windows.
+- 📐 **Dynamic Tiling Layouts**:
+  - **Balanced Grid**: Optimal square tiles with equitable distribution across all windows.
+  - **Primary + Stack**: Prominent primary work area on the left with vertical stack of secondary windows.
   - **Binary Split (BSP / Dwindle)**: Recursive alternating horizontal/vertical splits (Hyprland / bspwm style).
   - **Columns**: Clean vertical multi-column arrangement.
   - **Rows**: Horizontal band slicing.
   - **Monocle (Deck)**: Maximized working area per window with instant cycling.
   - **Floating**: Full manual window freedom.
-- 🖥️ **Virtual Desktop Layout Independence**: Assign Master-Stack to Desktop 1 (coding), Columns to Desktop 2 (communications), and Floating to Desktop 3 (gaming / Steam).
+- 🖥️ **Virtual Desktop Layout Independence**: Assign Primary-Stack to Desktop 1 (coding), Columns to Desktop 2 (communications), and Floating to Desktop 3 (gaming / Steam).
 - 📏 **Live Gap & Margin Studio**: Interactive sliders for inner gaps and outer margins paired with a **real-time desktop preview canvas**.
 - 🎯 **Visual Window Rule Builder**: Stop guessing arcane regex! Click **"Capture Active Window"** to automatically extract any app's class and title, and assign 1-click float or tile rules.
 - 🎨 **1-Click Presets**:

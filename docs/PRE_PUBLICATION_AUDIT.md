@@ -232,8 +232,8 @@ Before transitioning this repository to public visibility, Omega must decide and
 *None.* (All critical security, path disclosure, and packaging reproducibility issues are resolved.)
 
 ### P1 — Should Be Fixed Before First Public Release
-1. **Multi-Monitor Drag Prospective Layout Isolation**: In `contents/ui/main.qml`, ensure that dragging a window across monitor boundaries does not execute prospective layout queries that inadvertently relocate source-screen windows into target-screen coordinates during preview.
-2. **Corner Snap Slot Index Disambiguation**: In `contents/ui/main.qml`, distinguish `slotIndex` between top-right and bottom-right corner snapping (both currently map to slot 1).
+1. **Multi-Monitor Drag Prospective Layout Isolation**: **RESOLVED in Phase 5D**. Eliminated premature live geometry mutations during drag hover across monitor boundaries. Real retiling triggers only upon commit.
+2. **Corner Snap Slot Index Disambiguation**: **RESOLVED in Phase 5D**. Disambiguated corner quadrant slot indices (top-left: 0, top-right: 1, bottom-right: 2, bottom-left: 3) in `snap-zones.ts`.
 3. **Pin GitHub Actions to Commit SHAs**: In `.github/workflows/ci.yml` and `release.yml`, pin third-party actions to full commit SHAs instead of version tags to protect against upstream tag mutation.
 
 ### P2 — Safe Post-Public Cleanup

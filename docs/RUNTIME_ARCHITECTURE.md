@@ -134,9 +134,10 @@ Apply geometry writes to KWin windows (guarded by isArranging flag)
 - Incoming `frameGeometryChanged` events matching the recorded target (within 1px tolerance and 300ms window) are recognized as echoes, updating `lastObservedGeometry` without marking the screen dirty or scheduling a reconciliation pass.
 - Mismatched external geometry changes (e.g. user manually moving a window) are not suppressed and properly invalidate the screen.
 
-### Remaining Legacy / Runtime Duplication
-- `contents/ui/main.qml` retains a synchronous fallback `retileLegacyFallback()`. In accordance with Phase 2B **Strict Runtime Path Exclusivity**, `runtimeMode` is initialized once (`"reconciler"` or `"legacy-fallback"`). Reconciler mode NEVER calls `retileLegacyFallback()`, and `retileLegacyFallback()` immediately returns if `runtimeMode !== "legacy-fallback"`.
-- Visual overlays (`PlasmaCore.Dialog`) remain rendered in QML, but zone geometry calculation and cursor hover matching are delegated to pure TypeScript modules (`computeSnapZones`, `matchSnapZoneHover`).
+### Single Runtime Authority & Elimination of Legacy Dual Authority (Phase 5D)
+- In Phase 5D, `retileLegacyFallback()` and all competing secondary order maps in `contents/ui/main.qml` (`desktopLayouts`, `screenTiledWindows`, `persistentScreenOrder`, `screenLayouts`, `screenMasterRatios`, `screenMasterCounts`) were **permanently deleted**.
+- `RuntimeCoordinator` is the single runtime authority for all layout calculation, event coalescing, workspace scoping (`${outputId}:${desktopId}`), and slot ordering.
+- Visual overlays (`PlasmaCore.Dialog`) remain rendered in QML, but zone geometry calculation, corner quadrant slot mapping, and cursor hover matching are delegated to pure TypeScript modules (`computeSnapZones`, `matchSnapZoneHover`).
 
 ---
 
