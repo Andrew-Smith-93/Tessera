@@ -39,18 +39,19 @@ var RuleEngine = (function () {
     function isIgnored(window) {
         if (!window) return true;
 
+        // Must be a managed window by KWin
+        if (!window.managed) return true;
+
+        // Must be a normal window (skip docks, desktop, splash, notifications, toolbars)
+        if (!window.normalWindow) return true;
+
         // Skip non-normal windows (panels, desktop wallpaper, notifications, menus)
         if (window.desktopWindow || window.dock || window.splash || window.notification || window.onScreenDisplay) {
             return true;
         }
 
-        // Must be normal window or dialog
-        if (!window.normalWindow && !window.dialog) {
-            return true;
-        }
-
         // Skip utility popups and override-redirect style windows
-        if (window.popupMenu || window.tooltip) {
+        if (window.popupMenu || window.tooltip || window.specialWindow) {
             return true;
         }
 

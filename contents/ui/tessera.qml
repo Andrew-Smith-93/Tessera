@@ -31,7 +31,6 @@ Item {
     // State Tracking
     property var desktopLayouts: ({})
     property var floatingWindows: ({}) // window internalId -> boolean
-    property var trackedWindows: []
     property var currentLayoutList: ["master-stack", "bsp", "columns", "rows", "monocle", "floating"]
     property bool isArranging: false
 
@@ -63,9 +62,8 @@ Item {
             desktopLayouts = {};
         }
 
-        debounceTimer.interval = Math.max(20, config.nvidiaDebounceMs);
         log("Config loaded. Tiling active: " + config.enableTiling + " defaultLayout: " + config.defaultLayout);
-        triggerRetile();
+        retileNow();
     }
 
     // Native Plasma OSD notification
@@ -80,21 +78,6 @@ Item {
             arguments = [icon || "preferences-desktop-virtual", "Tessera: " + title];
             call();
         }
-    }
-
-    // Debounce timer for NVIDIA/X11 rendering stability
-    Timer {
-        id: debounceTimer
-        interval: 60
-        repeat: false
-        onTriggered: {
-            retileNow();
-        }
-    }
-
-    function triggerRetile() {
-        if (!config.enableTiling) return;
-        debounceTimer.restart();
     }
 
     // Returns the active layout name for the current desktop
@@ -113,7 +96,7 @@ Item {
         var key = getCurrentDesktopKey();
         desktopLayouts[key] = layoutName;
         osdCall.notify("Layout: " + layoutName.toUpperCase(), "preferences-desktop-virtual");
-        triggerRetile();
+        retileNow();
     }
 
     function cycleLayout(forward) {
@@ -129,7 +112,7 @@ Item {
         setActiveLayout(currentLayoutList[idx]);
     }
 
-    // Identify if a window belongs to current desktop and screen
+    // Identify if a window belongs to current desktop
     function isWindowOnCurrentDesktop(w) {
         if (!w) return false;
         if (w.onAllDesktops) return true;
@@ -151,9 +134,16 @@ Item {
             var w = allWindows[i];
             if (!w) continue;
 
-            // Check desktop & screen affinity
+            // Must be a managed normal window
+            if (!w.managed || !w.normalWindow || w.specialWindow) continue;
+
+            // Check desktop affinity
             if (!isWindowOnCurrentDesktop(w)) continue;
-            if (screen && w.output !== screen && w.screen !== screen) continue;
+
+            // Check screen / monitor affinity
+            var sName = screen ? (screen.name || "") : "";
+            var wName = w.output ? (w.output.name || "") : "";
+            if (sName && wName && sName !== wName) continue;
 
             // Ignore minimized if configured
             if (config.ignoreMinimized && w.minimized) continue;
@@ -233,9 +223,8 @@ Item {
                     var win = windows[w];
                     var r = rects[w];
 
-                    // Unmaximize if tiled
-                    if (win.maximized) {
-                        win.maximized = false;
+                    if (typeof win.setMaximize === "function") {
+                        win.setMaximize(false, false);
                     }
 
                     win.frameGeometry = Qt.rect(r.x, r.y, r.width, r.height);
@@ -253,7 +242,7 @@ Item {
         config.enableTiling = !config.enableTiling;
         osdCall.notify(config.enableTiling ? "Tiling Enabled" : "Tiling Disabled (Floating)", "preferences-desktop-virtual");
         if (config.enableTiling) {
-            triggerRetile();
+            retileNow();
         }
     }
 
@@ -267,7 +256,7 @@ Item {
         floatingWindows[wid] = !currentlyFloating;
 
         osdCall.notify(floatingWindows[wid] ? "Window Floating" : "Window Tiled", "preferences-system-windows");
-        triggerRetile();
+        retileNow();
     }
 
     // Window navigation & manipulation
@@ -294,25 +283,24 @@ Item {
 
         var targetIdx = forward ? ((currentIdx + 1) % windows.length) : ((currentIdx - 1 + windows.length) % windows.length);
 
-        // Swap positions in window hierarchy/order
         var targetWin = windows[targetIdx];
         var currentGeom = Workspace.activeWindow.frameGeometry;
         Workspace.activeWindow.frameGeometry = targetWin.frameGeometry;
         targetWin.frameGeometry = currentGeom;
 
-        triggerRetile();
+        retileNow();
     }
 
     function adjustMasterRatio(delta) {
         config.masterRatio = Math.max(0.2, Math.min(0.8, config.masterRatio + delta));
         osdCall.notify("Master Ratio: " + Math.round(config.masterRatio * 100) + "%", "preferences-desktop-virtual");
-        triggerRetile();
+        retileNow();
     }
 
     function adjustMasterCount(delta) {
         config.masterCount = Math.max(1, config.masterCount + delta);
         osdCall.notify("Master Windows: " + config.masterCount, "preferences-desktop-virtual");
-        triggerRetile();
+        retileNow();
     }
 
     // Connections to Workspace events
@@ -320,19 +308,22 @@ Item {
         target: Workspace
 
         function onWindowAdded(window) {
-            if (!window) return;
+            if (!window || !window.normalWindow || !window.managed) return;
             log("Window added: " + window.caption + " (" + window.resourceClass + ")");
 
-            // Hook window state changes
-            window.minimizedChanged.connect(function() {
-                triggerRetile();
-            });
-            window.fullScreenChanged.connect(function() {
-                triggerRetile();
-            });
+            if (window.minimizedChanged) {
+                window.minimizedChanged.connect(function() {
+                    retileNow();
+                });
+            }
+            if (window.fullScreenChanged) {
+                window.fullScreenChanged.connect(function() {
+                    retileNow();
+                });
+            }
 
             if (config.tileNewWindows) {
-                triggerRetile();
+                retileNow();
             }
         }
 
@@ -340,17 +331,17 @@ Item {
             if (!window) return;
             var wid = window.internalId ? window.internalId.toString() : (window.caption + window.resourceClass);
             delete floatingWindows[wid];
-            triggerRetile();
+            retileNow();
         }
 
         function onCurrentDesktopChanged() {
             log("Desktop switched to: " + Workspace.currentDesktop);
-            triggerRetile();
+            retileNow();
         }
 
         function onScreensChanged() {
             log("Screens configuration changed");
-            triggerRetile();
+            retileNow();
         }
     }
 
