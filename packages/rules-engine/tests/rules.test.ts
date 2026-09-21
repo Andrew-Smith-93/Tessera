@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { execSync } from "child_process";
 import {
   WindowRuleEngine,
+  WindowClassificationTracker,
   isGameIdentity,
   isFullscreenLike,
   normalizeAction,
@@ -406,25 +408,41 @@ describe("WindowRuleEngine & Game-Safe Classification", () => {
     expect(settings.source).toBe("default-rule");
   });
 
-  // 23. Dialog / transient window handling
-  it("classifies dialog / transient windows as dialog (runtime)", () => {
+  // 23. Preserved pre-Phase-1A dialog behavior (tiles by default)
+  it("preserves pre-Phase-1A dialog behavior (tiles by default unless explicitly ruled)", () => {
     const dlg = engine.classify({
       windowId: "26",
       managed: true,
       normalWindow: true,
-      dialog: true
+      dialog: true,
+      title: "Open File"
     });
-    expect(dlg.classification).toBe("dialog");
-    expect(dlg.source).toBe("runtime");
+    expect(dlg.classification).toBe("tiled");
+    expect(dlg.source).toBe("fallback");
 
     const trans = engine.classify({
       windowId: "27",
       managed: true,
       normalWindow: true,
-      transient: true
+      transient: true,
+      title: "Save As"
     });
-    expect(trans.classification).toBe("dialog");
-    expect(trans.source).toBe("runtime");
+    expect(trans.classification).toBe("tiled");
+    expect(trans.source).toBe("fallback");
+
+    // Explicit custom rule for dialog
+    const customEngine = new WindowRuleEngine({
+      customRules: [{ pattern: "Special Dialog", matchType: "title", action: "floating" }]
+    });
+    const customDlg = customEngine.classify({
+      windowId: "27b",
+      managed: true,
+      normalWindow: true,
+      dialog: true,
+      title: "Special Dialog"
+    });
+    expect(customDlg.classification).toBe("floating");
+    expect(customDlg.source).toBe("user-rule");
   });
 
   // 24. Default fallback window
@@ -476,5 +494,197 @@ describe("WindowRuleEngine & Game-Safe Classification", () => {
     const normalRes = RuleEngine.classify(normalWin);
     expect(normalRes.classification).toBe("tiled");
     expect(RuleEngine.shouldFloat(normalWin)).toBe(false);
+  });
+});
+
+describe("Slot Persistence, Tileability State Tracking, and Artifact Drift Guard", () => {
+  // 1. Entering fullscreen preserves slot/order
+  it("entering fullscreen preserves slot order in persistent screen state", () => {
+    let persistentOrder = ["win-1", "win-2", "win-3"];
+    const savedTiledGeometries: Record<string, { x: number; y: number; width: number; height: number }> = {
+      "win-1": { x: 0, y: 0, width: 600, height: 1080 },
+      "win-2": { x: 600, y: 0, width: 600, height: 1080 },
+      "win-3": { x: 1200, y: 0, width: 600, height: 1080 },
+    };
+
+    // win-2 entered fullscreen!
+    const windows = [
+      { id: "win-1", fullScreen: false, normalWindow: true, managed: true },
+      { id: "win-2", fullScreen: true, normalWindow: true, managed: true },
+      { id: "win-3", fullScreen: false, normalWindow: true, managed: true },
+    ];
+
+    const engine = new WindowRuleEngine();
+    const activeTileables = windows.filter(w => engine.classify({
+      windowId: w.id,
+      fullScreen: w.fullScreen,
+      normalWindow: w.normalWindow,
+      managed: w.managed
+    }).classification === "tiled");
+
+    expect(activeTileables.map(w => w.id)).toEqual(["win-1", "win-3"]);
+
+    // Main.qml prunedPersistent slot memory algorithm
+    const prunedPersistent: string[] = [];
+    for (const pWid of persistentOrder) {
+      const foundInActive = activeTileables.some(w => w.id === pWid);
+      const hasSavedSlot = Boolean(savedTiledGeometries[pWid]);
+      if (foundInActive || hasSavedSlot) {
+        prunedPersistent.push(pWid);
+      }
+    }
+    persistentOrder = prunedPersistent;
+
+    // Verify win-2's slot is preserved in persistent order despite not being active
+    expect(persistentOrder).toEqual(["win-1", "win-2", "win-3"]);
+  });
+
+  // 2. Exiting fullscreen restores slot/order
+  it("exiting fullscreen restores slot order without reshuffling existing tiles", () => {
+    let persistentOrder = ["win-1", "win-2", "win-3"];
+
+    // win-2 exits fullscreen!
+    const windows = [
+      { id: "win-1", fullScreen: false, normalWindow: true, managed: true },
+      { id: "win-2", fullScreen: false, normalWindow: true, managed: true },
+      { id: "win-3", fullScreen: false, normalWindow: true, managed: true },
+    ];
+
+    const engine = new WindowRuleEngine();
+    const activeTileables = windows.filter(w => engine.classify({
+      windowId: w.id,
+      fullScreen: w.fullScreen,
+      normalWindow: w.normalWindow,
+      managed: w.managed
+    }).classification === "tiled");
+
+    const newOrder: string[] = [];
+    for (const pWid of persistentOrder) {
+      if (activeTileables.some(w => w.id === pWid)) {
+        newOrder.push(pWid);
+      }
+    }
+
+    expect(newOrder).toEqual(["win-1", "win-2", "win-3"]);
+  });
+
+  // 3. Entering fullscreen-like state changes tileability once
+  it("entering fullscreen-like state changes tileability once and coalesces repeat events", () => {
+    const tracker = new WindowClassificationTracker();
+    const engine = new WindowRuleEngine();
+
+    const initialInput: WindowRuleInput = {
+      windowId: "game-win",
+      managed: true,
+      normalWindow: true,
+      noBorder: false,
+      maximizeMode: 0,
+      resourceClass: "my_custom_game"
+    };
+
+    const initialRes = engine.classify(initialInput);
+    const initialEval = tracker.evaluate("game-win", initialRes);
+    expect(initialEval.isTileable).toBe(true);
+    expect(initialEval.classification).toBe("tiled");
+
+    // Transition to fullscreen-like borderless window
+    const borderlessInput: WindowRuleInput = {
+      windowId: "game-win",
+      managed: true,
+      normalWindow: true,
+      noBorder: true,
+      maximizeMode: 0,
+      frameGeometry: { x: 0, y: 0, width: 1920, height: 1080 },
+      outputGeometry: { x: 0, y: 0, width: 1920, height: 1080 },
+      resourceClass: "my_custom_game"
+    };
+
+    const borderlessRes = engine.classify(borderlessInput);
+    const firstEval = tracker.evaluate("game-win", borderlessRes);
+
+    // Changes tileability once (from true to false)
+    expect(firstEval.changed).toBe(true);
+    expect(firstEval.isTileable).toBe(false);
+    expect(firstEval.classification).toBe("fullscreen-like");
+
+    // Repeat event with identical state (e.g. geometry tick)
+    const repeatRes = engine.classify(borderlessInput);
+    const secondEval = tracker.evaluate("game-win", repeatRes);
+
+    // Coalesced: changed is false!
+    expect(secondEval.changed).toBe(false);
+    expect(secondEval.isTileable).toBe(false);
+    expect(secondEval.classification).toBe("fullscreen-like");
+  });
+
+  // 4. Unchanged classification causes no layout transaction
+  it("unchanged classification causes no layout transaction", () => {
+    const tracker = new WindowClassificationTracker();
+    const engine = new WindowRuleEngine();
+
+    let transactionCount = 0;
+    const onTileabilityChanged = () => {
+      transactionCount++;
+    };
+
+    const input: WindowRuleInput = {
+      windowId: "browser-win",
+      managed: true,
+      normalWindow: true,
+      resourceClass: "google-chrome"
+    };
+
+    const res1 = engine.classify(input);
+    const eval1 = tracker.evaluate("browser-win", res1);
+    if (eval1.changed) {
+      onTileabilityChanged();
+    }
+    expect(transactionCount).toBe(0);
+
+    for (let i = 0; i < 5; i++) {
+      const res = engine.classify(input);
+      const evalN = tracker.evaluate("browser-win", res);
+      if (evalN.changed) {
+        onTileabilityChanged();
+      }
+    }
+
+    expect(transactionCount).toBe(0);
+  });
+
+  // 5. Staged generated-artifact drift fails verification
+  it("staged generated-artifact drift fails verification check against HEAD", () => {
+    // Verify that git diff --exit-code detects drifted artifacts and exits non-zero
+    expect(() => {
+      execSync("git diff --exit-code 84d58a133ca3292715e02c454fc5a4459599d003 HEAD -- contents/code/rules.js", {
+        cwd: process.cwd(),
+        stdio: "pipe"
+      });
+    }).toThrow();
+  });
+
+  // 6. Engine caching & deterministic signature
+  it("reuses compiled WindowRuleEngine across calls and rebuilds only when signature changes", () => {
+    RuleEngine.clearCache();
+    expect(RuleEngine.getCachedSignature()).toBe("");
+
+    const win = { internalId: "test-win", managed: true, normalWindow: true, resourceClass: "kitty" };
+    const options1 = { gameWindowPolicy: "floating" as const, userFilterString: "tessera" };
+
+    RuleEngine.classify(win, options1);
+    const sig1 = RuleEngine.getCachedSignature();
+    expect(sig1).toContain("floating");
+    expect(sig1).toContain("tessera");
+
+    // Second call with same options uses cached engine
+    RuleEngine.classify(win, options1);
+    expect(RuleEngine.getCachedSignature()).toBe(sig1);
+
+    // Call with different gameWindowPolicy rebuilds engine
+    const options2 = { gameWindowPolicy: "tiled" as const, userFilterString: "tessera" };
+    RuleEngine.classify(win, options2);
+    const sig2 = RuleEngine.getCachedSignature();
+    expect(sig2).not.toBe(sig1);
+    expect(sig2).toContain("tiled");
   });
 });

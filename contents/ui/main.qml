@@ -43,6 +43,8 @@ Item {
     property var wasDraggingMaximized: ({}) // windowId -> boolean
     property var persistentScreenOrder: ({}) // screenName -> array of windowIds
     property var currentLayoutList: ["master-stack", "bsp", "columns", "rows", "grid", "monocle", "floating"]
+    property var windowClassifications: ({}) // windowId -> classification string
+    property var windowTileability: ({})     // windowId -> boolean
     property bool isArranging: false
     property var currentDraggingWindow: null
 
@@ -100,6 +102,9 @@ Item {
         } catch (e) {
             desktopLayouts = {};
         }
+
+        windowClassifications = {};
+        windowTileability = {};
 
         var allWins = Workspace.stackingOrder || [];
         for (var i = 0; i < allWins.length; i++) {
@@ -210,8 +215,8 @@ Item {
         return true;
     }
 
-    function checkFilter(w) {
-        if (!w) return false;
+    function evaluateWindowTileability(w) {
+        if (!w) return { changed: false, isTileable: false };
         var screen = w.output || getScreenForPos(w.frameGeometry);
         var screenArea = screen ? Workspace.clientArea(KWin.MaximizeArea, screen, Workspace.currentDesktop) : null;
         var result = RulesModule.RuleEngine.classify(w, {
@@ -222,7 +227,30 @@ Item {
             outputUsableArea: screenArea
         });
 
-        return result.classification === "tiled";
+        var wid = getWindowId(w);
+        var prevClassification = windowClassifications[wid];
+        var prevTileable = windowTileability[wid];
+        var isTileable = (result.classification === "tiled");
+
+        windowClassifications[wid] = result.classification;
+        windowTileability[wid] = isTileable;
+
+        var changed = (prevTileable !== undefined && prevTileable !== isTileable) ||
+                      (prevClassification !== undefined && prevClassification !== result.classification);
+
+        return {
+            changed: changed,
+            isTileable: isTileable,
+            classification: result.classification,
+            previousClassification: prevClassification,
+            result: result
+        };
+    }
+
+    function checkFilter(w) {
+        if (!w) return false;
+        var evalRes = evaluateWindowTileability(w);
+        return evalRes.isTileable;
     }
 
     function getTileableWindows(screen) {
@@ -1301,7 +1329,11 @@ Item {
 
         if (w.fullScreenChanged) {
             w.fullScreenChanged.connect(function() {
-                retileNow();
+                if (isArranging) return;
+                var evalRes = evaluateWindowTileability(w);
+                if (evalRes.changed) {
+                    retileNow();
+                }
             });
         }
 
@@ -1327,6 +1359,29 @@ Item {
                         var target = savedTiledGeometries[wid];
                         w.frameGeometry = Qt.rect(target.x, target.y, target.width, target.height);
                     }
+                }
+                var evalRes = evaluateWindowTileability(w);
+                if (evalRes.changed) {
+                    retileNow();
+                }
+            });
+        }
+
+        if (w.noBorderChanged) {
+            w.noBorderChanged.connect(function() {
+                if (isArranging) return;
+                var evalRes = evaluateWindowTileability(w);
+                if (evalRes.changed) {
+                    retileNow();
+                }
+            });
+        }
+
+        if (w.outputChanged) {
+            w.outputChanged.connect(function() {
+                if (isArranging) return;
+                var evalRes = evaluateWindowTileability(w);
+                if (evalRes.changed) {
                     retileNow();
                 }
             });
@@ -1360,6 +1415,9 @@ Item {
             delete savedTiledGeometries[wid];
             delete savedMinimGeometries[wid];
             delete wasDraggingMaximized[wid];
+            delete windowClassifications[wid];
+            delete windowTileability[wid];
+            RulesModule.RuleEngine.forget(wid);
 
             // Remove from persistentScreenOrder across all screens
             for (var sName in persistentScreenOrder) {

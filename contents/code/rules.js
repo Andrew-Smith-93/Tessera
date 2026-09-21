@@ -22,6 +22,8 @@ var RulesEngineModule = (() => {
   var qml_rules_compat_exports = {};
   __export(qml_rules_compat_exports, {
     RuleEngine: () => RuleEngine,
+    computeConfigSignature: () => computeConfigSignature,
+    getOrCreateRuleEngine: () => getOrCreateRuleEngine,
     toWindowRuleInput: () => toWindowRuleInput
   });
 
@@ -233,13 +235,6 @@ var RulesEngineModule = (() => {
           matchedPattern: gameCheck.matchedPattern
         };
       }
-      if (input.dialog === true || input.transient === true) {
-        return {
-          classification: "dialog",
-          reason: "Window is marked as dialog or transient",
-          source: "runtime"
-        };
-      }
       for (const pat of _WindowRuleEngine.DEFAULT_FLOAT_PATTERNS) {
         if (rClass.includes(pat) || rName.includes(pat) || appId.includes(pat) || title.includes(pat)) {
           return {
@@ -255,6 +250,39 @@ var RulesEngineModule = (() => {
         reason: "Default tiling fallback",
         source: "fallback"
       };
+    }
+  };
+  var WindowClassificationTracker = class {
+    classifications = /* @__PURE__ */ new Map();
+    tileability = /* @__PURE__ */ new Map();
+    evaluate(windowId, result) {
+      const prevClassification = this.classifications.get(windowId);
+      const prevTileable = this.tileability.get(windowId);
+      const isTileable = result.classification === "tiled";
+      this.classifications.set(windowId, result.classification);
+      this.tileability.set(windowId, isTileable);
+      const changed = prevTileable !== void 0 && prevTileable !== isTileable || prevClassification !== void 0 && prevClassification !== result.classification;
+      return {
+        changed,
+        isTileable,
+        classification: result.classification,
+        previousClassification: prevClassification,
+        result
+      };
+    }
+    forget(windowId) {
+      this.classifications.delete(windowId);
+      this.tileability.delete(windowId);
+    }
+    getClassification(windowId) {
+      return this.classifications.get(windowId);
+    }
+    isTileable(windowId) {
+      return this.tileability.get(windowId);
+    }
+    clear() {
+      this.classifications.clear();
+      this.tileability.clear();
     }
   };
 
@@ -315,18 +343,50 @@ var RulesEngineModule = (() => {
     }
     return [];
   }
-  var RuleEngine = {
-    classify(w, options) {
+  var cachedEngine = null;
+  var cachedSignature = "";
+  var tracker = new WindowClassificationTracker();
+  function computeConfigSignature(options) {
+    if (!options) return "default";
+    const customRulesStr = typeof options.customRules === "string" ? options.customRules : JSON.stringify(options.customRules || []);
+    const filterStr = options.userFilterString || (options.userFilterPatterns ? options.userFilterPatterns.join(",") : "");
+    const policyStr = options.gameWindowPolicy || "floating";
+    const gamePatsStr = options.customGamePatterns ? options.customGamePatterns.join(",") : "";
+    return `${policyStr}|${filterStr}|${customRulesStr}|${gamePatsStr}`;
+  }
+  function getOrCreateRuleEngine(options) {
+    const sig = computeConfigSignature(options);
+    if (!cachedEngine || cachedSignature !== sig) {
       const parsedRules = parseCustomRules(options?.customRules);
       const filterPatterns = options?.userFilterPatterns || (options?.userFilterString ? [options.userFilterString] : []);
-      const engine = new WindowRuleEngine({
+      cachedEngine = new WindowRuleEngine({
         customRules: parsedRules,
         userFilterPatterns: filterPatterns,
         gameWindowPolicy: options?.gameWindowPolicy || "floating",
         customGamePatterns: options?.customGamePatterns
       });
+      cachedSignature = sig;
+    }
+    return cachedEngine;
+  }
+  var RuleEngine = {
+    classify(w, options) {
+      const engine = getOrCreateRuleEngine(options);
       const input = toWindowRuleInput(w, options);
       return engine.classify(input);
+    },
+    evaluate(w, options) {
+      const input = toWindowRuleInput(w, options);
+      const engine = getOrCreateRuleEngine(options);
+      const result = engine.classify(input);
+      const wid = input.windowId || (w?.internalId ? String(w.internalId) : "unknown");
+      return tracker.evaluate(wid, result);
+    },
+    forget(w) {
+      const wid = typeof w === "string" ? w : w?.internalId ? String(w.internalId) : w?.windowId || "";
+      if (wid) {
+        tracker.forget(wid);
+      }
     },
     shouldFloat(w, userFilterString, customRulesJson, gameWindowPolicy) {
       const result = this.classify(w, {
@@ -340,7 +400,16 @@ var RulesEngineModule = (() => {
       const result = this.classify(w);
       return result.classification === "ignored";
     },
-    defaultFloatPatterns: WindowRuleEngine.DEFAULT_FLOAT_PATTERNS
+    defaultFloatPatterns: WindowRuleEngine.DEFAULT_FLOAT_PATTERNS,
+    getCachedSignature() {
+      return cachedSignature;
+    },
+    clearCache() {
+      cachedEngine = null;
+      cachedSignature = "";
+      tracker.clear();
+    },
+    tracker
   };
   globalThis.RuleEngine = RuleEngine;
   return __toCommonJS(qml_rules_compat_exports);

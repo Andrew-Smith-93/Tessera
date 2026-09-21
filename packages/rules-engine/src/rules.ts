@@ -365,16 +365,9 @@ export class WindowRuleEngine {
       };
     }
 
-    // 6. Dialog / transient
-    if (input.dialog === true || input.transient === true) {
-      return {
-        classification: "dialog",
-        reason: "Window is marked as dialog or transient",
-        source: "runtime"
-      };
-    }
-
-    // 7. Default float patterns (Tessera Control Center)
+    // 6. Default float patterns (Tessera Control Center)
+    // Note: Standard dialogs and normal transient windows tile by default per pre-Phase-1A behavior
+    // unless matched by custom rules or default float patterns.
     for (const pat of WindowRuleEngine.DEFAULT_FLOAT_PATTERNS) {
       if (rClass.includes(pat) || rName.includes(pat) || appId.includes(pat) || title.includes(pat)) {
         return {
@@ -386,7 +379,7 @@ export class WindowRuleEngine {
       }
     }
 
-    // 8. Default fallback: Everything else tiles!
+    // 7. Default fallback: Everything else tiles!
     return {
       classification: "tiled",
       reason: "Default tiling fallback",
@@ -394,4 +387,64 @@ export class WindowRuleEngine {
     };
   }
 }
+
+export interface ClassificationChangeResult {
+  readonly changed: boolean;
+  readonly isTileable: boolean;
+  readonly classification: WindowClassification;
+  readonly previousClassification?: WindowClassification;
+  readonly result: WindowClassificationResult;
+}
+
+/**
+ * Minimal per-window classification-state tracking to coalesce events
+ * and avoid redundant retile transactions when tileability is unchanged.
+ */
+export class WindowClassificationTracker {
+  private readonly classifications = new Map<string, WindowClassification>();
+  private readonly tileability = new Map<string, boolean>();
+
+  public evaluate(
+    windowId: string,
+    result: WindowClassificationResult
+  ): ClassificationChangeResult {
+    const prevClassification = this.classifications.get(windowId);
+    const prevTileable = this.tileability.get(windowId);
+    const isTileable = result.classification === "tiled";
+
+    this.classifications.set(windowId, result.classification);
+    this.tileability.set(windowId, isTileable);
+
+    const changed =
+      (prevTileable !== undefined && prevTileable !== isTileable) ||
+      (prevClassification !== undefined && prevClassification !== result.classification);
+
+    return {
+      changed,
+      isTileable,
+      classification: result.classification,
+      previousClassification: prevClassification,
+      result
+    };
+  }
+
+  public forget(windowId: string): void {
+    this.classifications.delete(windowId);
+    this.tileability.delete(windowId);
+  }
+
+  public getClassification(windowId: string): WindowClassification | undefined {
+    return this.classifications.get(windowId);
+  }
+
+  public isTileable(windowId: string): boolean | undefined {
+    return this.tileability.get(windowId);
+  }
+
+  public clear(): void {
+    this.classifications.clear();
+    this.tileability.clear();
+  }
+}
+
 
