@@ -1996,6 +1996,13 @@ Item {
         onActivated: root.toggleActiveFloating()
     }
 
+    ShortcutHandler {
+        name: "Tessera: Toggle Window Floating (Meta)"
+        text: "Tessera: Toggle Window Floating (Meta Alternative)"
+        sequence: "Meta+Shift+F"
+        onActivated: root.toggleActiveFloating()
+    }
+
     // Left-Hand Directional Navigation (WASD)
     ShortcutHandler {
         name: "Tessera: Focus Left Window"
