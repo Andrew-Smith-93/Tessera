@@ -18,8 +18,7 @@
   - Hooks KWin workspace signals (`windowAdded`, `windowRemoved`, `windowActivated`, `currentDesktopChanged`, `screensChanged`).
   - Manages per-window event connections (`frameGeometryChanged`, `minimizedChanged`, `fullScreenChanged`, `interactiveMoveResizeStarted/Stepped/Finished`).
   - Renders the KZones-style visual snap overlay via `PlasmaCore.Dialog` (top maximize card, left/right halves, and 4 corner quadrants).
-  - Renders the visual Master HUD dialog (`masterHudDialog`).
-  - Dispatches native Plasma OSD notifications via DBus (`org.kde.osdService` / `showText`).
+  - Dispatches native Plasma OSD notifications via DBus (`org.kde.osdService` / `showText`) on layout cycling, retile, and primary region adjustments.
   - Resolves multi-screen affinity with mouse cursor prioritization (`getCurrentTargetScreen()`).
   - Retiles managed windows by invoking the layout calculation module.
 

@@ -114,21 +114,23 @@ All shortcuts integrate directly into KDE Plasma's Global Shortcuts system and c
 
 | Action | Shortcut |
 | :--- | :--- |
-| **Toggle Tiling Globally** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> |
-| **Cycle Next Layout** | <kbd>Meta</kbd> + <kbd>Space</kbd> |
-| **Cycle Previous Layout** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> |
-| **Toggle Active Window Floating** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> |
-| **Focus Next Window** | <kbd>Meta</kbd> + <kbd>J</kbd> *(or <kbd>Meta</kbd> + <kbd>Down</kbd>)* |
-| **Focus Previous Window** | <kbd>Meta</kbd> + <kbd>K</kbd> *(or <kbd>Meta</kbd> + <kbd>Up</kbd>)* |
-| **Swap Window Forward** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>J</kbd> |
-| **Swap Window Backward** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>K</kbd> |
-| **Expand Master Ratio (+5%)** | <kbd>Meta</kbd> + <kbd>L</kbd> *(or <kbd>Meta</kbd> + <kbd>Right</kbd>)* |
-| **Shrink Master Ratio (-5%)** | <kbd>Meta</kbd> + <kbd>H</kbd> *(or <kbd>Meta</kbd> + <kbd>Left</kbd>)* |
-| **Increase Master Window Count** | <kbd>Meta</kbd> + <kbd>I</kbd> |
-| **Decrease Master Window Count** | <kbd>Meta</kbd> + <kbd>D</kbd> |
-| **Force Retile Current Workspace** | <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> |
+| **Toggle Tiling Globally** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> |
+| **Cycle Next Layout** | <kbd>Ctrl</kbd> + <kbd>Space</kbd> |
+| **Cycle Previous Layout** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> |
+| **Toggle Active Window Floating** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> |
+| **Toggle Visual Snap Overlay** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> |
+| **Directional Focus (WASD)** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>W</kbd>/<kbd>A</kbd>/<kbd>S</kbd>/<kbd>D</kbd> |
+| **Directional Swap (Q/E)** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> / <kbd>E</kbd> |
+| **Focus Next / Previous Window** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>J</kbd> / <kbd>K</kbd> |
+| **Swap Window Forward / Backward** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>J</kbd> / <kbd>K</kbd> |
+| **Adjust Primary Ratio (+/- 5%)** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd> / <kbd>H</kbd> |
+| **Adjust Primary Region Count (+/- 1)** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd> / <kbd>O</kbd> |
+| **Move Window to Next Screen** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> |
+| **Cycle Layout on Other Screen** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd> |
+| **Swap Screen Layouts** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>X</kbd> |
+| **Force Retile Current Workspace** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> |
 
-*(Note: `<kbd>Meta</kbd>` is the Super / Windows key on your keyboard).*
+*(Note: All default shortcuts are ergonomically optimized around Ctrl and Shift to prevent conflict with KDE Plasma's default Meta shortcuts).*
 
 ---
 
