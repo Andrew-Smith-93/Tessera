@@ -87,16 +87,18 @@
 
 ---
 
-## 5. Duplicated & Dead Candidate Files
+## 5. Pruned Legacy Files (Phase 1B)
 
-The following files exist in the repository but represent legacy or duplicated code paths. Per Phase 0/1A constraints, they are preserved and documented here rather than prematurely deleted:
+During Phase 1B (Runtime Surface Pruning), the following dead candidate files were rigorously audited across all imports, packaging scripts, manifest definitions, and runtime loaders. Having been proven completely inactive, they were permanently pruned from the codebase:
 
-| File | Status | Rationale |
+| File | Status | Proof of Inactivity |
 | :--- | :--- | :--- |
-| `contents/code/main.js` | **Dead Candidate** | Legacy 1118-line monolithic script containing obsolete layout and rule code. Ignored by KWin when running in `declarativescript` mode (`ui/main.qml`). |
-| `contents/ui/tessera.qml` | **Dead Candidate** | Older alternative declarative entrypoint superseded by `contents/ui/main.qml`. |
-| `contents/ui/ZoneOverlay.qml`| **Dead Candidate** | Standalone QML overlay experiment; snap overlay is now rendered inline inside `main.qml`. |
-| `contents/ui/TopNotification.qml` | **Dead Candidate** | Custom notification overlay; superseded by native Plasma DBus OSD service. |
+| `contents/code/main.js` | **Pruned** | Legacy 1118-line monolithic JavaScript script from initial prototype. Inactive because `metadata.json` configures KWin in `declarativescript` mode with `ui/main.qml`; ignored by KWin runtime. No imports or packaging dependencies. |
+| `contents/ui/tessera.qml` | **Pruned** | Superseded prototype declarative entrypoint. Inactive because `metadata.json` specifies `"X-Plasma-MainScript": "ui/main.qml"`. Not loaded or referenced anywhere. |
+| `contents/ui/ZoneOverlay.qml`| **Pruned** | Standalone snap overlay experiment only loaded by the dead `tessera.qml`. Inactive because `contents/ui/main.qml` renders the KZones-style visual snap overlay inline via `PlasmaCore.Dialog`. |
+| `contents/ui/TopNotification.qml` | **Pruned** | Notification overlay experiment only loaded by the dead `tessera.qml`. Inactive because `contents/ui/main.qml` uses native Plasma DBus OSD (`org.kde.osdService` / `showText`) and an inline HUD dialog. |
+
+Absence of these files is enforced by automated packaging assertions in `.github/workflows/ci.yml` and unit tests in `tests/test_package_manifest.py`.
 
 ---
 
