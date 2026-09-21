@@ -5,6 +5,14 @@ import { resolve } from "node:path";
 describe("Acceptance Matrix Completeness & Integrity (91 Cases)", () => {
   const docPath = resolve(__dirname, "../../../docs/LIVE_KWIN_X11_ACCEPTANCE.md");
 
+  const VALID_STATUSES = new Set([
+    "LIVE PASS",
+    "AUTOMATED PASS",
+    "FAIL",
+    "BLOCKED",
+    "NOT RUN"
+  ]);
+
   const EXPECTED_IDS: string[] = [
     // Section A (8)
     "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8",
@@ -34,51 +42,127 @@ describe("Acceptance Matrix Completeness & Integrity (91 Cases)", () => {
     expect(existsSync(docPath)).toBe(true);
   });
 
-  it("2. Exactly 91 unique acceptance IDs are defined", () => {
+  it("2. Exactly 91 unique acceptance IDs are defined in test inventory", () => {
     expect(EXPECTED_IDS.length).toBe(91);
     const set = new Set(EXPECTED_IDS);
     expect(set.size).toBe(91);
   });
 
-  it("3. Every acceptance ID is present in docs/LIVE_KWIN_X11_ACCEPTANCE.md with no duplicates", () => {
+  it("3. Parse every case row, validate status, check for duplicates and ensure exactly 91 rows", () => {
     const content = readFileSync(docPath, "utf-8");
 
-    for (const id of EXPECTED_IDS) {
-      // Look for ID in table or markdown header: e.g. "| A1 |" or "A1."
-      const pattern = new RegExp(`(\\|\\s*${id}\\s*\\||\\b${id}\\.\\s+)`, "m");
-      expect(pattern.test(content), `Missing acceptance case ID: ${id}`).toBe(true);
+    // Match table rows: | ID | Description | **STATUS** | Evidence |
+    const rowPattern = /^\|\s*([A-K]\d+)\s*\|\s*([^|]+)\s*\|\s*\*\*([A-Z ]+)\*\*\s*\|\s*([^|]+)\s*\|/gm;
+    const parsedRows = new Map<string, { description: string; status: string; evidence: string }>();
+    const seenIds = new Set<string>();
 
-      // Verify no duplicate table entries for this ID
-      const tableMatch = content.match(new RegExp(`\\|\\s*\\*\\*${id}\\*\\*\\s*\\|`, "g")) ||
-                         content.match(new RegExp(`\\|\\s*${id}\\s*\\|`, "g"));
-      if (tableMatch) {
-        expect(tableMatch.length, `Duplicate entries found for ID: ${id}`).toBe(1);
-      }
+    let match: RegExpExecArray | null;
+    while ((match = rowPattern.exec(content)) !== null) {
+      const id = match[1];
+      const desc = match[2].trim();
+      const status = match[3].trim();
+      const evidence = match[4].trim();
+
+      expect(seenIds.has(id), `Duplicate case ID found in markdown table: ${id}`).toBe(false);
+      seenIds.add(id);
+
+      expect(VALID_STATUSES.has(status), `Unknown status "${status}" for case ${id}`).toBe(true);
+
+      parsedRows.set(id, { description: desc, status, evidence });
+    }
+
+    expect(parsedRows.size, `Expected exactly 91 case rows in tables, parsed ${parsedRows.size}`).toBe(91);
+
+    for (const expectedId of EXPECTED_IDS) {
+      expect(parsedRows.has(expectedId), `Missing acceptance case row for ID: ${expectedId}`).toBe(true);
     }
   });
 
-  it("4. Summary counts sum to exactly 91", () => {
+  it("4. Calculate section and overall counts directly from rows and compare with documented summary tables", () => {
     const content = readFileSync(docPath, "utf-8");
 
-    const livePassMatch = content.match(/\*\*LIVE PASS\*\*:\s*(\d+)/);
-    const autoPassMatch = content.match(/\*\*AUTOMATED PASS\*\*:\s*(\d+)/);
-    const failMatch = content.match(/\*\*FAIL\*\*:\s*(\d+)/);
-    const blockedMatch = content.match(/\*\*BLOCKED\*\*:\s*(\d+)/);
-    const notRunMatch = content.match(/\*\*NOT RUN\*\*:\s*(\d+)/);
+    const rowPattern = /^\|\s*([A-K]\d+)\s*\|\s*([^|]+)\s*\|\s*\*\*([A-Z ]+)\*\*\s*\|\s*([^|]+)\s*\|/gm;
+    const sectionCounts: Record<string, Record<string, number>> = {};
+    const overallCounts: Record<string, number> = {
+      "LIVE PASS": 0,
+      "AUTOMATED PASS": 0,
+      "FAIL": 0,
+      "BLOCKED": 0,
+      "NOT RUN": 0
+    };
 
-    expect(livePassMatch).not.toBeNull();
-    expect(autoPassMatch).not.toBeNull();
-    expect(failMatch).not.toBeNull();
-    expect(blockedMatch).not.toBeNull();
-    expect(notRunMatch).not.toBeNull();
+    const sections = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
+    for (const s of sections) {
+      sectionCounts[s] = {
+        "LIVE PASS": 0,
+        "AUTOMATED PASS": 0,
+        "FAIL": 0,
+        "BLOCKED": 0,
+        "NOT RUN": 0
+      };
+    }
 
-    const livePass = parseInt(livePassMatch![1], 10);
-    const autoPass = parseInt(autoPassMatch![1], 10);
-    const fail = parseInt(failMatch![1], 10);
-    const blocked = parseInt(blockedMatch![1], 10);
-    const notRun = parseInt(notRunMatch![1], 10);
+    let match: RegExpExecArray | null;
+    let totalCount = 0;
+    while ((match = rowPattern.exec(content)) !== null) {
+      const id = match[1];
+      const status = match[3].trim();
+      const sec = id[0];
 
-    const sum = livePass + autoPass + fail + blocked + notRun;
-    expect(sum, `Summary counts must sum to exactly 91, got ${sum} (${livePass}+${autoPass}+${fail}+${blocked}+${notRun})`).toBe(91);
+      expect(sectionCounts[sec]).toBeDefined();
+      sectionCounts[sec][status] = (sectionCounts[sec][status] || 0) + 1;
+      overallCounts[status] = (overallCounts[status] || 0) + 1;
+      totalCount++;
+    }
+
+    expect(totalCount).toBe(91);
+
+    // 1. Compare with documented overall summary list
+    const livePassDoc = parseInt(content.match(/\*\*LIVE PASS\*\*:\s*(\d+)/)?.[1] || "-1", 10);
+    const autoPassDoc = parseInt(content.match(/\*\*AUTOMATED PASS\*\*:\s*(\d+)/)?.[1] || "-1", 10);
+    const failDoc = parseInt(content.match(/\*\*FAIL\*\*:\s*(\d+)/)?.[1] || "-1", 10);
+    const blockedDoc = parseInt(content.match(/\*\*BLOCKED\*\*:\s*(\d+)/)?.[1] || "-1", 10);
+    const notRunDoc = parseInt(content.match(/\*\*NOT RUN\*\*:\s*(\d+)/)?.[1] || "-1", 10);
+
+    expect(overallCounts["LIVE PASS"]).toBe(livePassDoc);
+    expect(overallCounts["AUTOMATED PASS"]).toBe(autoPassDoc);
+    expect(overallCounts["FAIL"]).toBe(failDoc);
+    expect(overallCounts["BLOCKED"]).toBe(blockedDoc);
+    expect(overallCounts["NOT RUN"]).toBe(notRunDoc);
+
+    const overallSum = overallCounts["LIVE PASS"] + overallCounts["AUTOMATED PASS"] + overallCounts["FAIL"] + overallCounts["BLOCKED"] + overallCounts["NOT RUN"];
+    expect(overallSum).toBe(91);
+
+    // 2. Compare with documented Section Breakdown Table
+    const tableRowPattern = /^\|\s*([A-K])\s*\|\s*([^|]+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|/gm;
+    let tableMatch: RegExpExecArray | null;
+    const documentedSections: Record<string, { total: number; live: number; auto: number; fail: number; blocked: number; notRun: number }> = {};
+
+    while ((tableMatch = tableRowPattern.exec(content)) !== null) {
+      const sec = tableMatch[1];
+      documentedSections[sec] = {
+        total: parseInt(tableMatch[3], 10),
+        live: parseInt(tableMatch[4], 10),
+        auto: parseInt(tableMatch[5], 10),
+        fail: parseInt(tableMatch[6], 10),
+        blocked: parseInt(tableMatch[7], 10),
+        notRun: parseInt(tableMatch[8], 10)
+      };
+    }
+
+    for (const sec of sections) {
+      const doc = documentedSections[sec];
+      expect(doc, `Missing documented table row for section ${sec}`).toBeDefined();
+      const calc = sectionCounts[sec];
+
+      expect(calc["LIVE PASS"], `Section ${sec} LIVE PASS mismatch`).toBe(doc.live);
+      expect(calc["AUTOMATED PASS"], `Section ${sec} AUTOMATED PASS mismatch`).toBe(doc.auto);
+      expect(calc["FAIL"], `Section ${sec} FAIL mismatch`).toBe(doc.fail);
+      expect(calc["BLOCKED"], `Section ${sec} BLOCKED mismatch`).toBe(doc.blocked);
+      expect(calc["NOT RUN"], `Section ${sec} NOT RUN mismatch`).toBe(doc.notRun);
+
+      const secSum = calc["LIVE PASS"] + calc["AUTOMATED PASS"] + calc["FAIL"] + calc["BLOCKED"] + calc["NOT RUN"];
+      expect(secSum, `Section ${sec} total mismatch`).toBe(doc.total);
+    }
   });
 });

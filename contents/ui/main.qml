@@ -544,7 +544,12 @@ Item {
         }
 
         var diag = coord.getDiagnostics();
-        log("Reconciliation tx: ops=" + tx.operations.length + " reasons=" + (diag.lastTransactionReasons.join(",") || "none") + " outputs=" + (diag.lastAffectedScreenIds.join(",") || "all") + " totalTx=" + diag.totalReconciliationTransactions + " totalWrites=" + diag.totalGeometryWrites + " skippedWrites=" + diag.skippedIdenticalWrites + " suppressedEchoes=" + diag.suppressedGeometryEchoes + " retainedWins=" + diag.retainedWindowCount + " retainedScreens=" + diag.retainedScreenCount);
+        var opSummary = [];
+        for (var oi = 0; oi < tx.operations.length; oi++) {
+            var o = tx.operations[oi];
+            opSummary.push(o.windowId + "@" + o.targetRect.x + "," + o.targetRect.y + " " + o.targetRect.width + "x" + o.targetRect.height);
+        }
+        log("Reconciliation tx: ops=" + tx.operations.length + " [" + opSummary.join("; ") + "] reasons=" + (diag.lastTransactionReasons.join(",") || "none") + " outputs=" + (diag.lastAffectedScreenIds.join(",") || "all") + " totalTx=" + diag.totalReconciliationTransactions + " totalWrites=" + diag.totalGeometryWrites + " skippedWrites=" + diag.skippedIdenticalWrites + " suppressedEchoes=" + diag.suppressedGeometryEchoes + " retainedWins=" + diag.retainedWindowCount + " retainedScreens=" + diag.retainedScreenCount);
 
         // 4. Apply only changed geometries with feedback protection
         isArranging = true;
@@ -1763,16 +1768,22 @@ Item {
 
         var wid = getWindowId(w);
         var currentlyFloating = floatingWindows[wid] === true;
-        floatingWindows[wid] = !currentlyFloating;
-        delete preTiledWindows[wid];
-        log("toggleActiveFloating: " + (w.caption || wid) + " -> " + (floatingWindows[wid] ? "floating" : "tiled"));
-
+        var nextFloating = !currentlyFloating;
         var coord = getCoordinator();
+        var coordBefore = coord ? coord.isManualFloating(wid) : false;
+
+        floatingWindows[wid] = nextFloating;
+        delete preTiledWindows[wid];
+
+        var coordAfter = false;
         if (coord) {
-            coord.setManualFloating(wid, floatingWindows[wid]);
+            coord.setManualFloating(wid, nextFloating);
+            coordAfter = coord.isManualFloating(wid);
         }
 
-        osdCall.notify(floatingWindows[wid] ? "Window Floating" : "Window Tiled", "preferences-system-windows");
+        log("toggleActiveFloating: " + (w.caption || wid) + " [id=" + wid + "] currentlyFloating=" + currentlyFloating + " -> nextFloating=" + nextFloating + ", coordBefore=" + coordBefore + " -> coordAfter=" + coordAfter);
+
+        osdCall.notify(nextFloating ? "Window Floating" : "Window Tiled", "preferences-system-windows");
         retileNow();
     }
 

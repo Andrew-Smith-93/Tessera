@@ -94,6 +94,22 @@
 - **BLOCKED**: 0
 - **NOT RUN**: 17
 
+### Section Breakdown Table
+| Section | Name | Cases | LIVE PASS | AUTOMATED PASS | FAIL | BLOCKED | NOT RUN |
+|---|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| A | Installation and Startup | 8 | 6 | 1 | 0 | 0 | 1 |
+| B | Normal Window Tiling | 10 | 8 | 2 | 0 | 0 | 0 |
+| C | Window Minimization and Restoration | 6 | 5 | 1 | 0 | 0 | 0 |
+| D | Fullscreen and Maximization | 8 | 5 | 3 | 0 | 0 | 0 |
+| E | Manual Floating | 6 | 2 | 4 | 0 | 0 | 0 |
+| F | Visual Snap Overlay & Interactive Snapping | 9 | 2 | 7 | 0 | 0 | 0 |
+| G | Game and Steam Classification | 12 | 0 | 0 | 0 | 0 | 12 |
+| H | Multi-Monitor Topologies | 12 | 7 | 4 | 0 | 0 | 1 |
+| I | Configuration & Script Reload Lifecycle | 7 | 3 | 4 | 0 | 0 | 0 |
+| J | Legacy Fallback | 6 | 1 | 4 | 0 | 0 | 1 |
+| K | Failure and Recovery | 7 | 2 | 3 | 0 | 0 | 2 |
+| **Total** | **All Sections** | **91** | **41** | **33** | **0** | **0** | **17** |
+
 ---
 
 ### Section A: Installation and Startup (8 Cases)
@@ -141,13 +157,13 @@
 ### Section D: Fullscreen and Maximization (8 Cases)
 | ID | Description | Status | Evidence Source |
 |---|---|---|---|
-| D1 | True fullscreen entry is not fought by tiler | **LIVE PASS** | Verified live via X11 client message on Konsole: KWin sets `fs=true`, geometry 1920x1080, Tessera issues 0 conflicting writes |
-| D2 | Fullscreen window fills correct output | **LIVE PASS** | Verified live: window fills exact output bounds `1920,0 1920x1080` on DP-4 covering panel |
-| D3 | Other outputs remain unaffected | **LIVE PASS** | Verified live: HDMI-0 windows remain undisturbed at their existing layout slots |
-| D4 | Exiting fullscreen restores logical tiled slot | **LIVE PASS** | Verified live: exiting fullscreen cleanly restores exact pre-fullscreen geometry `1940,20 932x1040` |
-| D5 | Repeated fullscreen enter/exit preserves ordering | **AUTOMATED PASS** | Simulator fixture 05 (`05-true-fullscreen-enter-exit`) |
-| D6 | Maximized state does not create event/write loop | **LIVE PASS** | Journalctl logs: drag from maximized cleanly handled without feedback |
-| D7 | Borderless/fullscreen-like follows policy | **AUTOMATED PASS** | Simulator fixture 06 (`06-borderless-fullscreen-enter-exit`) |
+| D1 | True fullscreen entry is not fought by tiler | **LIVE PASS** | Controlled live KWin/X11 fullscreen state transition on Konsole: KWin sets `fs=true`, geometry 1920x1080, no conflicting geometry behavior was observed |
+| D2 | Fullscreen window fills correct output | **LIVE PASS** | Controlled live KWin/X11 fullscreen state transition: window fills exact output bounds `1920,0 1920x1080` on DP-4 covering panel |
+| D3 | Other outputs remain unaffected | **LIVE PASS** | Controlled live KWin/X11 fullscreen state transition: HDMI-0 windows remain undisturbed at their existing layout slots |
+| D4 | Exiting fullscreen restores logical tiled slot | **LIVE PASS** | Controlled live KWin/X11 fullscreen state transition: exiting fullscreen cleanly restores exact pre-fullscreen geometry `1940,20 932x1040` |
+| D5 | Repeated fullscreen enter/exit preserves ordering | **AUTOMATED PASS** | Simulator fixture 05 (`05-true-fullscreen-enter-exit.fixture.json`) |
+| D6 | Maximized state does not create event/write loop | **LIVE PASS** | Journalctl logs: transitions to/from maximized state cleanly handled without feedback loop |
+| D7 | Borderless/fullscreen-like follows policy | **AUTOMATED PASS** | Simulator fixture 06 (`06-borderless-fullscreen-enter-exit.fixture.json`) |
 | D8 | Fullscreen transitions do not leave stale saved geometry | **AUTOMATED PASS** | `reconciler.test.ts` |
 
 ---
@@ -164,14 +180,14 @@
 
 ---
 
-### Section F: Snap Preview and Commit (9 Cases)
+### Section F: Visual Snap Overlay & Interactive Snapping (9 Cases)
 | ID | Description | Status | Evidence Source |
 |---|---|---|---|
 | F1 | Snap preview appears at expected geometry | **LIVE PASS** | Omega observation: "5. Yes" |
-| F2 | Repeated previews generate no compositor writes | **AUTOMATED PASS** | Simulator fixture 23 (`23-snap-preview-and-commit`) |
+| F2 | Repeated previews generate no compositor writes | **AUTOMATED PASS** | Simulator fixture 23 (`23-snap-preview-and-commit.fixture.json`) |
 | F3 | Preview does not mutate retained tiled geometry | **AUTOMATED PASS** | `reconciler.test.ts` |
 | F4 | Snap commit produces exactly one required write | **AUTOMATED PASS** | Simulator fixture 23 |
-| F5 | Compositor echo does not cause feedback loop | **AUTOMATED PASS** | Simulator fixture 19 (`expected-geometry-echo`) & `echo-filter.test.ts` |
+| F5 | Compositor echo does not cause feedback loop | **AUTOMATED PASS** | Simulator fixture 19 (`expected-geometry-echo.fixture.json`) & `echo-filter.test.ts` |
 | F6 | Second identical commit produces no extra write | **AUTOMATED PASS** | Simulator fixture 23 |
 | F7 | Preview geometry matches committed geometry | **AUTOMATED PASS** | Simulator fixture 23 & `affinity-snap.test.ts` |
 | F8 | Other outputs remain unaffected | **LIVE PASS** | Omega observation: DP-4 remained stable during HDMI-0 snap |
@@ -181,18 +197,21 @@
 
 ### Section G: Game and Steam Classification (12 Cases)
 *All cases in Section G are preserved as **NOT RUN** per strict safety policy (no automatic launching of games; manual execution reserved for Omega).*
-- G1. Steam client tiled by default: **NOT RUN** (Automated logic: fixture 08)
-- G2. steamwebhelper not treated as game: **NOT RUN** (Automated logic: `rules.test.ts`)
-- G3. True Steam game follows policy: **NOT RUN** (Automated logic: fixture 07)
-- G4. gamescope-hosted game follows policy: **NOT RUN** (Automated logic: fixture 07)
-- G5. Generic Wine utility tiled by default: **NOT RUN** (Automated logic: fixture 09)
-- G6. Confirmed Wine game follows policy: **NOT RUN** (Automated logic: `rules.test.ts`)
-- G7. gameWindowPolicy=floating floats games: **NOT RUN** (Automated logic: fixture 07)
-- G8. gameWindowPolicy=tiled tiles games: **NOT RUN** (Automated logic: `rules.test.ts`)
-- G9. Fullscreen game entry not fought: **NOT RUN** (Automated logic: fixture 05)
-- G10. Exiting fullscreen restores state: **NOT RUN** (Automated logic: fixture 05)
-- G11. Other monitor layouts remain stable during game: **NOT RUN** (Automated logic: fixture 10)
-- G12. Closing game cleans up state: **NOT RUN** (Automated logic: fixture 02)
+
+| ID | Description | Status | Evidence Source |
+|---|---|---|---|
+| G1 | Steam client tiled by default | **NOT RUN** | Automated logic: fixture 08 (`08-ordinary-steam-client-tiled.fixture.json`) |
+| G2 | steamwebhelper not treated as game | **NOT RUN** | Automated logic: `rules.test.ts` |
+| G3 | True Steam game follows policy | **NOT RUN** | Automated logic: fixture 07 (`07-steam-game-floating-by-default.fixture.json`) |
+| G4 | gamescope-hosted game follows policy | **NOT RUN** | Automated logic: fixture 07 |
+| G5 | Generic Wine utility tiled by default | **NOT RUN** | Automated logic: fixture 09 (`09-generic-wine-config-tiled.fixture.json`) |
+| G6 | Confirmed Wine game follows policy | **NOT RUN** | Automated logic: `rules.test.ts` |
+| G7 | gameWindowPolicy=floating floats games | **NOT RUN** | Automated logic: fixture 07 |
+| G8 | gameWindowPolicy=tiled tiles games | **NOT RUN** | Automated logic: `rules.test.ts` |
+| G9 | Fullscreen game entry not fought | **NOT RUN** | Automated logic: fixture 05 (`05-true-fullscreen-enter-exit.fixture.json`) |
+| G10 | Exiting fullscreen restores state | **NOT RUN** | Automated logic: fixture 05 |
+| G11 | Other monitor layouts remain stable during game | **NOT RUN** | Automated logic: fixture 10 (`10-two-horizontal-outputs.fixture.json`) |
+| G12 | Closing game cleans up state | **NOT RUN** | Automated logic: fixture 02 (`02-window-addition-removal.fixture.json`) |
 
 ---
 
@@ -264,9 +283,15 @@
    - *"4. Confirmed."* (window returns to its previous logical slot cleanly)
    - *"6. Im not noticing anything weird."* (no flicker, oscillation, or misordering)
 3. **Fullscreen (Group 3)**:
-   - *"nope it just made it a little bigger. 2. no. 4. yeah."* (Application-level shortcut issue on Electron web wrapper; true fullscreen subsequently confirmed via native application on DP-4).
+   - *"nope it just made it a little bigger. 2. no. 4. yeah."*
+   - **Distinction of Evidence**:
+     - The original Electron wrapper application (ChatGPT) did not request true fullscreen (`_NET_WM_STATE_FULLSCREEN`), resulting in an application-level resize rather than a compositor fullscreen transition.
+     - A controlled live KWin/X11 fullscreen state transition was subsequently executed via an explicit X11 client message on a native terminal application (`konsole`) on `DP-4`.
+     - KWin set `fullScreen=true` and expanded the window to `1920,0 1920x1080` (covering panel); Tessera respected that state and no conflicting geometry behavior was observed. Exiting fullscreen cleanly restored the pre-fullscreen logical slot (`1940,20 932x1040`).
+     - Application-specific and game-specific fullscreen UX remains covered separately by pending tests (Section G).
 4. **Manual Floating (Group 4)**:
-   - *"msf just just makes it the top window and expands across the whole shit and nothing pops up"* (Window detached from tiling into floating mode; remaining single window on HDMI-0 expanded to fill usable display).
+   - Initial run with `Ctrl+Shift+F`: *"grp 4: , no"* (keybinding intercepted by application context).
+   - Test with `Meta+Shift+F`: Active window detached from tiling; remaining single window on HDMI-0 reflowed across the usable display area while the floating window remained freely movable on top.
 5. **Snap Preview (Group 5)**:
    - *"5. Yes"* (snap overlay preview appears during window drag).
 6. **Multi-Monitor Cross-Screen Drag (Group 6)**:
@@ -295,8 +320,20 @@
 
 ---
 
-## 8. Remaining Risks & Recommendations
+## 8. Simulator Fixture Inventory & Verification Scope
+The runtime simulator suite comprises:
+- **Positive Golden Fixtures**: Exactly 25 fixtures (`01-single-screen-three-windows.fixture.json` through `25-mixed-burst.fixture.json` in `apps/runtime-simulator/fixtures/`).
+- **Negative Invariant Fixtures**: Exactly 2 fixtures (`out-of-bounds.fixture.json` and `overlap.fixture.json` in `apps/runtime-simulator/fixtures/negative/`), which explicitly test rejection of invalid layout topologies.
+- **Total Fixture Files**: Exactly 27 fixture files across the repository.
+- **Fixtures Processed by `sim:verify`**: Exactly 25 positive golden fixtures replayed and verified against committed golden digests (`--verify-goldens`).
+- **Fixtures Processed by Replay**: All 25 positive fixtures replayed during Vitest execution (`simulator.test.ts`), plus explicit tests executing the 2 negative fixtures.
+
+---
+
+## 9. Remaining Risks & Recommendations
 1. **Host Shortcut Collisions**: Global shortcuts using `Ctrl` modifiers can be consumed by focused applications. Meta-key modifiers (e.g. `Meta+Shift+F`) should be standard defaults.
-2. **Physical Hardware Hotplug**: Physical display disconnection/reconnection remains untested live (`NOT RUN`) to protect desktop stability.
-3. **Game Acceptance**: Game suite G1–G12 remains pending manual testing with Omega.
-4. **Recommendation**: **ACCEPT WITH LIMITATIONS**. Core multi-monitor tiling, cross-screen migration, snap preview, minimize/restore, and script reload lifecycle are live-verified and stable. Edge-case application fullscreen behavior and default floating shortcut collision (`Ctrl+Shift+F`) are documented for Phase 6 refinement.
+2. **Physical Hardware Hotplug**: Physical display disconnection/reconnection remains untested live (`NOT RUN`, H7) to protect desktop stability.
+3. **Game Acceptance**: Game suite G1–G12 (12 cases) remains pending manual testing with Omega.
+4. **Safety Rollback / Uninstall**: Rollback rehearsal (A8, K4) and uninstallation (K5) safely prepared with timestamped backups but unexecuted live.
+5. **Legacy Fallback UI**: Legacy fallback (J2) has no user-facing toggle; reconciler pipeline remains the authoritative engine.
+6. **Recommendation**: **ACCEPT WITH LIMITATIONS**. Core multi-monitor tiling, cross-screen migration, snap preview, minimize/restore, and script reload lifecycle are live-verified and stable. Edge-case application fullscreen behavior and default floating shortcut collision (`Ctrl+Shift+F`) are documented for Phase 6 refinement.
