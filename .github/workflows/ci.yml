@@ -44,6 +44,9 @@ jobs:
       - name: Verify Generated Artifacts Up-To-Date
         run: npm run verify:artifacts
 
+      - name: Verify Protocol V1 Freeze Manifest
+        run: npm run verify:freeze
+
       - name: Verify Runtime Simulator Goldens & Fixed Stress Seeds
         run: |
           npm run sim:verify

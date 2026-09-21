@@ -23,6 +23,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --build",
     "verify:artifacts": "git diff --exit-code HEAD -- contents/code/layouts.js contents/code/rules.js contents/code/reconciler.js packages/protocol/src/schemas/*.schema.json",
+    "verify:freeze": "vitest run packages/protocol/tests/freeze-manifest.test.ts",
     "generate:schemas": "node packages/protocol/scripts/generate-schemas.mjs",
     "sim:run": "node apps/runtime-simulator/bin/sim-cli.mjs",
     "sim:verify": "node apps/runtime-simulator/bin/sim-cli.mjs --verify-goldens",

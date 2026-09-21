@@ -278,3 +278,95 @@ fn test_disconnected_backend_grants_zero_capabilities() {
         error_codes::CAPABILITY_NOT_NEGOTIATED
     );
 }
+
+#[test]
+fn test_protocol_backend_and_negotiated_capability_distinctions() {
+    let schemas = Arc::new(CompiledSchemas::compile().unwrap());
+    let shutdown = ShutdownCoordinator::new();
+
+    // --- Scenario A: DisconnectedBackend ---
+    let disc_backend = Arc::new(DisconnectedBackend);
+    let mut disc_handler =
+        ConnectionHandler::new(6, disc_backend, schemas.clone(), shutdown.clone());
+
+    // 1. Protocol capabilities query (state.getCapabilities)
+    // Note: state.getCapabilities returns canonical V1 capabilities in 'capabilities'
+    // and numeric backend capability mask in 'adapterCapabilities'.
+    // Handshake first:
+    let disc_hello = disc_handler.process_frame(json!({
+        "protocol": "tessera.ipc",
+        "majorVersion": 1,
+        "minorVersion": 0,
+        "kind": "request",
+        "id": "h-disc-dist",
+        "method": "system.hello",
+        "params": {
+            "clientName": "DiscDistClient",
+            "clientVersion": "1.0",
+            "requestedCapabilities": V1_CAPABILITIES
+        }
+    }));
+    assert!(disc_hello["ok"].as_bool().unwrap());
+    let negotiated_disc = disc_hello["result"]["capabilities"].as_array().unwrap();
+    // For DisconnectedBackend: negotiatedCapabilities MUST be empty
+    assert!(
+        negotiated_disc.is_empty(),
+        "negotiatedCapabilities for DisconnectedBackend must be empty"
+    );
+
+    // --- Scenario B: Connected InMemoryTestBackend ---
+    let conn_backend = Arc::new(InMemoryTestBackend::new(0x01));
+    let mut conn_handler = ConnectionHandler::new(7, conn_backend, schemas, shutdown);
+
+    let conn_hello = conn_handler.process_frame(json!({
+        "protocol": "tessera.ipc",
+        "majorVersion": 1,
+        "minorVersion": 0,
+        "kind": "request",
+        "id": "h-conn-dist",
+        "method": "system.hello",
+        "params": {
+            "clientName": "ConnDistClient",
+            "clientVersion": "1.0",
+            "requestedCapabilities": ["state.inspect", "config.mutate"]
+        }
+    }));
+    assert!(conn_hello["ok"].as_bool().unwrap());
+    let negotiated_conn: Vec<String> = conn_hello["result"]["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    // For connected backend: negotiatedCapabilities is the granted intersection
+    assert_eq!(negotiated_conn, vec!["config.mutate", "state.inspect"]);
+
+    // state.getCapabilities returns protocolCapabilities (all 4) and backendCapabilities (> 0)
+    let state_caps = conn_handler.process_frame(json!({
+        "protocol": "tessera.ipc",
+        "majorVersion": 1,
+        "minorVersion": 0,
+        "kind": "request",
+        "id": "state-caps",
+        "method": "state.getCapabilities"
+    }));
+    assert!(state_caps["ok"].as_bool().unwrap());
+    let proto_caps: Vec<String> = state_caps["result"]["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        proto_caps.len(),
+        4,
+        "protocolCapabilities must list all 4 canonical capabilities"
+    );
+    assert!(
+        state_caps["result"]["adapterCapabilities"]
+            .as_u64()
+            .unwrap()
+            > 0,
+        "backendCapabilities must report positive adapterCapabilities for connected backend"
+    );
+}

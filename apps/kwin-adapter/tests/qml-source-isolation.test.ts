@@ -129,4 +129,69 @@ describe("QML Source Isolation & Legacy Map Audit", () => {
     expect(content).toMatch(/if\s*\(runtimeMode\s*===\s*"reconciler"\)/);
     expect(content).toMatch(/if\s*\(runtimeMode\s*!==\s*"legacy-fallback"\)\s*return;/);
   });
+
+  it("7. Source-region control flow analysis: legacy retile functions are unreachable from performReconciliation", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+    const lines = content.split("\n");
+
+    // Extract performReconciliation function body
+    const startIdx = lines.findIndex(l => l.includes("function performReconciliation()"));
+    expect(startIdx).toBeGreaterThan(0);
+
+    // Find end of performReconciliation (matching braces)
+    let braceCount = 0;
+    let endIdx = -1;
+    for (let i = startIdx; i < lines.length; i++) {
+      for (const ch of lines[i]) {
+        if (ch === "{") braceCount++;
+        if (ch === "}") {
+          braceCount--;
+          if (braceCount === 0) {
+            endIdx = i;
+            break;
+          }
+        }
+      }
+      if (endIdx !== -1) break;
+    }
+    expect(endIdx).toBeGreaterThan(startIdx);
+
+    const reconcilerBody = lines.slice(startIdx, endIdx + 1).join("\n");
+
+    // 1. Must never call legacy retile or legacy window ordering functions in active reconciler execution
+    const activeReconcilerBody = reconcilerBody.substring(reconcilerBody.indexOf("if (!config.enableTiling"));
+    expect(activeReconcilerBody).not.toMatch(/\bgetTileableWindows\s*\(/);
+    expect(activeReconcilerBody).not.toMatch(/\bretileLegacyFallback\s*\(/);
+    expect(activeReconcilerBody).not.toMatch(/\barrangeMasterStack\s*\(/);
+    expect(activeReconcilerBody).not.toMatch(/\barrangeBsp\s*\(/);
+    expect(reconcilerBody).not.toMatch(/\barrangeColumns\s*\(/);
+    expect(reconcilerBody).not.toMatch(/\barrangeRows\s*\(/);
+    expect(reconcilerBody).not.toMatch(/\barrangeMonocle\s*\(/);
+
+    // 2. Must never read legacy ordering maps in reconcilerBody
+    expect(reconcilerBody).not.toMatch(/\bscreenTiledWindows\b/);
+    expect(reconcilerBody).not.toMatch(/\bpersistentScreenOrder\b/);
+    expect(reconcilerBody).not.toMatch(/\bwindowClassifications\b/);
+    expect(reconcilerBody).not.toMatch(/\bwindowTileability\b/);
+
+    // 3. Must invoke coordinator.reconcile() as the sole layout authority
+    expect(reconcilerBody).toMatch(/coord\.reconcile\s*\(\)/);
+  });
+
+  it("8. Occurrence-by-occurrence reachability: legacy maps never decide geometry in reconciler mode", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+
+    // Verify retileScreen strictly branches on runtimeMode
+    const retileScreenBranch = content.match(
+      /if\s*\(\s*runtimeMode\s*===\s*"reconciler"\s*\)\s*\{\s*performReconciliation\(\);\s*\}\s*else\s*\{\s*retileLegacyFallback\(\);\s*\}/
+    );
+    expect(retileScreenBranch).not.toBeNull();
+
+    // Verify retileLegacyFallback begins with strict runtimeMode guard
+    const legacyGuard = content.match(
+      /function\s+retileLegacyFallback\s*\(\)\s*\{\s*if\s*\(\s*runtimeMode\s*!==\s*"legacy-fallback"\s*\)\s*return;/
+    );
+    expect(legacyGuard).not.toBeNull();
+  });
 });
+

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tessera.wm/schemas/v1/protocol-freeze-manifest.json",
+  "frozenParentSha": "2d47c86c0ae7fc17d82d80cce5a0ba9b4723a43e",
+  "namespace": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "capabilities": [
+    "state.inspect",
+    "config.mutate",
+    "runtime.control",
+    "trace.inspect"
+  ],
+  "methods": [
+    "system.hello",
+    "system.subscribe",
+    "system.unsubscribe",
+    "state.getSnapshot",
+    "state.getDiagnostics",
+    "state.getCapabilities",
+    "config.get",
+    "config.validatePatch",
+    "config.applyPatch",
+    "runtime.requestReconcile",
+    "runtime.setLayout",
+    "runtime.setMasterCount",
+    "runtime.setMasterRatio",
+    "runtime.setWindowFloating",
+    "runtime.getVersion",
+    "trace.getRecent",
+    "trace.clearRecent"
+  ],
+  "events": [
+    "runtime.ready",
+    "runtime.stateChanged",
+    "runtime.transactionCommitted",
+    "runtime.configurationChanged",
+    "runtime.capabilitiesChanged",
+    "runtime.warning"
+  ],
+  "errorCodes": [
+    "INVALID_ENVELOPE",
+    "UNSUPPORTED_MAJOR_VERSION",
+    "UNSUPPORTED_MINOR_VERSION",
+    "CAPABILITY_NOT_NEGOTIATED",
+    "UNKNOWN_METHOD",
+    "INVALID_PAYLOAD",
+    "FRAME_TOO_LARGE",
+    "CONFIG_VALIDATION_FAILED",
+    "REVISION_CONFLICT",
+    "IDEMPOTENCY_CONFLICT",
+    "RESOURCE_LIMIT_EXCEEDED",
+    "WINDOW_NOT_FOUND",
+    "OUTPUT_NOT_FOUND",
+    "TRACE_DISABLED",
+    "INTERNAL_ERROR",
+    "DECODE_ERROR"
+  ],
+  "limits": {
+    "maxFrameSize": 1048576,
+    "maxBufferedBytes": 2097152,
+    "maxNestingDepth": 32,
+    "maxStringLength": 65536,
+    "maxArrayLength": 10000,
+    "maxOutstandingRequests": 1000,
+    "maxSubscriptionCount": 100,
+    "maxQueueLength": 1000,
+    "maxIdempotencyCacheSize": 1000
+  },
+  "schemas": {
+    "envelope.schema.json": {
+      "rawSha256": "e5ecc02dcc43282ea22785e0b0a4c4ef730bb39163079d8681cd58d86e2b203b",
+      "canonicalSha256": "040fc487bbd6499d41ed6206510494748d22ea4c73efcd82474bf64307d5a3d3"
+    },
+    "error.schema.json": {
+      "rawSha256": "c8fce6209313569993c1558cf20e389a2aa5c67b45fbec5631dd57172fd75f35",
+      "canonicalSha256": "4c3a153569b8dc7896778a1b01cad973b4fa3b62193a9545e1e48f81f13d75a6"
+    },
+    "event.schema.json": {
+      "rawSha256": "8f518f936e4b68881b2c1c0c4c0e63c31f224f12b89b2ef128de00b4774c8328",
+      "canonicalSha256": "bbb55c85b0ca5223b822035c7ab2083aae43b45cc6026fbae5f74a761ad28f78"
+    },
+    "request.schema.json": {
+      "rawSha256": "1013fe3ad99ccdedf9e470fa81d0c15015229e74de4ed212fba6bcc6e2e148ee",
+      "canonicalSha256": "8c878f52f56067a341fcd923d78898e313ef98c385886b9c2013e10ce48bd046"
+    },
+    "response.schema.json": {
+      "rawSha256": "506d9e95e9ae8be54fe7585514b3254f37aacb1009471dc71799891f67332c50",
+      "canonicalSha256": "a87c637071646b7fbd497f8599ab911a96827f139b1739be5e564a8f7f9dd3e3"
+    }
+  }
+}

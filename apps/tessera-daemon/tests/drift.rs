@@ -217,3 +217,102 @@ fn test_resource_limits_drift() {
     assert_eq!(MAX_BUFFERED_BYTES, 2 * 1024 * 1024);
     assert_eq!(MAX_FRAME_SIZE, 1024 * 1024);
 }
+
+#[test]
+fn test_freeze_manifest_drift() {
+    let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/protocol/protocol-v1.freeze.json");
+    let manifest_content =
+        fs::read_to_string(&manifest_path).expect("Failed to read protocol-v1.freeze.json");
+    let manifest: Value =
+        serde_json::from_str(&manifest_content).expect("Failed to parse protocol-v1.freeze.json");
+
+    // 1. Identity
+    assert_eq!(PROTOCOL_NAMESPACE, manifest["namespace"].as_str().unwrap());
+    assert_eq!(
+        PROTOCOL_MAJOR_VERSION as u64,
+        manifest["majorVersion"].as_u64().unwrap()
+    );
+    assert_eq!(
+        PROTOCOL_MINOR_VERSION as u64,
+        manifest["minorVersion"].as_u64().unwrap()
+    );
+
+    // 2. Capabilities
+    let manifest_caps: Vec<String> = manifest["capabilities"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    let rust_caps: Vec<String> = V1_CAPABILITIES.iter().map(|&s| s.to_string()).collect();
+    assert_eq!(
+        rust_caps, manifest_caps,
+        "Rust V1_CAPABILITIES drifted from freeze manifest"
+    );
+
+    // 3. Methods
+    let manifest_methods: BTreeSet<String> = manifest["methods"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    let rust_methods: BTreeSet<String> = KNOWN_METHODS.iter().map(|&s| s.to_string()).collect();
+    assert_eq!(
+        rust_methods, manifest_methods,
+        "Rust KNOWN_METHODS drifted from freeze manifest"
+    );
+
+    // 4. Events
+    let manifest_events: BTreeSet<String> = manifest["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    let rust_events: BTreeSet<String> = KNOWN_EVENTS.iter().map(|&s| s.to_string()).collect();
+    assert_eq!(
+        rust_events, manifest_events,
+        "Rust KNOWN_EVENTS drifted from freeze manifest"
+    );
+
+    // 5. Limits
+    let limits = &manifest["limits"];
+    assert_eq!(
+        MAX_FRAME_SIZE,
+        limits["maxFrameSize"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        MAX_BUFFERED_BYTES,
+        limits["maxBufferedBytes"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        MAX_NESTING_DEPTH,
+        limits["maxNestingDepth"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        MAX_STRING_LENGTH,
+        limits["maxStringLength"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        MAX_ARRAY_LENGTH,
+        limits["maxArrayLength"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        MAX_OUTSTANDING_REQUESTS,
+        limits["maxOutstandingRequests"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        MAX_SUBSCRIPTION_COUNT,
+        limits["maxSubscriptionCount"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        MAX_QUEUE_LENGTH,
+        limits["maxQueueLength"].as_u64().unwrap() as usize
+    );
+    assert_eq!(
+        MAX_IDEMPOTENCY_CACHE_SIZE,
+        limits["maxIdempotencyCacheSize"].as_u64().unwrap() as usize
+    );
+}

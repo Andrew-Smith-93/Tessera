@@ -8,7 +8,7 @@ export const SUPPORTED_MINOR_VERSIONS: readonly number[] = [0] as const;
 
 // Conservative Security and Resource Limits
 export const DEFAULT_FRAME_LIMIT = 1024 * 1024; // 1 MiB
-export const MAX_FRAME_SIZE = 16 * 1024 * 1024; // 16 MB max frame size limit
+export const MAX_FRAME_SIZE = 1024 * 1024; // 1 MiB max frame size limit
 export const MAX_BUFFERED_BYTES = 2 * 1024 * 1024; // 2 MiB streaming buffer limit
 export const MAX_NESTING_DEPTH = 32;
 export const MAX_STRING_LENGTH = 65536; // 64 KB

@@ -3,6 +3,7 @@ import {
   ReferenceServer,
   ReferenceClient,
   ProtocolErrorCode,
+  V1_CAPABILITIES,
   encodeFrame,
   type CoordinatorRuntimeTarget,
   type ProtocolRequest,
@@ -906,5 +907,57 @@ describe("Tessera Protocol V1 Reference Endpoint & Command Queue", () => {
     }, "conn-auth");
     expect(layoutResp.ok).toBe(false);
     expect(layoutResp.error?.code).toBe(ProtocolErrorCode.CAPABILITY_NOT_NEGOTIATED);
+  });
+
+  it("24. Distinct capability concepts: protocolCapabilities, backendCapabilities, and negotiatedCapabilities", async () => {
+    // 1. Disconnected runtime (adapterCapabilities = 0)
+    const discRuntime = {
+      ...mockRuntime,
+      getCapabilities: () => 0
+    };
+    const discServer = new ReferenceServer(discRuntime);
+    const discClient = new ReferenceClient(discServer, "conn-disc");
+
+    // Handshake requesting all capabilities
+    const discHello = await discClient.hello("DiscClient", "1.0", [...V1_CAPABILITIES]);
+    // negotiatedCapabilities must be empty
+    expect(discHello.capabilities).toEqual([]);
+
+    // In disconnected mode, no capabilities are negotiated, so methods requiring capabilities are rejected
+    const discStateCaps = await discServer.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-disc-caps",
+      method: "state.getCapabilities"
+    }, "conn-disc");
+    expect(discStateCaps.ok).toBe(false);
+    expect(discStateCaps.error?.code).toBe(ProtocolErrorCode.CAPABILITY_NOT_NEGOTIATED);
+
+    // 2. Connected runtime (adapterCapabilities > 0)
+    const connRuntime = {
+      ...mockRuntime,
+      getCapabilities: () => 1
+    };
+    const connServer = new ReferenceServer(connRuntime);
+    const connClient = new ReferenceClient(connServer, "conn-conn");
+
+    const connHello = await connClient.hello("ConnClient", "1.0", ["state.inspect", "config.mutate"]);
+    // negotiatedCapabilities is the granted intersection
+    expect(connHello.capabilities).toEqual(["state.inspect", "config.mutate"]);
+
+    const connStateCaps = await connServer.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-conn-caps",
+      method: "state.getCapabilities"
+    }, "conn-conn");
+    expect(connStateCaps.ok).toBe(true);
+    const connResult = connStateCaps.result as StateCapabilitiesResult;
+    expect(connResult.capabilities).toEqual([...V1_CAPABILITIES]);
+    expect(connResult.adapterCapabilities).toBeGreaterThan(0);
   });
 });
