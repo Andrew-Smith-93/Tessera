@@ -771,4 +771,74 @@ describe("Tessera Protocol V1 Reference Endpoint & Command Queue", () => {
 
     expect(resp.ok).toBe(true);
   });
+
+  it("21. Two simultaneous sessions using identical clientName, method, and idempotency key but different payloads remain isolated", async () => {
+    const server = new ReferenceServer(mockRuntime);
+    // Two distinct connections/sessions sharing the identical clientName
+    const session1 = new ReferenceClient(server, "conn-session-1");
+    const session2 = new ReferenceClient(server, "conn-session-2");
+
+    await session1.hello("IdenticalAppClient", "1.0");
+    await session2.hello("IdenticalAppClient", "1.0");
+
+    // Both sessions use the exact same idempotencyKey but DIFFERENT payloads
+    const resp1 = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-s1",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "columns", idempotencyKey: "duplicate-app-key" }
+    }, "conn-session-1");
+
+    const resp2 = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-s2",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "grid", idempotencyKey: "duplicate-app-key" }
+    }, "conn-session-2");
+
+    // Both must succeed independently without conflict
+    expect(resp1.ok).toBe(true);
+    expect(resp2.ok).toBe(true);
+
+    const ack1 = resp1.result as RuntimeCommandAckResult;
+    const ack2 = resp2.result as RuntimeCommandAckResult;
+    expect(ack1.commandId).not.toBe(ack2.commandId);
+
+    // Session 1 replays its key: gets ack1
+    const replay1 = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-s1-replay",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "columns", idempotencyKey: "duplicate-app-key" }
+    }, "conn-session-1");
+    expect(replay1.ok).toBe(true);
+    expect((replay1.result as RuntimeCommandAckResult).commandId).toBe(ack1.commandId);
+
+    // Session 2 replays its key: gets ack2
+    const replay2 = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-s2-replay",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "grid", idempotencyKey: "duplicate-app-key" }
+    }, "conn-session-2");
+    expect(replay2.ok).toBe(true);
+    expect((replay2.result as RuntimeCommandAckResult).commandId).toBe(ack2.commandId);
+
+    // Reconnecting/new session has clean idempotency slate:
+    // Disconnecting session 1 removes connection state
+    server.removeSession("conn-session-1");
+    // New connection reusing "conn-session-1" or fresh session starts fresh
+  });
 });

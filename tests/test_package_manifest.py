@@ -83,5 +83,12 @@ class TestPackageManifest(unittest.TestCase):
                 self.assertNotIn("contents/ui/ZoneOverlay.qml", namelist)
                 self.assertNotIn("contents/ui/TopNotification.qml", namelist)
 
+                # Assert daemon, target, and rust sources are absent
+                self.assertFalse(any(p.startswith("apps/") for p in namelist), "Daemon sources must not be in .kwinscript")
+                self.assertFalse(any(p.startswith("target/") for p in namelist), "Target build artifacts must not be in .kwinscript")
+                self.assertFalse(any(p.endswith(".rs") for p in namelist), "Rust sources must not be in .kwinscript")
+                self.assertNotIn("Cargo.toml", namelist)
+                self.assertNotIn("Cargo.lock", namelist)
+
 if __name__ == "__main__":
     unittest.main()

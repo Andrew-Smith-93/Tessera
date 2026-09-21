@@ -397,3 +397,64 @@ All client interactions begin with a mandatory handshake:
 - **Deterministic Fuzz Testing**: Byte stream and envelope object fuzzing using Mulberry32 PRNG (seeds 42 and 12345) running 5,000 iterations each to guarantee crash resilience. Zero wall-clock or non-deterministic PRNG.
 - **Package Archive Isolation**: Protocol schemas, fixtures, and tests reside in `packages/protocol` and are strictly excluded from the release `.kwinscript` bundle.
 
+---
+
+## 12. Standalone Companion Daemon Architecture (Phase 5)
+
+Phase 5 introduces the optional standalone daemon bootstrap (`apps/tessera-daemon`) implemented in Rust.
+
+### Cold-Path Independence & Complete Isolation
+- **Out-of-Process**: The companion daemon operates purely out-of-process as a non-blocking asynchronous Unix domain socket server.
+- **Zero Live Connection in Phase 5**: The daemon is deliberately **not** connected to QML or the live KWin runtime in this phase. It does not participate in live window tiling, modify window geometry, install as a systemd service, or start automatically.
+- **Zero Impact on KWin Hot Path**: The KWin declarative script and TypeScript coordinator remain entirely self-contained and fully functional without the daemon running.
+
+### Runtime Backend Abstraction
+- The daemon defines an asynchronous `RuntimeBackend` trait decouled from transport and IPC framing:
+  ```rust
+  #[async_trait]
+  pub trait RuntimeBackend: Send + Sync {
+      fn capabilities(&self) -> Capabilities;
+      async fn get_snapshot(&self) -> Result<Value, ProtocolError>;
+      async fn get_diagnostics(&self) -> Result<Value, ProtocolError>;
+      async fn get_config(&self) -> Result<Value, ProtocolError>;
+      async fn validate_config_patch(&self, patch: &Value) -> Result<(), ProtocolError>;
+      async fn apply_config_patch(&self, patch: Value, expected_revision: Option<u64>) -> Result<Value, ProtocolError>;
+      async fn request_reconcile(&self, output_id: Option<String>, force: bool) -> Result<Value, ProtocolError>;
+      async fn set_layout(&self, output_id: String, layout: String) -> Result<Value, ProtocolError>;
+      async fn set_master_count(&self, output_id: String, count: u32) -> Result<Value, ProtocolError>;
+      async fn set_master_ratio(&self, output_id: String, ratio: f64) -> Result<Value, ProtocolError>;
+      async fn set_window_floating(&self, window_id: String, floating: bool) -> Result<Value, ProtocolError>;
+  }
+  ```
+- **`DisconnectedBackend`**: Baseline implementation when no live compositor is connected. Advertises 0 capabilities (`0x0000`). Correctly responds to discovery and hello handshakes, while rejecting capability-dependent methods with `CAPABILITY_NOT_NEGOTIATED`.
+- **`InMemoryTestBackend`**: Authoritative mock backend for protocol conformance tests and test rigs.
+
+### Transport Security & Socket Lifecycle
+- **Filesystem Path**: Defaults to `$XDG_RUNTIME_DIR/tessera/tessera.sock`.
+- **Path Restrictions**: Refuses paths inside `/tmp` or `/var/tmp`, relative paths, paths containing traversal (`..`), or paths resolving through symlinks.
+- **Permissions**: Directory created with mode `0700` (`rwx------`); Unix socket created with mode `0600` (`rw-------`). Directory and socket must be owned by the calling process UID.
+- **Stale Socket Handling & Single-Instance**:
+  - Connects to existing socket: if a live instance responds, the second instance aborts immediately with a descriptive single-instance error.
+  - If the socket is stale (connection refused) and owned by the calling UID, it is safely unlinked.
+- **Graceful Shutdown**: Intercepts `SIGINT` and `SIGTERM`, signals all active client tasks via broadcast channel, waits for socket task drain, and cleanly unlinks the socket file.
+
+### Bounded Resource Guarantees
+- **Concurrency Limit**: Maximum of 64 concurrent client connections via `tokio::sync::Semaphore`. Excess connections are cleanly rejected without process exhaustion.
+- **Timeouts**: Handshake timeout (5s), idle read timeout (60s), frame write timeout (10s).
+- **Frame & Buffer Limits**: Maximum frame payload size is 1 MiB (`1,048,576` bytes); maximum pre-copy buffer size is 2 MiB (`2,097,152` bytes). Oversized frames or buffer overflows trigger immediate typed errors without allocations.
+- **Payload Limits**: Max nesting depth: 32; max string length: 65,536; max array items: 10,000.
+- **Session-Scoped Idempotency**: Idempotency is strictly session-scoped within each connection's private state, bounded at 1,000 entries with FIFO eviction. Simultaneous clients with identical `clientName` never cross-contaminate or leak responses.
+- **Subscription Caps**: Maximum 100 active subscriptions per client connection.
+
+### Authoritative Schema Conformance
+- The daemon embeds and compiles the canonical `envelope.schema.json` via `include_str!` using the `jsonschema` crate with zero network dependencies (`default-features = false`).
+- All 25 JSON protocol conformance fixtures (15 valid, 10 invalid) pass cross-language verification identically between TypeScript and Rust.
+
+### Outbound Redaction & Safe Error Handling
+- Outbound responses and broadcasts pass through `sanitize_outbound_payload()`: sensitive window titles and application metadata are redacted when privacy modes are active.
+- Unhandled internal errors are masked with generic messages and unique internal error hashes (`create_safe_internal_error()`) to prevent information disclosure.
+
+### Distribution Packaging Isolation
+- Release `.kwinscript` bundles contain only KWin declarative artifacts (`contents/` and `metadata.json`).
+- Rust sources (`apps/tessera-daemon`), build outputs (`target/`), and Cargo manifests are strictly excluded from packaging archives, verified in CI and python tests.
+

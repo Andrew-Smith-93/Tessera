@@ -24,6 +24,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
       - name: Install Node Dependencies
         run: npm ci
 
@@ -45,6 +50,20 @@ jobs:
           npm run sim:run -- --seed 42 --quiet
           npm run sim:run -- --seed 12345 --quiet
           npm run sim:run -- --seed 99999 --quiet
+
+      - name: Rust Code Formatting Check
+        run: cargo fmt --check
+
+      - name: Rust Clippy Lints
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Run Rust Daemon Unit & Conformance Tests
+        run: cargo test --locked
+
+      - name: Verify Rust Daemon CLI Self-Check & Spec
+        run: |
+          cargo run --locked -- --check
+          cargo run --locked -- --print-protocol
 
       - name: Validate Python Syntax & Bytecode Compilation
         run: |
@@ -81,5 +100,6 @@ jobs:
           unzip -l dist/*.kwinscript | grep "contents/code/reconciler.js"
           unzip -l dist/*.kwinscript | grep "contents/ui/main.qml"
           ! unzip -l dist/*.kwinscript | grep -E "contents/code/main\.js|contents/ui/tessera\.qml|contents/ui/ZoneOverlay\.qml|contents/ui/TopNotification\.qml"
+          ! unzip -l dist/*.kwinscript | grep -E "apps/|target/|\.rs$|Cargo\."
           python3 tests/test_package_manifest.py
           echo "Package archive structure verified successfully."
