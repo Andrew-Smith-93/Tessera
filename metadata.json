@@ -18,8 +18,8 @@
             "KWin/Script"
         ]
     },
-    "X-Plasma-API": "declarativescript",
-    "X-Plasma-MainScript": "ui/main.qml",
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js",
     "X-Plasma-API-Minimum-Version": "6.0",
     "KPackageStructure": "KWin/Script",
     "X-KDE-PluginKeyword": "tessera",

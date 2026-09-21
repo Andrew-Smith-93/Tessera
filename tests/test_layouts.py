@@ -44,7 +44,7 @@ class TestTessera(unittest.TestCase):
             meta = json.load(f)
         self.assertIn("KPlugin", meta)
         self.assertEqual(meta["KPlugin"]["Id"], "tessera")
-        self.assertEqual(meta["X-Plasma-API"], "declarativescript")
+        self.assertEqual(meta["X-Plasma-API"], "javascript")
 
 if __name__ == "__main__":
     unittest.main()
