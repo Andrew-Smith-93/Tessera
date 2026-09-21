@@ -217,17 +217,20 @@ var LayoutsModule = (() => {
     }
     return result;
   }
-  function solveMasterStack(area, windows, gaps, options) {
+  function solvePrimaryStack(area, windows, gaps, options) {
     const result = /* @__PURE__ */ new Map();
     const count = windows.length;
     if (count === 0) return result;
-    const masterRatio = options?.masterRatio !== void 0 ? options.masterRatio : 0.5;
-    const masterCount = Math.max(0, options?.masterCount !== void 0 ? options.masterCount : 1);
+    const ratio = options?.primaryRegionRatio !== void 0 ? options.primaryRegionRatio : options?.masterRatio !== void 0 ? options.masterRatio : 0.5;
+    const regionCount = Math.max(
+      0,
+      options?.primaryRegionCount !== void 0 ? options.primaryRegionCount : options?.masterCount !== void 0 ? options.masterCount : 1
+    );
     if (count === 1) {
       result.set(windows[0], applyGaps(area, gaps, true, true, true, true));
       return result;
     }
-    if (masterCount === 0) {
+    if (regionCount === 0) {
       return solveBalancedGrid(area, windows, gaps);
     }
     if (count === 2) {
@@ -236,33 +239,36 @@ var LayoutsModule = (() => {
       result.set(windows[1], applyGaps({ x: area.x + halfW, y: area.y, width: area.width - halfW, height: area.height }, gaps, false, true, true, true));
       return result;
     }
-    const actualMasters = Math.min(count, masterCount);
-    const stackCount = count - actualMasters;
+    const actualPrimary = Math.min(count, regionCount);
+    const stackCount = count - actualPrimary;
     if (stackCount === 0) {
-      const colWidth = Math.floor(area.width / actualMasters);
-      for (let c = 0; c < actualMasters; c++) {
+      const colWidth = Math.floor(area.width / actualPrimary);
+      for (let c = 0; c < actualPrimary; c++) {
         const cx = area.x + c * colWidth;
-        const cw = c === actualMasters - 1 ? area.width - c * colWidth : colWidth;
-        result.set(windows[c], applyGaps({ x: cx, y: area.y, width: cw, height: area.height }, gaps, c === 0, c === actualMasters - 1, true, true));
+        const cw = c === actualPrimary - 1 ? area.width - c * colWidth : colWidth;
+        result.set(windows[c], applyGaps({ x: cx, y: area.y, width: cw, height: area.height }, gaps, c === 0, c === actualPrimary - 1, true, true));
       }
       return result;
     }
-    const masterWidth = Math.floor(area.width * masterRatio);
-    const stackWidth = area.width - masterWidth;
-    const masterHeight = Math.floor(area.height / actualMasters);
-    for (let m = 0; m < actualMasters; m++) {
-      const my = area.y + m * masterHeight;
-      const mh = m === actualMasters - 1 ? area.height - m * masterHeight : masterHeight;
-      result.set(windows[m], applyGaps({ x: area.x, y: my, width: masterWidth, height: mh }, gaps, true, false, m === 0, m === actualMasters - 1));
+    const primaryWidth = Math.floor(area.width * ratio);
+    const stackWidth = area.width - primaryWidth;
+    const primaryHeight = Math.floor(area.height / actualPrimary);
+    let curY = area.y;
+    for (let m = 0; m < actualPrimary; m++) {
+      const mh = m === actualPrimary - 1 ? area.height - (curY - area.y) : primaryHeight;
+      result.set(windows[m], applyGaps({ x: area.x, y: curY, width: primaryWidth, height: mh }, gaps, true, false, m === 0, m === actualPrimary - 1));
+      curY += mh;
     }
     const stackHeight = Math.floor(area.height / stackCount);
+    curY = area.y;
     for (let s = 0; s < stackCount; s++) {
-      const sy = area.y + s * stackHeight;
-      const sh = s === stackCount - 1 ? area.height - s * stackHeight : stackHeight;
-      result.set(windows[actualMasters + s], applyGaps({ x: area.x + masterWidth, y: sy, width: stackWidth, height: sh }, gaps, false, true, s === 0, s === stackCount - 1));
+      const sh = s === stackCount - 1 ? area.height - (curY - area.y) : stackHeight;
+      result.set(windows[actualPrimary + s], applyGaps({ x: area.x + primaryWidth, y: curY, width: stackWidth, height: sh }, gaps, false, true, s === 0, s === stackCount - 1));
+      curY += sh;
     }
     return result;
   }
+  var solveMasterStack = solvePrimaryStack;
   function solveTree(node, area, gaps) {
     const result = /* @__PURE__ */ new Map();
     if (!node) return result;
@@ -292,8 +298,9 @@ var LayoutsModule = (() => {
       case "balanced-grid":
       case "grid":
         return solveBalancedGrid(area, windows, gaps);
+      case "primary-stack":
       case "master-stack":
-        return solveMasterStack(area, windows, gaps, options);
+        return solvePrimaryStack(area, windows, gaps, options);
       case "binary-split":
         return treeNode ? solveTree(treeNode, area, gaps) : solveBalancedGrid(area, windows, gaps);
       case "columns": {

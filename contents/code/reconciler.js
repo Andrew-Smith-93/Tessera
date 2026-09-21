@@ -228,17 +228,20 @@ var ReconcilerModule = (() => {
     }
     return result;
   }
-  function solveMasterStack(area, windows, gaps, options) {
+  function solvePrimaryStack(area, windows, gaps, options) {
     const result = /* @__PURE__ */ new Map();
     const count = windows.length;
     if (count === 0) return result;
-    const masterRatio = options?.masterRatio !== void 0 ? options.masterRatio : 0.5;
-    const masterCount = Math.max(0, options?.masterCount !== void 0 ? options.masterCount : 1);
+    const ratio = options?.primaryRegionRatio !== void 0 ? options.primaryRegionRatio : options?.masterRatio !== void 0 ? options.masterRatio : 0.5;
+    const regionCount = Math.max(
+      0,
+      options?.primaryRegionCount !== void 0 ? options.primaryRegionCount : options?.masterCount !== void 0 ? options.masterCount : 1
+    );
     if (count === 1) {
       result.set(windows[0], applyGaps(area, gaps, true, true, true, true));
       return result;
     }
-    if (masterCount === 0) {
+    if (regionCount === 0) {
       return solveBalancedGrid(area, windows, gaps);
     }
     if (count === 2) {
@@ -247,30 +250,32 @@ var ReconcilerModule = (() => {
       result.set(windows[1], applyGaps({ x: area.x + halfW, y: area.y, width: area.width - halfW, height: area.height }, gaps, false, true, true, true));
       return result;
     }
-    const actualMasters = Math.min(count, masterCount);
-    const stackCount = count - actualMasters;
+    const actualPrimary = Math.min(count, regionCount);
+    const stackCount = count - actualPrimary;
     if (stackCount === 0) {
-      const colWidth = Math.floor(area.width / actualMasters);
-      for (let c = 0; c < actualMasters; c++) {
+      const colWidth = Math.floor(area.width / actualPrimary);
+      for (let c = 0; c < actualPrimary; c++) {
         const cx = area.x + c * colWidth;
-        const cw = c === actualMasters - 1 ? area.width - c * colWidth : colWidth;
-        result.set(windows[c], applyGaps({ x: cx, y: area.y, width: cw, height: area.height }, gaps, c === 0, c === actualMasters - 1, true, true));
+        const cw = c === actualPrimary - 1 ? area.width - c * colWidth : colWidth;
+        result.set(windows[c], applyGaps({ x: cx, y: area.y, width: cw, height: area.height }, gaps, c === 0, c === actualPrimary - 1, true, true));
       }
       return result;
     }
-    const masterWidth = Math.floor(area.width * masterRatio);
-    const stackWidth = area.width - masterWidth;
-    const masterHeight = Math.floor(area.height / actualMasters);
-    for (let m = 0; m < actualMasters; m++) {
-      const my = area.y + m * masterHeight;
-      const mh = m === actualMasters - 1 ? area.height - m * masterHeight : masterHeight;
-      result.set(windows[m], applyGaps({ x: area.x, y: my, width: masterWidth, height: mh }, gaps, true, false, m === 0, m === actualMasters - 1));
+    const primaryWidth = Math.floor(area.width * ratio);
+    const stackWidth = area.width - primaryWidth;
+    const primaryHeight = Math.floor(area.height / actualPrimary);
+    let curY = area.y;
+    for (let m = 0; m < actualPrimary; m++) {
+      const mh = m === actualPrimary - 1 ? area.height - (curY - area.y) : primaryHeight;
+      result.set(windows[m], applyGaps({ x: area.x, y: curY, width: primaryWidth, height: mh }, gaps, true, false, m === 0, m === actualPrimary - 1));
+      curY += mh;
     }
     const stackHeight = Math.floor(area.height / stackCount);
+    curY = area.y;
     for (let s = 0; s < stackCount; s++) {
-      const sy = area.y + s * stackHeight;
-      const sh = s === stackCount - 1 ? area.height - s * stackHeight : stackHeight;
-      result.set(windows[actualMasters + s], applyGaps({ x: area.x + masterWidth, y: sy, width: stackWidth, height: sh }, gaps, false, true, s === 0, s === stackCount - 1));
+      const sh = s === stackCount - 1 ? area.height - (curY - area.y) : stackHeight;
+      result.set(windows[actualPrimary + s], applyGaps({ x: area.x + primaryWidth, y: curY, width: stackWidth, height: sh }, gaps, false, true, s === 0, s === stackCount - 1));
+      curY += sh;
     }
     return result;
   }
@@ -303,8 +308,9 @@ var ReconcilerModule = (() => {
       case "balanced-grid":
       case "grid":
         return solveBalancedGrid(area, windows, gaps);
+      case "primary-stack":
       case "master-stack":
-        return solveMasterStack(area, windows, gaps, options);
+        return solvePrimaryStack(area, windows, gaps, options);
       case "binary-split":
         return treeNode ? solveTree(treeNode, area, gaps) : solveBalancedGrid(area, windows, gaps);
       case "columns": {
@@ -349,6 +355,9 @@ var ReconcilerModule = (() => {
   var DEFAULT_ECHO_EXPIRY_MS = 500;
   function rectEqualsWithTolerance(a, b, tolerance = DEFAULT_GEOMETRY_TOLERANCE_PX) {
     return Math.abs(a.x - b.x) <= tolerance && Math.abs(a.y - b.y) <= tolerance && Math.abs(a.width - b.width) <= tolerance && Math.abs(a.height - b.height) <= tolerance;
+  }
+  function getWorkspaceScopeKey(outputId, desktopId = "1") {
+    return `${outputId}:${desktopId}`;
   }
 
   // packages/rules-engine/src/rules.ts
@@ -987,6 +996,7 @@ var ReconcilerModule = (() => {
   var RuntimeCoordinator = class {
     windows = /* @__PURE__ */ new Map();
     screens = /* @__PURE__ */ new Map();
+    workspaces = /* @__PURE__ */ new Map();
     inFlightEchoes = /* @__PURE__ */ new Map();
     dirtyScreenIds = /* @__PURE__ */ new Set();
     pendingReasons = /* @__PURE__ */ new Set();
@@ -1006,13 +1016,17 @@ var ReconcilerModule = (() => {
     constructor(initialConfig, clock = new SystemClock(), traceRecorder = new TraceRecorder()) {
       this.clock = clock;
       this.traceRecorder = traceRecorder;
+      const effRatio = initialConfig?.primaryRegionRatio !== void 0 ? initialConfig.primaryRegionRatio : initialConfig?.masterRatio ?? 0.5;
+      const effCount = initialConfig?.primaryRegionCount !== void 0 ? initialConfig.primaryRegionCount : initialConfig?.masterCount ?? 1;
       this.config = {
         enableTiling: initialConfig?.enableTiling ?? true,
         defaultLayout: initialConfig?.defaultLayout ?? "master-stack",
         gapInner: initialConfig?.gapInner ?? 8,
         gapOuter: initialConfig?.gapOuter ?? 10,
-        masterRatio: initialConfig?.masterRatio ?? 0.5,
-        masterCount: initialConfig?.masterCount ?? 1,
+        primaryRegionRatio: effRatio,
+        primaryRegionCount: effCount,
+        masterRatio: effRatio,
+        masterCount: effCount,
         ignoreMinimized: initialConfig?.ignoreMinimized ?? true,
         gameWindowPolicy: initialConfig?.gameWindowPolicy ?? "floating",
         floatFilter: initialConfig?.floatFilter ?? "tessera,tessera-settings,tessera_settings.py",
@@ -1026,7 +1040,16 @@ var ReconcilerModule = (() => {
       return { ...this.config };
     }
     updateConfig(updates) {
-      this.config = { ...this.config, ...updates };
+      const effRatio = updates.primaryRegionRatio !== void 0 ? updates.primaryRegionRatio : updates.masterRatio !== void 0 ? updates.masterRatio : this.config.masterRatio;
+      const effCount = updates.primaryRegionCount !== void 0 ? updates.primaryRegionCount : updates.masterCount !== void 0 ? updates.masterCount : this.config.masterCount;
+      this.config = {
+        ...this.config,
+        ...updates,
+        primaryRegionRatio: effRatio,
+        primaryRegionCount: effCount,
+        masterRatio: effRatio,
+        masterCount: effCount
+      };
       this.invalidateAllScreens("GlobalConfigChanged");
     }
     getRetainedWindow(id) {
@@ -1041,26 +1064,94 @@ var ReconcilerModule = (() => {
     getRetainedScreens() {
       return Array.from(this.screens.values());
     }
+    getOrCreateWorkspace(outputId, desktopId = "1") {
+      const key = getWorkspaceScopeKey(outputId, desktopId);
+      let ws = this.workspaces.get(key);
+      if (!ws) {
+        ws = {
+          scopeKey: key,
+          outputId,
+          desktopId,
+          activeLayout: this.config.defaultLayout,
+          primaryRegionCount: this.config.primaryRegionCount ?? this.config.masterCount,
+          primaryRegionRatio: this.config.primaryRegionRatio ?? this.config.masterRatio,
+          gaps: { inner: this.config.gapInner, outer: this.config.gapOuter },
+          orderedSlotWindowIds: []
+        };
+        this.workspaces.set(key, ws);
+      }
+      return ws;
+    }
+    getWorkspace(outputId, desktopId = "1") {
+      return this.workspaces.get(getWorkspaceScopeKey(outputId, desktopId));
+    }
     getOrCreateScreen(input) {
       let screen = this.screens.get(input.outputId);
+      const activeDesktopId = input.activeDesktopId || "1";
+      this.getOrCreateWorkspace(input.outputId, activeDesktopId);
       if (!screen) {
-        screen = {
+        const self = this;
+        const newScreen = {
           outputId: input.outputId,
           name: input.name || input.outputId,
           geometry: { ...input.geometry },
           usableArea: { ...input.usableArea },
-          activeDesktopId: input.activeDesktopId || "1",
+          activeDesktopId,
           activeActivityId: input.activeActivityId,
-          activeLayout: this.config.defaultLayout,
-          masterCount: this.config.masterCount,
-          masterRatio: this.config.masterRatio,
-          gaps: { inner: this.config.gapInner, outer: this.config.gapOuter },
-          orderedWindowIds: [],
-          persistentOrder: [],
+          get activeLayout() {
+            return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).activeLayout;
+          },
+          set activeLayout(l) {
+            self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).activeLayout = l;
+          },
+          get masterCount() {
+            return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionCount;
+          },
+          set masterCount(c) {
+            self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionCount = c;
+          },
+          get masterRatio() {
+            return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionRatio;
+          },
+          set masterRatio(r) {
+            self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionRatio = r;
+          },
+          get primaryRegionCount() {
+            return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionCount;
+          },
+          set primaryRegionCount(c) {
+            self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionCount = c;
+          },
+          get primaryRegionRatio() {
+            return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionRatio;
+          },
+          set primaryRegionRatio(r) {
+            self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionRatio = r;
+          },
+          get gaps() {
+            return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).gaps;
+          },
+          set gaps(g) {
+            self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).gaps = g;
+          },
+          _orderedWindowIds: [],
+          get orderedWindowIds() {
+            return this._orderedWindowIds || [];
+          },
+          set orderedWindowIds(wids) {
+            this._orderedWindowIds = wids;
+          },
+          get persistentOrder() {
+            return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).orderedSlotWindowIds;
+          },
+          set persistentOrder(wids) {
+            self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).orderedSlotWindowIds = wids;
+          },
           dirtyReasons: /* @__PURE__ */ new Set(),
           latestCommittedEpoch: 0
         };
-        this.screens.set(input.outputId, screen);
+        this.screens.set(input.outputId, newScreen);
+        screen = newScreen;
       } else {
         if (input.name) screen.name = input.name;
         screen.geometry = { ...input.geometry };
@@ -1134,6 +1225,7 @@ var ReconcilerModule = (() => {
         case "WindowDiscovered": {
           const winInput = event.window;
           let outputId = winInput.outputId || "default";
+          const desktopId = winInput.desktopId || "1";
           if (!this.screens.has(outputId) && this.screens.size > 0) {
             const screensList = Array.from(this.screens.values()).map((s) => ({
               outputId: s.outputId,
@@ -1161,7 +1253,7 @@ var ReconcilerModule = (() => {
             title: winInput.title || "",
             role: winInput.role || "",
             outputId,
-            desktopId: winInput.desktopId || "1",
+            desktopId,
             activityId: winInput.activityId,
             minimized: Boolean(winInput.minimized),
             fullScreen: Boolean(winInput.fullScreen),
@@ -1182,10 +1274,9 @@ var ReconcilerModule = (() => {
             outputAffinity: winInput.outputAffinity || outputId
           };
           this.windows.set(winInput.id, retained);
-          if (screen) {
-            if (!screen.persistentOrder.includes(winInput.id)) {
-              screen.persistentOrder.push(winInput.id);
-            }
+          const ws = this.getOrCreateWorkspace(outputId, desktopId);
+          if (!ws.orderedSlotWindowIds.includes(winInput.id)) {
+            ws.orderedSlotWindowIds.push(winInput.id);
           }
           this.markScreenDirty(outputId, "WindowDiscovered");
           return { dirty: true, affectedScreens: [outputId], isEcho: false };
@@ -1193,25 +1284,31 @@ var ReconcilerModule = (() => {
         case "WindowRemoved": {
           const retained = this.windows.get(event.windowId);
           const outputId = retained ? retained.outputId : void 0;
+          const desktopId = retained ? retained.desktopId : void 0;
           this.windows.delete(event.windowId);
           this.inFlightEchoes.delete(event.windowId);
           const affected = [];
-          for (const screen of this.screens.values()) {
-            const idx = screen.persistentOrder.indexOf(event.windowId);
-            if (idx !== -1) {
-              screen.persistentOrder.splice(idx, 1);
-              screen.dirtyReasons.add("WindowRemoved");
-              this.dirtyScreenIds.add(screen.outputId);
-              affected.push(screen.outputId);
+          if (outputId && desktopId) {
+            const ws = this.getWorkspace(outputId, desktopId);
+            if (ws) {
+              const idx = ws.orderedSlotWindowIds.indexOf(event.windowId);
+              if (idx !== -1) {
+                ws.orderedSlotWindowIds.splice(idx, 1);
+              }
             }
-            const oIdx = screen.orderedWindowIds.indexOf(event.windowId);
-            if (oIdx !== -1) {
-              screen.orderedWindowIds.splice(oIdx, 1);
-            }
-          }
-          if (outputId && !affected.includes(outputId)) {
             this.markScreenDirty(outputId, "WindowRemoved");
             affected.push(outputId);
+          } else {
+            for (const ws of this.workspaces.values()) {
+              const idx = ws.orderedSlotWindowIds.indexOf(event.windowId);
+              if (idx !== -1) {
+                ws.orderedSlotWindowIds.splice(idx, 1);
+                if (!affected.includes(ws.outputId)) {
+                  this.markScreenDirty(ws.outputId, "WindowRemoved");
+                  affected.push(ws.outputId);
+                }
+              }
+            }
           }
           this.pendingReasons.add("WindowRemoved");
           return { dirty: affected.length > 0, affectedScreens: affected, isEcho: false };
@@ -1300,22 +1397,27 @@ var ReconcilerModule = (() => {
         }
         case "WindowMovedOutput": {
           const win = this.windows.get(event.windowId);
+          const deskId = win ? win.desktopId : "1";
           if (win) {
             win.outputId = event.toOutputId;
             win.outputAffinity = event.toOutputId;
           }
+          const oldWs = this.getWorkspace(event.fromOutputId, deskId);
+          if (oldWs) {
+            const idx = oldWs.orderedSlotWindowIds.indexOf(event.windowId);
+            if (idx !== -1) oldWs.orderedSlotWindowIds.splice(idx, 1);
+          }
           const oldScreen = this.screens.get(event.fromOutputId);
           if (oldScreen) {
-            const idx = oldScreen.persistentOrder.indexOf(event.windowId);
-            if (idx !== -1) oldScreen.persistentOrder.splice(idx, 1);
             oldScreen.dirtyReasons.add("WindowMovedOutputSource");
             this.dirtyScreenIds.add(oldScreen.outputId);
           }
+          const newWs = this.getOrCreateWorkspace(event.toOutputId, deskId);
+          if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
+            newWs.orderedSlotWindowIds.push(event.windowId);
+          }
           const newScreen = this.screens.get(event.toOutputId);
           if (newScreen) {
-            if (!newScreen.persistentOrder.includes(event.windowId)) {
-              newScreen.persistentOrder.push(event.windowId);
-            }
             newScreen.dirtyReasons.add("WindowMovedOutputTarget");
             this.dirtyScreenIds.add(newScreen.outputId);
           }
@@ -1325,7 +1427,18 @@ var ReconcilerModule = (() => {
         case "WindowMovedDesktop": {
           const win = this.windows.get(event.windowId);
           if (win) {
-            win.desktopId = event.toDesktopId;
+            const oldDeskId = event.fromDesktopId;
+            const newDeskId = event.toDesktopId;
+            win.desktopId = newDeskId;
+            const oldWs = this.getWorkspace(win.outputId, oldDeskId);
+            if (oldWs) {
+              const idx = oldWs.orderedSlotWindowIds.indexOf(event.windowId);
+              if (idx !== -1) oldWs.orderedSlotWindowIds.splice(idx, 1);
+            }
+            const newWs = this.getOrCreateWorkspace(win.outputId, newDeskId);
+            if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
+              newWs.orderedSlotWindowIds.push(event.windowId);
+            }
             this.markScreenDirty(win.outputId, "WindowMovedDesktop");
             return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
           }
@@ -1360,9 +1473,9 @@ var ReconcilerModule = (() => {
                 });
                 win.outputId = newOutputId;
                 win.outputAffinity = newOutputId;
-                const targetScreen = this.screens.get(newOutputId);
-                if (targetScreen && !targetScreen.persistentOrder.includes(win.id)) {
-                  targetScreen.persistentOrder.push(win.id);
+                const targetWs = this.getOrCreateWorkspace(newOutputId, win.desktopId);
+                if (!targetWs.orderedSlotWindowIds.includes(win.id)) {
+                  targetWs.orderedSlotWindowIds.push(win.id);
                 }
               }
             }
@@ -1372,31 +1485,47 @@ var ReconcilerModule = (() => {
         }
         case "ScreenLayoutChanged": {
           const screen = this.screens.get(event.outputId);
-          if (screen) {
-            screen.activeLayout = event.layout;
-            this.markScreenDirty(event.outputId, "ScreenLayoutChanged");
-            return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
-          }
-          return { dirty: false, affectedScreens: [], isEcho: false };
+          const deskId = event.desktopId || (screen ? screen.activeDesktopId : "1");
+          const ws = this.getOrCreateWorkspace(event.outputId, deskId);
+          ws.activeLayout = event.layout;
+          this.markScreenDirty(event.outputId, "ScreenLayoutChanged");
+          return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
+        }
+        case "WorkspaceLayoutChanged": {
+          const ws = this.getOrCreateWorkspace(event.outputId, event.desktopId);
+          ws.activeLayout = event.layout;
+          this.markScreenDirty(event.outputId, "WorkspaceLayoutChanged");
+          return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
         }
         case "ScreenMasterConfigChanged": {
           const screen = this.screens.get(event.outputId);
-          if (screen) {
-            if (event.count !== void 0) screen.masterCount = Math.max(0, event.count);
-            if (event.ratio !== void 0) screen.masterRatio = Math.max(0.1, Math.min(0.9, event.ratio));
-            this.markScreenDirty(event.outputId, "ScreenMasterConfigChanged");
-            return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
-          }
-          return { dirty: false, affectedScreens: [], isEcho: false };
+          const deskId = event.desktopId || (screen ? screen.activeDesktopId : "1");
+          const ws = this.getOrCreateWorkspace(event.outputId, deskId);
+          if (event.count !== void 0) ws.primaryRegionCount = Math.max(0, event.count);
+          if (event.ratio !== void 0) ws.primaryRegionRatio = Math.max(0.1, Math.min(0.9, event.ratio));
+          this.markScreenDirty(event.outputId, "ScreenMasterConfigChanged");
+          return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
+        }
+        case "WorkspacePrimaryConfigChanged": {
+          const ws = this.getOrCreateWorkspace(event.outputId, event.desktopId);
+          if (event.count !== void 0) ws.primaryRegionCount = Math.max(0, event.count);
+          if (event.ratio !== void 0) ws.primaryRegionRatio = Math.max(0.1, Math.min(0.9, event.ratio));
+          this.markScreenDirty(event.outputId, "WorkspacePrimaryConfigChanged");
+          return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
         }
         case "ScreenGapsChanged": {
           const screen = this.screens.get(event.outputId);
-          if (screen) {
-            screen.gaps = { ...event.gaps };
-            this.markScreenDirty(event.outputId, "ScreenGapsChanged");
-            return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
-          }
-          return { dirty: false, affectedScreens: [], isEcho: false };
+          const deskId = event.desktopId || (screen ? screen.activeDesktopId : "1");
+          const ws = this.getOrCreateWorkspace(event.outputId, deskId);
+          ws.gaps = { ...event.gaps };
+          this.markScreenDirty(event.outputId, "ScreenGapsChanged");
+          return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
+        }
+        case "WorkspaceGapsChanged": {
+          const ws = this.getOrCreateWorkspace(event.outputId, event.desktopId);
+          ws.gaps = { ...event.gaps };
+          this.markScreenDirty(event.outputId, "WorkspaceGapsChanged");
+          return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
         }
         case "GlobalConfigChanged": {
           this.updateConfig(event.config);
@@ -1407,7 +1536,10 @@ var ReconcilerModule = (() => {
           if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
           const targetScreen = this.screens.get(event.outputId);
           const oldOutputId = win.outputId;
+          const oldDeskId = win.desktopId;
+          const newDeskId = event.desktopId || (targetScreen ? targetScreen.activeDesktopId : oldDeskId);
           win.outputId = event.outputId;
+          win.desktopId = newDeskId;
           win.outputAffinity = event.outputId;
           win.isDragging = false;
           win.isManualFloating = false;
@@ -1415,27 +1547,22 @@ var ReconcilerModule = (() => {
           win.classification = "tiled";
           win.currentDesiredTiledGeometry = { ...event.targetRect };
           this.setSavedTiledGeometry(event.windowId, event.targetRect);
-          if (targetScreen) {
-            if (oldOutputId && oldOutputId !== event.outputId) {
-              const oldScreen = this.screens.get(oldOutputId);
-              if (oldScreen) {
-                const oIdx = oldScreen.persistentOrder.indexOf(event.windowId);
-                if (oIdx !== -1) oldScreen.persistentOrder.splice(oIdx, 1);
-                const wIdx = oldScreen.orderedWindowIds.indexOf(event.windowId);
-                if (wIdx !== -1) oldScreen.orderedWindowIds.splice(wIdx, 1);
-              }
+          if (oldOutputId !== event.outputId || oldDeskId !== newDeskId) {
+            const oldWs = this.getWorkspace(oldOutputId, oldDeskId);
+            if (oldWs) {
+              const oIdx = oldWs.orderedSlotWindowIds.indexOf(event.windowId);
+              if (oIdx !== -1) oldWs.orderedSlotWindowIds.splice(oIdx, 1);
             }
-            const curPIdx = targetScreen.persistentOrder.indexOf(event.windowId);
-            if (curPIdx !== -1) targetScreen.persistentOrder.splice(curPIdx, 1);
-            const curOIdx = targetScreen.orderedWindowIds.indexOf(event.windowId);
-            if (curOIdx !== -1) targetScreen.orderedWindowIds.splice(curOIdx, 1);
-            if (event.slotIndex === 0) {
-              targetScreen.persistentOrder.unshift(event.windowId);
-              targetScreen.orderedWindowIds.unshift(event.windowId);
-            } else {
-              targetScreen.persistentOrder.push(event.windowId);
-              targetScreen.orderedWindowIds.push(event.windowId);
-            }
+          }
+          const targetWs = this.getOrCreateWorkspace(event.outputId, newDeskId);
+          const curIdx = targetWs.orderedSlotWindowIds.indexOf(event.windowId);
+          if (curIdx !== -1) targetWs.orderedSlotWindowIds.splice(curIdx, 1);
+          if (event.slotIndex === 0) {
+            targetWs.orderedSlotWindowIds.unshift(event.windowId);
+          } else if (event.slotIndex !== void 0 && event.slotIndex > 0) {
+            targetWs.orderedSlotWindowIds.splice(event.slotIndex, 0, event.windowId);
+          } else {
+            targetWs.orderedSlotWindowIds.push(event.windowId);
           }
           this.markScreenDirty(event.outputId, "WindowSnapCommitted");
           const affected = [event.outputId];
@@ -1483,12 +1610,15 @@ var ReconcilerModule = (() => {
       });
     }
     /**
-     * Determines tileable windows for a screen according to slot persistence.
+     * Determines tileable windows for a screen according to scoped workspace slot persistence.
      */
     getTileableWindowsForScreen(screen) {
+      const desktopId = screen.activeDesktopId || "1";
+      const ws = this.getOrCreateWorkspace(screen.outputId, desktopId);
       const candidateWins = [];
       for (const win of this.windows.values()) {
         if (win.outputId !== screen.outputId) continue;
+        if (win.desktopId !== desktopId) continue;
         if (!win.tileable) continue;
         if (win.isManualFloating) continue;
         if (this.config.ignoreMinimized && win.minimized) continue;
@@ -1498,7 +1628,7 @@ var ReconcilerModule = (() => {
       }
       const ordered = [];
       const remaining = new Set(candidateWins);
-      for (const wid of screen.persistentOrder) {
+      for (const wid of ws.orderedSlotWindowIds) {
         const match = candidateWins.find((w) => w.id === wid);
         if (match) {
           ordered.push(match);
@@ -1507,8 +1637,8 @@ var ReconcilerModule = (() => {
       }
       for (const newWin of remaining) {
         ordered.push(newWin);
-        if (!screen.persistentOrder.includes(newWin.id)) {
-          screen.persistentOrder.push(newWin.id);
+        if (!ws.orderedSlotWindowIds.includes(newWin.id)) {
+          ws.orderedSlotWindowIds.push(newWin.id);
         }
       }
       screen.orderedWindowIds = ordered.map((w) => w.id);
@@ -1561,8 +1691,11 @@ var ReconcilerModule = (() => {
         const ids = tileableWindows.map((w) => w.id);
         let solution = /* @__PURE__ */ new Map();
         switch (screen.activeLayout) {
+          case "primary-stack":
           case "master-stack":
-            solution = solveMasterStack(area, ids, screen.gaps, {
+            solution = solvePrimaryStack(area, ids, screen.gaps, {
+              primaryRegionRatio: screen.primaryRegionRatio,
+              primaryRegionCount: screen.primaryRegionCount,
               masterRatio: screen.masterRatio,
               masterCount: screen.masterCount
             });
@@ -1590,10 +1723,7 @@ var ReconcilerModule = (() => {
             solution = solveLayout("monocle", area, ids, screen.gaps);
             break;
           default:
-            solution = solveMasterStack(area, ids, screen.gaps, {
-              masterRatio: screen.masterRatio,
-              masterCount: screen.masterCount
-            });
+            solution = solveBalancedGrid(area, ids, screen.gaps);
             break;
         }
         for (const win of tileableWindows) {
@@ -1767,12 +1897,14 @@ var ReconcilerModule = (() => {
         updates: { isManualFloating: val }
       });
     }
-    swapWindowOrder(outputId, forward) {
+    swapWindowOrder(outputId, forward, desktopId) {
       const screen = this.screens.get(outputId);
-      if (!screen || screen.persistentOrder.length < 2) {
+      const deskId = desktopId || (screen ? screen.activeDesktopId : "1");
+      const ws = this.getOrCreateWorkspace(outputId, deskId);
+      if (ws.orderedSlotWindowIds.length < 2) {
         return { dirty: false, affectedScreens: [], isEcho: false };
       }
-      const order = [...screen.persistentOrder];
+      const order = [...ws.orderedSlotWindowIds];
       if (forward) {
         const first = order.shift();
         order.push(first);
@@ -1780,9 +1912,41 @@ var ReconcilerModule = (() => {
         const last = order.pop();
         order.unshift(last);
       }
-      screen.persistentOrder = order;
+      ws.orderedSlotWindowIds = order;
       this.markScreenDirty(outputId, "WindowOrderSwapped");
       return { dirty: true, affectedScreens: [outputId], isEcho: false };
+    }
+    moveWindowToSlot(windowId, targetSlotIndex) {
+      const win = this.windows.get(windowId);
+      if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
+      const ws = this.getOrCreateWorkspace(win.outputId, win.desktopId);
+      const curIdx = ws.orderedSlotWindowIds.indexOf(windowId);
+      if (curIdx === -1) return { dirty: false, affectedScreens: [], isEcho: false };
+      ws.orderedSlotWindowIds.splice(curIdx, 1);
+      const boundedSlot = Math.max(0, Math.min(targetSlotIndex, ws.orderedSlotWindowIds.length));
+      ws.orderedSlotWindowIds.splice(boundedSlot, 0, windowId);
+      this.markScreenDirty(win.outputId, "WindowSlotMoved");
+      return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
+    }
+    moveWindowToFirstSlot(windowId) {
+      return this.moveWindowToSlot(windowId, 0);
+    }
+    swapWindowSlots(windowIdA, windowIdB) {
+      const winA = this.windows.get(windowIdA);
+      const winB = this.windows.get(windowIdB);
+      if (!winA || !winB || winA.outputId !== winB.outputId || winA.desktopId !== winB.desktopId) {
+        return { dirty: false, affectedScreens: [], isEcho: false };
+      }
+      const ws = this.getOrCreateWorkspace(winA.outputId, winA.desktopId);
+      const idxA = ws.orderedSlotWindowIds.indexOf(windowIdA);
+      const idxB = ws.orderedSlotWindowIds.indexOf(windowIdB);
+      if (idxA === -1 || idxB === -1) {
+        return { dirty: false, affectedScreens: [], isEcho: false };
+      }
+      ws.orderedSlotWindowIds[idxA] = windowIdB;
+      ws.orderedSlotWindowIds[idxB] = windowIdA;
+      this.markScreenDirty(winA.outputId, "WindowSlotsSwapped");
+      return { dirty: true, affectedScreens: [winA.outputId], isEcho: false };
     }
     getDiagnostics() {
       return {
@@ -1873,7 +2037,7 @@ var ReconcilerModule = (() => {
       title: "Bottom-Left Quarter",
       badge: "\u25E3 Bottom-Left",
       desc: "25% Quadrant",
-      slotIndex: 0,
+      slotIndex: 3,
       rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
       targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
       triggerX: area.x,
@@ -1901,7 +2065,7 @@ var ReconcilerModule = (() => {
       title: "Bottom-Right Quarter",
       badge: "\u25E2 Bottom-Right",
       desc: "25% Quadrant",
-      slotIndex: 1,
+      slotIndex: 2,
       rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
       targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
       triggerX: area.x + Math.floor(area.width * 0.78),

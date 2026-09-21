@@ -35,36 +35,23 @@ Item {
     // =========================================================================
     // 2. State Tracking
     // =========================================================================
-    property var desktopLayouts: ({})
     property var floatingWindows: ({})   // windowId -> boolean (manual float)
     property var preTiledWindows: ({})   // windowId -> boolean (single-window snap)
-    property var screenTiledWindows: ({}) // screenName -> array of windows
     property var savedTiledGeometries: ({}) // windowId -> Qt.rect
     property var savedMinimGeometries: ({}) // windowId -> Qt.rect
     property var wasDraggingMaximized: ({}) // windowId -> boolean
-    property var persistentScreenOrder: ({}) // screenName -> array of windowIds
     property var currentLayoutList: ["master-stack", "bsp", "columns", "rows", "grid", "monocle", "floating"]
     property var windowClassifications: ({}) // windowId -> classification string
     property var windowTileability: ({})     // windowId -> boolean
     property bool isArranging: false
     property var currentDraggingWindow: null
 
-    // Runtime Mode: "reconciler" | "legacy-fallback" (strictly exclusive)
+    // Runtime Mode: "reconciler" (single runtime authority)
     property string runtimeMode: "reconciler"
 
     function initRuntimeMode() {
-        try {
-            var coord = getCoordinator();
-            if (coord) {
-                runtimeMode = "reconciler";
-                log("Runtime mode initialized: reconciler");
-                return;
-            }
-        } catch (e) {
-            log("Reconciler initialization failed, falling back to legacy: " + e);
-        }
-        runtimeMode = "legacy-fallback";
-        log("Runtime mode initialized: legacy-fallback");
+        runtimeMode = "reconciler";
+        log("Runtime mode initialized: reconciler (single authority)");
     }
 
     function getSavedTiledGeometry(wid) {
@@ -165,14 +152,6 @@ Item {
         config.gameWindowPolicy = KWin.readConfig("gameWindowPolicy", "floating");
         config.floatFilter = KWin.readConfig("floatFilter", "tessera,tessera-settings,tessera_settings.py");
         config.customRulesJson = KWin.readConfig("customRulesJson", "[]");
-        config.desktopLayoutsJson = KWin.readConfig("desktopLayoutsJson", "{}");
-
-        try {
-            desktopLayouts = JSON.parse(config.desktopLayoutsJson || "{}");
-        } catch (e) {
-            desktopLayouts = {};
-        }
-
         windowClassifications = {};
         windowTileability = {};
 
@@ -186,6 +165,8 @@ Item {
                 defaultLayout: config.defaultLayout,
                 gapInner: config.gapInner,
                 gapOuter: config.gapOuter,
+                primaryRegionRatio: config.masterRatio,
+                primaryRegionCount: config.masterCount,
                 masterRatio: config.masterRatio,
                 masterCount: config.masterCount,
                 ignoreMinimized: config.ignoreMinimized,
@@ -228,10 +209,6 @@ Item {
         return desk ? (desk.id || desk.name || desk.toString()) : "default";
     }
 
-    property var screenLayouts: ({})      // screenName:desktopKey -> layoutName
-    property var screenMasterRatios: ({}) // screenName -> master ratio
-    property var screenMasterCounts: ({}) // screenName -> master count
-
     function getCurrentTargetScreen() {
         // 1. First priority: Screen containing the mouse cursor (where user is physically interacting)
         var curPos = Workspace.cursorPos;
@@ -256,15 +233,29 @@ Item {
 
     function getActiveLayout(screen) {
         var scr = screen || getCurrentTargetScreen();
-        var key = getLayoutKey(scr);
-        return screenLayouts[key] || desktopLayouts[getCurrentDesktopKey()] || config.defaultLayout || "master-stack";
+        var sName = getScreenName(scr);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (coord) {
+            var ws = coord.getOrCreateWorkspace(sName, deskKey);
+            return ws.activeLayout || config.defaultLayout || "master-stack";
+        }
+        return config.defaultLayout || "master-stack";
     }
 
     function setActiveLayout(layoutName, screen) {
         var scr = screen || getCurrentTargetScreen();
-        var key = getLayoutKey(scr);
-        screenLayouts[key] = layoutName;
-        desktopLayouts[getCurrentDesktopKey()] = layoutName;
+        var sName = getScreenName(scr);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (coord) {
+            coord.handleEvent({
+                type: "WorkspaceLayoutChanged",
+                outputId: sName,
+                desktopId: deskKey,
+                layout: layoutName
+            });
+        }
         var sLabel = scr ? (scr.name || "Screen") : "Screen";
         osdCall.notify(sLabel + " Layout: " + layoutName.toUpperCase(), "preferences-desktop-virtual");
         retileNow();
@@ -337,81 +328,6 @@ Item {
         return evalRes.isTileable;
     }
 
-    function getTileableWindows(screen) {
-        var allWindows = Workspace.stackingOrder || [];
-        var tileables = [];
-        var sName = getScreenName(screen);
-
-        for (var i = 0; i < allWindows.length; i++) {
-            var w = allWindows[i];
-            if (!w || !checkFilter(w)) continue;
-            if (!isWindowOnCurrentDesktop(w)) continue;
-
-            // Check screen affinity by actual physical center coordinates (never stale w.output)
-            var wScreen = getScreenForPos(w.frameGeometry);
-            if (sName && getScreenName(wScreen) !== sName) continue;
-
-            var wid = getWindowId(w);
-            if (floatingWindows[wid] === true) continue;
-
-            if (config.ignoreMinimized && w.minimized) continue;
-
-            tileables.push(w);
-        }
-
-        // Maintain persistent slot order per screen so windows NEVER swap on minimize/restore!
-        var persistentOrder = persistentScreenOrder[sName] || [];
-        var newOrder = [];
-
-        var activeIds = [];
-        for (var a = 0; a < tileables.length; a++) {
-            activeIds.push(getWindowId(tileables[a]));
-        }
-
-        // 1. Keep existing persistent order for windows that are currently on this screen
-        var prunedPersistent = [];
-        for (var p = 0; p < persistentOrder.length; p++) {
-            var pWid = persistentOrder[p];
-            var found = false;
-            for (var t = 0; t < tileables.length; t++) {
-                if (getWindowId(tileables[t]) === pWid) {
-                    newOrder.push(tileables[t]);
-                    found = true;
-                    break;
-                }
-            }
-            if (found || (savedMinimGeometries[pWid] && getScreenName(getScreenForPos(savedMinimGeometries[pWid])) === sName) || (savedTiledGeometries[pWid] && getScreenName(getScreenForPos(savedTiledGeometries[pWid])) === sName)) {
-                prunedPersistent.push(pWid);
-            }
-        }
-        persistentOrder = prunedPersistent;
-
-        // 2. Add any brand-new windows that arrived on this screen
-        for (var t2 = 0; t2 < tileables.length; t2++) {
-            if (newOrder.indexOf(tileables[t2]) === -1) {
-                newOrder.push(tileables[t2]);
-                var tWid = getWindowId(tileables[t2]);
-                if (persistentOrder.indexOf(tWid) === -1) {
-                    persistentOrder.push(tWid);
-                }
-                // Purge this window from any other screen's persistent list
-                for (var oScr in persistentScreenOrder) {
-                    if (oScr !== sName) {
-                        var oList = persistentScreenOrder[oScr] || [];
-                        var oIdx = oList.indexOf(tWid);
-                        if (oIdx !== -1) {
-                            oList.splice(oIdx, 1);
-                            persistentScreenOrder[oScr] = oList;
-                        }
-                    }
-                }
-            }
-        }
-
-        persistentScreenOrder[sName] = persistentOrder;
-        screenTiledWindows[sName] = newOrder;
-        return newOrder;
-    }
 
     // =========================================================================
     // 5. Retained Coordinator & Coalesced Reconciliation Pipeline
@@ -461,12 +377,6 @@ Item {
     }
 
     function performReconciliation() {
-        if (runtimeMode !== "reconciler") {
-            if (runtimeMode === "legacy-fallback") {
-                retileLegacyFallback();
-            }
-            return;
-        }
         if (!config.enableTiling || isArranging) return;
 
         var coord = getCoordinator();
@@ -484,15 +394,7 @@ Item {
             if (!area || area.width <= 0 || area.height <= 0) continue;
 
             var sInput = ReconcilerModule.ReconcilerBridge.toNormalizedScreen(scr, area);
-            var activeL = getActiveLayout(scr);
-            var sName = getScreenName(scr);
-            var effectiveRatio = screenMasterRatios[sName] !== undefined ? screenMasterRatios[sName] : config.masterRatio;
-            var effectiveCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
-
             var retScr = coord.getOrCreateScreen(sInput);
-            retScr.activeLayout = activeL;
-            retScr.masterRatio = effectiveRatio;
-            retScr.masterCount = effectiveCount;
             retScr.gaps = { inner: config.gapInner, outer: config.gapOuter };
         }
 
@@ -579,6 +481,8 @@ Item {
         } finally {
             isArranging = false;
         }
+    function retileScreen() {
+        performReconciliation();
     }
 
     function retileNow(targetScreenName) {
@@ -593,53 +497,7 @@ Item {
         if (reconcileTimer.running) {
             reconcileTimer.stop();
         }
-        if (runtimeMode === "reconciler") {
-            performReconciliation();
-        } else {
-            retileLegacyFallback();
-        }
-    }
-
-    function retileLegacyFallback() {
-        if (runtimeMode !== "legacy-fallback") return;
-        if (!config.enableTiling || isArranging) return;
-        isArranging = true;
-        try {
-            var screens = Workspace.screens || [Workspace.activeScreen];
-            for (var s = 0; s < screens.length; s++) {
-                var screen = screens[s];
-                if (!screen) continue;
-                var area = Workspace.clientArea(KWin.MaximizeArea, screen, Workspace.currentDesktop);
-                if (!area || area.width <= 0 || area.height <= 0) continue;
-                var layoutName = getActiveLayout(screen);
-                if (layoutName === "floating") continue;
-                var windows = getTileableWindows(screen);
-                if (windows.length === 0) continue;
-
-                var sName = getScreenName(screen);
-                var effectiveRatio = screenMasterRatios[sName] !== undefined ? screenMasterRatios[sName] : config.masterRatio;
-                var effectiveCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
-                var options = {
-                    gapInner: config.gapInner,
-                    gapOuter: config.gapOuter,
-                    masterRatio: effectiveRatio,
-                    masterCount: effectiveCount
-                };
-
-                var rects = LayoutsModule.Layouts.masterStack(area, windows.length, options);
-                for (var w = 0; w < windows.length && w < rects.length; w++) {
-                    var win = windows[w];
-                    var r = rects[w];
-                    if (win === currentDraggingWindow) continue;
-                    var wid = getWindowId(win);
-                    savedTiledGeometries[wid] = Qt.rect(r.x, r.y, r.width, r.height);
-                    if (win.maximizeMode !== 0) continue;
-                    win.frameGeometry = Qt.rect(r.x, r.y, r.width, r.height);
-                }
-            }
-        } finally {
-            isArranging = false;
-        }
+        performReconciliation();
     }
 
     // =========================================================================
@@ -776,7 +634,7 @@ Item {
                 title: "Bottom-Left Quarter",
                 badge: "◣ Bottom-Left",
                 desc: "25% Quadrant",
-                slotIndex: 0,
+                slotIndex: 3,
                 rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
                 targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
                 triggerX: area.x,
@@ -808,7 +666,7 @@ Item {
                 title: "Bottom-Right Quarter",
                 badge: "◢ Bottom-Right",
                 desc: "25% Quadrant",
-                slotIndex: 1,
+                slotIndex: 2,
                 rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
                 targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
                 triggerX: area.x + Math.floor(area.width * 0.78),
@@ -889,29 +747,8 @@ Item {
         // Live preview of prospective window layout
         function previewProspectiveLayout(draggedWin, targetZone) {
             if (!draggedWin || !targetZone || isArranging) return;
-            var scr = draggedWin.output || getScreenForPos(draggedWin.frameGeometry);
-            var tiled = getTileableWindows(scr);
-            if (tiled.length <= 1) return;
-
-            var area = activeScreenGeom;
-            var go = config.gapOuter;
-            var gi = config.gapInner;
-            var uw = area.width - (go * 2);
-            var uh = area.height - (go * 2);
-            var hw = Math.floor((uw - gi) / 2);
-
-            for (var i = 0; i < tiled.length; i++) {
-                var other = tiled[i];
-                if (other === draggedWin) continue;
-
-                if (targetZone.id === "left-half") {
-                    // dragged window will take left half; other window previews on right half
-                    other.frameGeometry = Qt.rect(area.x + go + hw + gi, area.y + go, uw - hw - gi, uh);
-                } else if (targetZone.id === "right-half") {
-                    // dragged window will take right half; other window previews on left half
-                    other.frameGeometry = Qt.rect(area.x + go, area.y + go, hw, uh);
-                }
-            }
+            // The visual snap overlay card clearly indicates the target placement.
+            // Windows are reconciled authoritatively by the coordinator on commit.
         }
 
         // =====================================================================
@@ -1467,44 +1304,23 @@ Item {
                             coordinator.setManualFloating(wid, false);
                         }
 
-                        // Update window order on this screen
                         var scr = getScreenForPos(target.targetRect);
                         var sName = getScreenName(scr);
-                        var currentWins = screenTiledWindows[sName] || [];
-                        var list = [];
-                        for (var k = 0; k < currentWins.length; k++) {
-                            if (currentWins[k] !== w) list.push(currentWins[k]);
-                        }
-                        if (target.slotIndex === 0) {
-                            list.unshift(w);
-                        } else {
-                            list.push(w);
-                        }
-                        screenTiledWindows[sName] = list;
-
-                        // Keep persistentScreenOrder in sync
-                        var pOrder = persistentScreenOrder[sName] || [];
-                        var newPOrder = [];
-                        for (var pi = 0; pi < pOrder.length; pi++) {
-                            if (pOrder[pi] !== wid) newPOrder.push(pOrder[pi]);
-                        }
-                        if (target.slotIndex === 0) {
-                            newPOrder.unshift(wid);
-                        } else {
-                            newPOrder.push(wid);
-                        }
-                        persistentScreenOrder[sName] = newPOrder;
-
-                        // Purge wid from any other screens' persistent order
-                        for (var oScr in persistentScreenOrder) {
-                            if (oScr !== sName) {
-                                var oList = persistentScreenOrder[oScr] || [];
-                                var oIdx = oList.indexOf(wid);
-                                if (oIdx !== -1) {
-                                    oList.splice(oIdx, 1);
-                                    persistentScreenOrder[oScr] = oList;
-                                }
-                            }
+                        var coord = getCoordinator();
+                        if (coord) {
+                            coord.handleEvent({
+                                type: "WindowSnapCommitted",
+                                windowId: wid,
+                                outputId: sName,
+                                targetRect: {
+                                    x: target.targetRect.x,
+                                    y: target.targetRect.y,
+                                    width: target.targetRect.width,
+                                    height: target.targetRect.height
+                                },
+                                slotIndex: target.slotIndex,
+                                desktopId: getCurrentDesktopKey()
+                            });
                         }
 
                         setSavedTiledGeometry(wid, target.targetRect);
@@ -1513,18 +1329,6 @@ Item {
                     }
                 } else {
                     // Dropped outside any snap zone
-                    var dropScr = getScreenForPos(w.frameGeometry);
-                    var dropSName = getScreenName(dropScr);
-                    for (var oScr2 in persistentScreenOrder) {
-                        if (oScr2 !== dropSName) {
-                            var oList2 = persistentScreenOrder[oScr2] || [];
-                            var oIdx2 = oList2.indexOf(wid);
-                            if (oIdx2 !== -1) {
-                                oList2.splice(oIdx2, 1);
-                                persistentScreenOrder[oScr2] = oList2;
-                            }
-                        }
-                    }
                     if (wasDraggingMaximized[wid]) {
                         floatingWindows[wid] = false;
                         if (coordinator) {
@@ -1722,17 +1526,6 @@ Item {
                 coord.ingestEvent({ type: "WindowRemoved", windowId: wid });
             }
 
-            if (runtimeMode === "legacy-fallback") {
-                // Remove from persistentScreenOrder across all screens
-                for (var sName in persistentScreenOrder) {
-                    var pList = persistentScreenOrder[sName] || [];
-                    var filtered = [];
-                    for (var i = 0; i < pList.length; i++) {
-                        if (pList[i] !== wid) filtered.push(pList[i]);
-                    }
-                    persistentScreenOrder[sName] = filtered;
-                }
-            }
 
             scheduleReconcile("WindowRemoved");
         }
@@ -1783,53 +1576,78 @@ Item {
     }
 
     function focusWindow(forward) {
-        var windows = getTileableWindows(Workspace.activeScreen);
-        if (windows.length <= 1) return;
+        var s = Workspace.activeScreen;
+        var sName = getScreenName(s);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (!coord) return;
 
-        var currentIdx = windows.indexOf(Workspace.activeWindow);
-        if (currentIdx === -1) {
-            Workspace.activeWindow = windows[0];
-            return;
+        var ws = coord.getOrCreateWorkspace(sName, deskKey);
+        var order = ws.orderedSlotWindowIds || [];
+        if (order.length <= 1) return;
+
+        var curWin = Workspace.activeWindow;
+        var curWid = curWin ? getWindowId(curWin) : null;
+        var currentIdx = curWid ? order.indexOf(curWid) : -1;
+        if (currentIdx === -1) currentIdx = 0;
+
+        var nextIdx = forward ? ((currentIdx + 1) % order.length) : ((currentIdx - 1 + order.length) % order.length);
+        var nextWid = order[nextIdx];
+
+        var allWins = Workspace.stackingOrder || [];
+        for (var i = 0; i < allWins.length; i++) {
+            if (getWindowId(allWins[i]) === nextWid) {
+                Workspace.activeWindow = allWins[i];
+                return;
+            }
         }
-
-        var nextIdx = forward ? ((currentIdx + 1) % windows.length) : ((currentIdx - 1 + windows.length) % windows.length);
-        Workspace.activeWindow = windows[nextIdx];
     }
 
     function swapWindow(forward) {
         var s = Workspace.activeScreen;
         var sName = getScreenName(s);
-        var windows = screenTiledWindows[sName] || getTileableWindows(s);
-        if (windows.length <= 1) return;
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (!coord) return;
 
-        var currentIdx = windows.indexOf(Workspace.activeWindow);
+        var ws = coord.getOrCreateWorkspace(sName, deskKey);
+        var order = ws.orderedSlotWindowIds || [];
+        if (order.length <= 1) return;
+
+        var curWin = Workspace.activeWindow;
+        if (!curWin) return;
+        var curWid = getWindowId(curWin);
+        var currentIdx = order.indexOf(curWid);
         if (currentIdx === -1) return;
 
-        var targetIdx = forward ? ((currentIdx + 1) % windows.length) : ((currentIdx - 1 + windows.length) % windows.length);
+        var targetIdx = forward ? ((currentIdx + 1) % order.length) : ((currentIdx - 1 + order.length) % order.length);
+        var targetWid = order[targetIdx];
 
-        var temp = windows[currentIdx];
-        windows[currentIdx] = windows[targetIdx];
-        windows[targetIdx] = temp;
-        screenTiledWindows[sName] = windows;
-
-        // Keep persistentScreenOrder in sync with the swap!
-        var newPOrder = [];
-        for (var i = 0; i < windows.length; i++) {
-            newPOrder.push(getWindowId(windows[i]));
-        }
-        persistentScreenOrder[sName] = newPOrder;
-
+        coord.swapWindowSlots(curWid, targetWid);
         retileNow();
     }
 
     function adjustMasterRatio(delta) {
         var scr = getCurrentTargetScreen();
         var sName = getScreenName(scr);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        var currentRatio = config.masterRatio;
+        if (coord) {
+            var ws = coord.getOrCreateWorkspace(sName, deskKey);
+            currentRatio = ws.primaryRegionRatio;
+        }
 
-        var currentRatio = screenMasterRatios[sName] !== undefined ? screenMasterRatios[sName] : config.masterRatio;
         var newRatio = Math.max(0.2, Math.min(0.8, currentRatio + delta));
         newRatio = Math.round(newRatio * 100) / 100;
-        screenMasterRatios[sName] = newRatio;
+        if (coord) {
+            coord.handleEvent({
+                type: "WorkspacePrimaryConfigChanged",
+                outputId: sName,
+                desktopId: deskKey,
+                primaryRegionRatio: newRatio
+            });
+        }
 
         osdCall.notify(sName + " Master Ratio: " + Math.round(newRatio * 100) + "%", "preferences-desktop-virtual");
         retileNow();
@@ -1838,10 +1656,23 @@ Item {
     function adjustMasterCount(delta) {
         var scr = getCurrentTargetScreen();
         var sName = getScreenName(scr);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        var currentCount = config.masterCount;
+        if (coord) {
+            var ws = coord.getOrCreateWorkspace(sName, deskKey);
+            currentCount = ws.primaryRegionCount;
+        }
 
-        var currentCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
         var newCount = Math.max(0, currentCount + delta);
-        screenMasterCounts[sName] = newCount;
+        if (coord) {
+            coord.handleEvent({
+                type: "WorkspacePrimaryConfigChanged",
+                outputId: sName,
+                desktopId: deskKey,
+                primaryRegionCount: newCount
+            });
+        }
 
         log("adjustMasterCount delta=" + delta + " target=" + sName + " newCount=" + newCount);
         masterHudDialog.popup(scr, newCount);
@@ -1851,7 +1682,13 @@ Item {
     function showMasterDialog(targetScreen) {
         var scr = targetScreen || getCurrentTargetScreen();
         var sName = getScreenName(scr);
-        var curCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        var curCount = config.masterCount;
+        if (coord) {
+            var ws = coord.getOrCreateWorkspace(sName, deskKey);
+            curCount = ws.primaryRegionCount;
+        }
         log("showMasterDialog target=" + sName + " curCount=" + curCount);
         masterHudDialog.popup(scr, curCount);
     }
@@ -1881,26 +1718,7 @@ Item {
         var nextIdx = forward !== false ? ((currentIdx + 1) % screens.length) : ((currentIdx - 1 + screens.length) % screens.length);
         var targetScreen = screens[nextIdx];
 
-        var fromName = getScreenName(currentScreen);
         var toName = getScreenName(targetScreen);
-        var wid = getWindowId(w);
-
-        if (runtimeMode === "legacy-fallback") {
-            // Remove from old screen's persistent order
-            var oldList = persistentScreenOrder[fromName] || [];
-            var cleanList = [];
-            for (var i = 0; i < oldList.length; i++) {
-                if (oldList[i] !== wid) cleanList.push(oldList[i]);
-            }
-            persistentScreenOrder[fromName] = cleanList;
-
-            // Add to new screen's persistent order
-            var newList = persistentScreenOrder[toName] || [];
-            if (newList.indexOf(wid) === -1) {
-                newList.push(wid);
-            }
-            persistentScreenOrder[toName] = newList;
-        }
 
         var toArea = Workspace.clientArea(KWin.MaximizeArea, targetScreen, Workspace.currentDesktop);
         var curW = Math.min(w.frameGeometry.width, toArea.width - (config.gapOuter * 2));
@@ -1930,11 +1748,7 @@ Item {
         idx = (idx + 1) % currentLayoutList.length;
         var nextLayout = currentLayoutList[idx];
 
-        var key = getLayoutKey(targetScreen);
-        screenLayouts[key] = nextLayout;
-
-        osdCall.notify(sName + " Layout: " + nextLayout.toUpperCase(), "preferences-desktop-virtual");
-        retileNow();
+        setActiveLayout(nextLayout, targetScreen);
     }
 
     function swapScreenLayouts() {
@@ -1944,20 +1758,45 @@ Item {
         var s0Name = getScreenName(screens[0]);
         var s1Name = getScreenName(screens[1]);
         var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (!coord) return;
 
-        var key0 = s0Name + ":" + deskKey;
-        var key1 = s1Name + ":" + deskKey;
+        var ws0 = coord.getOrCreateWorkspace(s0Name, deskKey);
+        var ws1 = coord.getOrCreateWorkspace(s1Name, deskKey);
 
-        var l0 = screenLayouts[key0] || desktopLayouts[deskKey] || config.defaultLayout;
-        var l1 = screenLayouts[key1] || desktopLayouts[deskKey] || config.defaultLayout;
+        var l0 = ws0.activeLayout;
+        var l1 = ws1.activeLayout;
+        var r0 = ws0.primaryRegionRatio;
+        var r1 = ws1.primaryRegionRatio;
+        var c0 = ws0.primaryRegionCount;
+        var c1 = ws1.primaryRegionCount;
 
-        screenLayouts[key0] = l1;
-        screenLayouts[key1] = l0;
-
-        var r0 = screenMasterRatios[s0Name] || config.masterRatio;
-        var r1 = screenMasterRatios[s1Name] || config.masterRatio;
-        screenMasterRatios[s0Name] = r1;
-        screenMasterRatios[s1Name] = r0;
+        coord.handleEvent({
+            type: "WorkspaceLayoutChanged",
+            outputId: s0Name,
+            desktopId: deskKey,
+            layout: l1
+        });
+        coord.handleEvent({
+            type: "WorkspaceLayoutChanged",
+            outputId: s1Name,
+            desktopId: deskKey,
+            layout: l0
+        });
+        coord.handleEvent({
+            type: "WorkspacePrimaryConfigChanged",
+            outputId: s0Name,
+            desktopId: deskKey,
+            primaryRegionRatio: r1,
+            primaryRegionCount: c1
+        });
+        coord.handleEvent({
+            type: "WorkspacePrimaryConfigChanged",
+            outputId: s1Name,
+            desktopId: deskKey,
+            primaryRegionRatio: r0,
+            primaryRegionCount: c0
+        });
 
         osdCall.notify("Swapped Layouts: " + s0Name + " ↔ " + s1Name, "preferences-desktop-display");
         retileNow();

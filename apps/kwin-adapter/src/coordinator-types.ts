@@ -85,6 +85,23 @@ export interface RetainedWindowState {
   outputAffinity?: string;
 }
 
+export type WorkspaceScopeKey = string; // "${outputId}:${desktopId}"
+
+export function getWorkspaceScopeKey(outputId: string, desktopId: string = "1"): WorkspaceScopeKey {
+  return `${outputId}:${desktopId}`;
+}
+
+export interface WorkspaceLayoutState {
+  readonly scopeKey: WorkspaceScopeKey;
+  readonly outputId: string;
+  readonly desktopId: string;
+  activeLayout: LayoutAlgorithm;
+  primaryRegionCount: number;
+  primaryRegionRatio: number;
+  gaps: GapConfig;
+  orderedSlotWindowIds: RuntimeWindowId[];
+}
+
 export interface RetainedScreenState {
   readonly outputId: string;
   name: string;
@@ -92,11 +109,15 @@ export interface RetainedScreenState {
   usableArea: Rect;
   activeDesktopId: string;
   activeActivityId?: string;
+  // Compat getters/fields for active desktop's layout state
   activeLayout: LayoutAlgorithm;
   masterCount: number;
   masterRatio: number;
+  primaryRegionCount: number;
+  primaryRegionRatio: number;
   gaps: GapConfig;
   orderedWindowIds: RuntimeWindowId[];
+  _orderedWindowIds?: RuntimeWindowId[];
   persistentOrder: RuntimeWindowId[];
   dirtyReasons: Set<string>;
   latestCommittedEpoch: number;
@@ -122,6 +143,8 @@ export interface CoordinatorConfig {
   defaultLayout: LayoutAlgorithm;
   gapInner: number;
   gapOuter: number;
+  primaryRegionRatio?: number;
+  primaryRegionCount?: number;
   masterRatio: number;
   masterCount: number;
   ignoreMinimized: boolean;
@@ -199,8 +222,11 @@ export type NormalizedEvent =
   | { type: "WindowMovedOutput"; windowId: RuntimeWindowId; fromOutputId: string; toOutputId: string }
   | { type: "WindowMovedDesktop"; windowId: RuntimeWindowId; fromDesktopId: string; toDesktopId: string }
   | { type: "ScreenTopologyChanged"; screens: NormalizedScreenInput[] }
-  | { type: "ScreenLayoutChanged"; outputId: string; layout: LayoutAlgorithm }
-  | { type: "ScreenMasterConfigChanged"; outputId: string; count?: number; ratio?: number }
-  | { type: "ScreenGapsChanged"; outputId: string; gaps: GapConfig }
+  | { type: "ScreenLayoutChanged"; outputId: string; layout: LayoutAlgorithm; desktopId?: string }
+  | { type: "ScreenMasterConfigChanged"; outputId: string; count?: number; ratio?: number; desktopId?: string }
+  | { type: "ScreenGapsChanged"; outputId: string; gaps: GapConfig; desktopId?: string }
+  | { type: "WorkspaceLayoutChanged"; outputId: string; desktopId: string; layout: LayoutAlgorithm }
+  | { type: "WorkspacePrimaryConfigChanged"; outputId: string; desktopId: string; count?: number; ratio?: number }
+  | { type: "WorkspaceGapsChanged"; outputId: string; desktopId: string; gaps: GapConfig }
   | { type: "GlobalConfigChanged"; config: Partial<CoordinatorConfig> }
-  | { type: "WindowSnapCommitted"; windowId: RuntimeWindowId; outputId: string; targetRect: Rect; slotIndex?: number; timestamp?: number };
+  | { type: "WindowSnapCommitted"; windowId: RuntimeWindowId; outputId: string; targetRect: Rect; slotIndex?: number; timestamp?: number; desktopId?: string };
