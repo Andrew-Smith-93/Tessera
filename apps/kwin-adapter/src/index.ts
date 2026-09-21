@@ -20,6 +20,7 @@ export {
 export * from "./coordinator-types.js";
 export * from "./screen-affinity.js";
 export * from "./snap-zones.js";
+export * from "./trace-recorder.js";
 
 export function initTessera(): TilingEngine {
   const readStr = (key: string, def: string) => String(KWin.readConfig(key, def));

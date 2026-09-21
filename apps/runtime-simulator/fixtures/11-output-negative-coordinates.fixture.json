@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "11-output-negative-coordinates",
+  "description": "Secondary screen positioned to the left at negative coordinates (-1920, 0)",
+  "initialConfig": {
+    "enableTiling": true,
+    "defaultLayout": "master-stack"
+  },
+  "initialScreens": [
+    {
+      "outputId": "DP-2",
+      "name": "DP-2",
+      "geometry": {
+        "x": -1920,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": -1920,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "outputId": "HDMI-A-1",
+      "name": "HDMI-A-1",
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-left",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-left",
+        "outputId": "DP-2",
+        "frameGeometry": {
+          "x": -1800,
+          "y": 100,
+          "width": 800,
+          "height": 600
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-right",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-right",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "flush"
+    }
+  ]
+}

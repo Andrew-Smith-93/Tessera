@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "20-expired-geometry-echo",
+  "description": "Delayed echo exceeding logical expiry is not suppressed and treated as external event",
+  "echoMode": "delayed",
+  "echoDelayTicks": 100,
+  "initialConfig": {
+    "enableTiling": true,
+    "defaultLayout": "master-stack",
+    "echoExpiryMs": 50
+  },
+  "initialScreens": [
+    {
+      "outputId": "HDMI-A-1",
+      "name": "HDMI-A-1",
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "events": [
+    {
+      "tick": 1,
+      "type": "window-discovered",
+      "window": {
+        "id": "win-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-1",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "tick": 2,
+      "type": "flush"
+    },
+    {
+      "tick": 150,
+      "type": "advance-clock",
+      "deltaTicks": 148
+    },
+    {
+      "tick": 151,
+      "type": "flush"
+    }
+  ]
+}

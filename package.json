@@ -17,11 +17,15 @@
   ],
   "scripts": {
     "build": "tsc --build && npm run bundle:kwin",
+    "clean": "tsc --build --clean && rm -rf dist apps/*/dist packages/*/dist *.tsbuildinfo */*/*.tsbuildinfo",
     "bundle:kwin": "node apps/kwin-adapter/esbuild.config.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --build",
-    "verify:artifacts": "git diff --exit-code HEAD -- contents/code/layouts.js contents/code/rules.js contents/code/reconciler.js"
+    "verify:artifacts": "git diff --exit-code HEAD -- contents/code/layouts.js contents/code/rules.js contents/code/reconciler.js",
+    "sim:run": "node apps/runtime-simulator/bin/sim-cli.mjs",
+    "sim:verify": "node apps/runtime-simulator/bin/sim-cli.mjs --verify-goldens",
+    "sim:update-goldens": "node apps/runtime-simulator/bin/sim-cli.mjs --update-goldens"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

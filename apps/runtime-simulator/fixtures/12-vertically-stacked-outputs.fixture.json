@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "12-vertically-stacked-outputs",
+  "description": "Two outputs vertically stacked: primary at (0,0), secondary at (0, 1080)",
+  "initialConfig": {
+    "enableTiling": true,
+    "defaultLayout": "master-stack"
+  },
+  "initialScreens": [
+    {
+      "outputId": "HDMI-A-1",
+      "name": "HDMI-A-1",
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "outputId": "HDMI-A-2",
+      "name": "HDMI-A-2",
+      "geometry": {
+        "x": 0,
+        "y": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 1080,
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "top-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window top-1",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "bottom-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window bottom-1",
+        "outputId": "HDMI-A-2",
+        "frameGeometry": {
+          "x": 100,
+          "y": 1180,
+          "width": 800,
+          "height": 600
+        }
+      }
+    },
+    {
+      "type": "flush"
+    }
+  ]
+}

@@ -340,6 +340,11 @@ var ReconcilerModule = (() => {
   }
 
   // apps/kwin-adapter/src/coordinator-types.ts
+  var SystemClock = class {
+    now() {
+      return Date.now();
+    }
+  };
   var DEFAULT_GEOMETRY_TOLERANCE_PX = 1;
   var DEFAULT_ECHO_EXPIRY_MS = 500;
   function rectEqualsWithTolerance(a, b, tolerance = DEFAULT_GEOMETRY_TOLERANCE_PX) {
@@ -885,6 +890,99 @@ var ReconcilerModule = (() => {
     return candidates[0] || screens[0];
   }
 
+  // apps/kwin-adapter/src/trace-recorder.ts
+  var TraceRecorder = class {
+    enabled;
+    maxCapacity;
+    recordTitles;
+    redactAppIds;
+    redactResourceClass;
+    sequence = 0;
+    buffer = [];
+    constructor(options) {
+      this.enabled = Boolean(options?.enabled);
+      this.maxCapacity = Math.max(1, options?.maxCapacity ?? 1e3);
+      this.recordTitles = Boolean(options?.recordTitles);
+      this.redactAppIds = Boolean(options?.redactAppIds);
+      this.redactResourceClass = Boolean(options?.redactResourceClass);
+    }
+    isEnabled() {
+      return this.enabled;
+    }
+    setEnabled(enabled) {
+      this.enabled = enabled;
+    }
+    clear() {
+      this.buffer.length = 0;
+      this.sequence = 0;
+    }
+    getRecordedEvents() {
+      return [...this.buffer];
+    }
+    getEntries() {
+      return [...this.buffer];
+    }
+    getCapacity() {
+      return this.maxCapacity;
+    }
+    setCapacity(capacity) {
+      this.maxCapacity = Math.max(1, capacity);
+      while (this.buffer.length > this.maxCapacity) {
+        this.buffer.shift();
+      }
+    }
+    sanitizeWindowInput(win) {
+      const copy = { ...win };
+      if (!this.recordTitles) {
+        delete copy.title;
+      }
+      if (this.redactAppIds && copy.appId) {
+        copy.appId = "[REDACTED]";
+      }
+      if (this.redactResourceClass && copy.resourceClass) {
+        copy.resourceClass = "[REDACTED]";
+      }
+      return copy;
+    }
+    sanitizeEvent(event) {
+      if (event.type === "WindowDiscovered") {
+        return {
+          type: "WindowDiscovered",
+          window: this.sanitizeWindowInput(event.window)
+        };
+      }
+      if (event.type === "WindowStateChanged") {
+        const updates = { ...event.updates };
+        if (!this.recordTitles) {
+          delete updates.title;
+        }
+        if (this.redactAppIds && updates.appId) {
+          updates.appId = "[REDACTED]";
+        }
+        if (this.redactResourceClass && updates.resourceClass) {
+          updates.resourceClass = "[REDACTED]";
+        }
+        return {
+          type: "WindowStateChanged",
+          windowId: event.windowId,
+          updates
+        };
+      }
+      return event;
+    }
+    recordEvent(event, timestamp) {
+      if (!this.enabled) return;
+      if (this.buffer.length >= this.maxCapacity) {
+        this.buffer.shift();
+      }
+      this.buffer.push({
+        sequence: ++this.sequence,
+        timestamp,
+        event: this.sanitizeEvent(event)
+      });
+    }
+  };
+
   // apps/kwin-adapter/src/runtime-coordinator.ts
   var RuntimeCoordinator = class {
     windows = /* @__PURE__ */ new Map();
@@ -892,6 +990,8 @@ var ReconcilerModule = (() => {
     inFlightEchoes = /* @__PURE__ */ new Map();
     dirtyScreenIds = /* @__PURE__ */ new Set();
     pendingReasons = /* @__PURE__ */ new Set();
+    clock;
+    traceRecorder;
     config;
     currentEpoch = 0;
     // Diagnostics counters
@@ -903,7 +1003,9 @@ var ReconcilerModule = (() => {
     suppressedGeometryEchoes = 0;
     lastTransactionReasons = [];
     lastAffectedScreenIds = [];
-    constructor(initialConfig) {
+    constructor(initialConfig, clock = new SystemClock(), traceRecorder = new TraceRecorder()) {
+      this.clock = clock;
+      this.traceRecorder = traceRecorder;
       this.config = {
         enableTiling: initialConfig?.enableTiling ?? true,
         defaultLayout: initialConfig?.defaultLayout ?? "master-stack",
@@ -1027,6 +1129,7 @@ var ReconcilerModule = (() => {
      */
     ingestEvent(event) {
       this.totalNormalizedEvents++;
+      this.traceRecorder.recordEvent(event, this.clock.now());
       switch (event.type) {
         case "WindowDiscovered": {
           const winInput = event.window;
@@ -1286,6 +1389,15 @@ var ReconcilerModule = (() => {
           }
           return { dirty: false, affectedScreens: [], isEcho: false };
         }
+        case "ScreenGapsChanged": {
+          const screen = this.screens.get(event.outputId);
+          if (screen) {
+            screen.gaps = { ...event.gaps };
+            this.markScreenDirty(event.outputId, "ScreenGapsChanged");
+            return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
+          }
+          return { dirty: false, affectedScreens: [], isEcho: false };
+        }
         case "GlobalConfigChanged": {
           this.updateConfig(event.config);
           return { dirty: true, affectedScreens: Array.from(this.screens.keys()), isEcho: false };
@@ -1295,7 +1407,7 @@ var ReconcilerModule = (() => {
     /**
      * Geometry echo detection and suppression.
      */
-    checkAndHandleEcho(windowId, newGeometry, timestamp = Date.now()) {
+    checkAndHandleEcho(windowId, newGeometry, timestamp = this.clock.now()) {
       const entry = this.inFlightEchoes.get(windowId);
       if (!entry) return { isEcho: false };
       const elapsed = timestamp - entry.timestamp;
@@ -1324,7 +1436,7 @@ var ReconcilerModule = (() => {
       this.inFlightEchoes.set(windowId, {
         target: { ...target },
         epoch,
-        timestamp: Date.now()
+        timestamp: this.clock.now()
       });
     }
     /**
@@ -1381,7 +1493,7 @@ var ReconcilerModule = (() => {
       if (screensToReconcile.length === 0) {
         return null;
       }
-      const startTime = Date.now();
+      const startTime = this.clock.now();
       const epoch = ++this.currentEpoch;
       const reasons = Array.from(this.pendingReasons);
       const affectedScreenIds = screensToReconcile.map((s) => s.outputId);
@@ -1470,7 +1582,7 @@ var ReconcilerModule = (() => {
       this.totalReconciliationTransactions++;
       this.lastTransactionReasons = reasons;
       this.lastAffectedScreenIds = affectedScreenIds;
-      const durationMs = Date.now() - startTime;
+      const durationMs = this.clock.now() - startTime;
       return {
         epoch,
         reasons,
@@ -1539,6 +1651,43 @@ var ReconcilerModule = (() => {
         screens
       });
       return this.reconcile();
+    }
+    getClock() {
+      return this.clock;
+    }
+    getTraceRecorder() {
+      return this.traceRecorder;
+    }
+    isManualFloating(windowId) {
+      return Boolean(this.windows.get(windowId)?.isManualFloating);
+    }
+    setManualFloating(windowId, val) {
+      const win = this.windows.get(windowId);
+      if (win) {
+        win.isManualFloating = val;
+      }
+      return this.ingestEvent({
+        type: "WindowStateChanged",
+        windowId,
+        updates: { isManualFloating: val }
+      });
+    }
+    swapWindowOrder(outputId, forward) {
+      const screen = this.screens.get(outputId);
+      if (!screen || screen.persistentOrder.length < 2) {
+        return { dirty: false, affectedScreens: [], isEcho: false };
+      }
+      const order = [...screen.persistentOrder];
+      if (forward) {
+        const first = order.shift();
+        order.push(first);
+      } else {
+        const last = order.pop();
+        order.unshift(last);
+      }
+      screen.persistentOrder = order;
+      this.markScreenDirty(outputId, "WindowOrderSwapped");
+      return { dirty: true, affectedScreens: [outputId], isEcho: false };
     }
     getDiagnostics() {
       return {

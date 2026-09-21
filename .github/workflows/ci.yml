@@ -39,6 +39,13 @@ jobs:
       - name: Verify Generated Artifacts Up-To-Date
         run: npm run verify:artifacts
 
+      - name: Verify Runtime Simulator Goldens & Fixed Stress Seeds
+        run: |
+          npm run sim:verify
+          npm run sim:run -- --seed 42 --quiet
+          npm run sim:run -- --seed 12345 --quiet
+          npm run sim:run -- --seed 99999 --quiet
+
       - name: Validate Python Syntax & Bytecode Compilation
         run: |
           python3 -m py_compile tessera-control/*.py tests/*.py

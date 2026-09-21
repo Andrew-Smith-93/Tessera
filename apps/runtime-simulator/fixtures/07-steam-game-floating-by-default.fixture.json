@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "07-steam-game-floating-by-default",
+  "description": "Steam game identified via steam_app_ class floats by default",
+  "initialConfig": {
+    "enableTiling": true,
+    "gameWindowPolicy": "floating"
+  },
+  "initialScreens": [
+    {
+      "outputId": "HDMI-A-1",
+      "name": "HDMI-A-1",
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "game-1",
+        "resourceClass": "steam_app_1245620",
+        "resourceName": "kitty",
+        "title": "Elden Ring",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "term-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window term-1",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "flush"
+    }
+  ]
+}

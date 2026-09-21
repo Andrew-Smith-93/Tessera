@@ -7,6 +7,37 @@ import type {
 } from "@tessera/protocol";
 import type { GameWindowPolicy, CustomRule } from "@tessera/rules-engine";
 
+export interface Clock {
+  now(): number;
+}
+
+export class SystemClock implements Clock {
+  public now(): number {
+    return Date.now();
+  }
+}
+
+export class LogicalClock implements Clock {
+  private currentTick: number;
+
+  constructor(initialTick: number = 0) {
+    this.currentTick = initialTick;
+  }
+
+  public now(): number {
+    return this.currentTick;
+  }
+
+  public advance(delta: number = 1): number {
+    this.currentTick += delta;
+    return this.currentTick;
+  }
+
+  public set(tick: number): void {
+    this.currentTick = tick;
+  }
+}
+
 export const DEFAULT_GEOMETRY_TOLERANCE_PX = 1;
 export const DEFAULT_ECHO_EXPIRY_MS = 500;
 
@@ -170,4 +201,5 @@ export type NormalizedEvent =
   | { type: "ScreenTopologyChanged"; screens: NormalizedScreenInput[] }
   | { type: "ScreenLayoutChanged"; outputId: string; layout: LayoutAlgorithm }
   | { type: "ScreenMasterConfigChanged"; outputId: string; count?: number; ratio?: number }
+  | { type: "ScreenGapsChanged"; outputId: string; gaps: GapConfig }
   | { type: "GlobalConfigChanged"; config: Partial<CoordinatorConfig> };

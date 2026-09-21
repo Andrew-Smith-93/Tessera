@@ -1,0 +1,237 @@
+{
+  "digest": "4cec13dfbf0b9d55414b3a9123eedf0984e1c91458a633d966f4b3718276af69",
+  "fixtureName": "13-differently-sized-outputs",
+  "finalTick": 0,
+  "diagnostics": {
+    "totalEvents": 4,
+    "totalTransactions": 1,
+    "totalLayoutComputations": 2,
+    "totalGeometryWrites": 3,
+    "skippedWrites": 0,
+    "suppressedEchoes": 3,
+    "previewOnlyOperations": 0,
+    "unaffectedScreensRecomputed": 0
+  },
+  "canonicalState": {
+    "diagnostics": {
+      "previewOnlyOperations": 0,
+      "skippedWrites": 0,
+      "suppressedEchoes": 3,
+      "totalEvents": 4,
+      "totalGeometryWrites": 3,
+      "totalLayoutComputations": 2,
+      "totalTransactions": 1,
+      "unaffectedScreensRecomputed": 0
+    },
+    "finalTick": 0,
+    "fixtureName": "13-differently-sized-outputs",
+    "invariants": {
+      "passed": true,
+      "violations": []
+    },
+    "retainedScreens": [
+      {
+        "activeLayout": "master-stack",
+        "gaps": {
+          "inner": 8,
+          "outer": 10
+        },
+        "geometry": {
+          "height": 1440,
+          "width": 2560,
+          "x": 3840,
+          "y": 0
+        },
+        "masterCount": 1,
+        "masterRatio": 0.5,
+        "name": "1440p-Screen",
+        "orderedWindowIds": [
+          "win-1440-1"
+        ],
+        "outputId": "1440p-Screen",
+        "persistentOrder": [
+          "win-1440-1"
+        ],
+        "usableArea": {
+          "height": 1440,
+          "width": 2560,
+          "x": 3840,
+          "y": 0
+        }
+      },
+      {
+        "activeLayout": "master-stack",
+        "gaps": {
+          "inner": 8,
+          "outer": 10
+        },
+        "geometry": {
+          "height": 2160,
+          "width": 3840,
+          "x": 0,
+          "y": 0
+        },
+        "masterCount": 1,
+        "masterRatio": 0.5,
+        "name": "4K-Screen",
+        "orderedWindowIds": [
+          "win-4k-1",
+          "win-4k-2"
+        ],
+        "outputId": "4K-Screen",
+        "persistentOrder": [
+          "win-4k-1",
+          "win-4k-2"
+        ],
+        "usableArea": {
+          "height": 2160,
+          "width": 3840,
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "retainedWindows": [
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 1420,
+          "width": 2540,
+          "x": 3850,
+          "y": 10
+        },
+        "frameGeometry": {
+          "height": 1420,
+          "width": 2540,
+          "x": 3850,
+          "y": 10
+        },
+        "fullScreen": false,
+        "id": "win-1440-1",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "1440p-Screen",
+        "outputId": "1440p-Screen",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      },
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 2140,
+          "width": 1906,
+          "x": 10,
+          "y": 10
+        },
+        "frameGeometry": {
+          "height": 2140,
+          "width": 1906,
+          "x": 10,
+          "y": 10
+        },
+        "fullScreen": false,
+        "id": "win-4k-1",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "4K-Screen",
+        "outputId": "4K-Screen",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      },
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 2140,
+          "width": 1906,
+          "x": 1924,
+          "y": 10
+        },
+        "frameGeometry": {
+          "height": 2140,
+          "width": 1906,
+          "x": 1924,
+          "y": 10
+        },
+        "fullScreen": false,
+        "id": "win-4k-2",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "4K-Screen",
+        "outputId": "4K-Screen",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      }
+    ],
+    "schemaVersion": "1.0.0",
+    "transactions": [
+      {
+        "affectedScreens": [
+          "4K-Screen",
+          "1440p-Screen"
+        ],
+        "epoch": 1,
+        "operations": [
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 2140,
+              "width": 1906,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-4k-1"
+          },
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 2140,
+              "width": 1906,
+              "x": 1924,
+              "y": 10
+            },
+            "windowId": "win-4k-2"
+          },
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 1420,
+              "width": 2540,
+              "x": 3850,
+              "y": 10
+            },
+            "windowId": "win-1440-1"
+          }
+        ],
+        "reasons": [
+          "WindowDiscovered"
+        ],
+        "skippedWrites": 0,
+        "tick": 0
+      }
+    ]
+  }
+}

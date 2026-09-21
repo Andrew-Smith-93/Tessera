@@ -1,0 +1,1051 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "18-hundred-coalesced-geometry-events",
+  "description": "A burst of 100 geometry updates in the same turn coalesce into one transaction",
+  "initialConfig": {
+    "enableTiling": true,
+    "defaultLayout": "master-stack"
+  },
+  "initialScreens": [
+    {
+      "outputId": "HDMI-A-1",
+      "name": "HDMI-A-1",
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-1",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "flush"
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 100,
+        "y": 100,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 101,
+        "y": 101,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 102,
+        "y": 102,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 103,
+        "y": 103,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 104,
+        "y": 104,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 105,
+        "y": 105,
+        "width": 600,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 106,
+        "y": 106,
+        "width": 601,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 107,
+        "y": 107,
+        "width": 602,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 108,
+        "y": 108,
+        "width": 603,
+        "height": 400
+      }
+    },
+    {
+      "type": "geometry-change",
+      "windowId": "win-1",
+      "geometry": {
+        "x": 109,
+        "y": 109,
+        "width": 604,
+        "height": 400
+      }
+    },
+    {
+      "type": "flush"
+    }
+  ]
+}

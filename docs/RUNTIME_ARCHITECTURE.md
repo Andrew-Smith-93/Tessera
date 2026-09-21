@@ -205,7 +205,57 @@ Absence of these files is enforced by automated packaging assertions in `.github
 
 ---
 
-## 8. Intended Migration Boundary
+## 8. Deterministic Runtime Simulator (Phase 3)
+
+- **Authoritative Package**: [`apps/runtime-simulator`](../apps/runtime-simulator)
+- **Role**: Headless, offline test runner and trace replay harness that directly consumes the production TypeScript runtime modules:
+  - [`RuntimeCoordinator`](../apps/kwin-adapter/src/runtime-coordinator.ts)
+  - [`@tessera/layout-core`](../packages/layout-core)
+  - [`@tessera/rules-engine`](../packages/rules-engine)
+  - Screen affinity and snap zone geometry solvers.
+- **Execution Architecture**:
+  ```
+  ┌────────────────────────────────────────────────────────┐
+  │                 apps/runtime-simulator                 │
+  │  ┌────────────────────────┐  ┌──────────────────────┐  │
+  │  │ Trace Fixtures (1.0.0) │  │ Seeded PRNG Stress   │  │
+  │  └───────────┬────────────┘  └──────────┬───────────┘  │
+  │              │                          │              │
+  │              ▼                          ▼              │
+  │  ┌──────────────────────────────────────────────────┐  │
+  │  │ RuntimeSimulator Engine & Injectable LogicalClock│  │
+  │  └───────────────────────┬──────────────────────────┘  │
+  │                          │                             │
+  │                          ▼                             │
+  │  ┌──────────────────────────────────────────────────┐  │
+  │  │ Production RuntimeCoordinator (apps/kwin-adapter)│  │
+  │  │   ├── @tessera/layout-core                       │  │
+  │  │   └── @tessera/rules-engine                      │  │
+  │  └───────────────────────┬──────────────────────────┘  │
+  │                          │                             │
+  │                          ▼                             │
+  │  ┌──────────────────────────────────────────────────┐  │
+  │  │ SimulatedKWinSession (Echo Simulation Boundary)  │  │
+  │  │   (immediate, delayed, missing, mismatched, dup) │  │
+  │  └───────────────────────┬──────────────────────────┘  │
+  │                          │                             │
+  │                          ▼                             │
+  │  ┌──────────────────────────────────────────────────┐  │
+  │  │ Canonical JSON Serialization & Invariant Checker │  │
+  │  │   (13 Structural Rules, SHA-256 Digest)          │  │
+  │  └──────────────────────────────────────────────────┘  │
+  └────────────────────────────────────────────────────────┘
+  ```
+- **Guarantees**:
+  - Zero wall-clock dependence via `LogicalClock`.
+  - Turn-based event coalescing and explicit flush boundaries.
+  - Byte-level determinism with deep key-sorted canonical JSON.
+  - Verification enforced in CI via `npm run sim:verify`.
+  - Strictly excluded from release `.kwinscript` bundles.
+
+---
+
+## 9. Intended Migration Boundary
 
 Future convergence will separate concerns across strict architectural layers:
 
@@ -233,7 +283,7 @@ Future convergence will separate concerns across strict architectural layers:
 
 ---
 
-## 9. Critical Features to Preserve During Migration
+## 10. Critical Features to Preserve During Migration
 
 Any subsequent convergence or refactoring MUST preserve the following runtime invariants:
 

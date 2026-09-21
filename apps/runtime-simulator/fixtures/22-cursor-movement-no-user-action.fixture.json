@@ -1,0 +1,417 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "22-cursor-movement-no-user-action",
+  "description": "Continuous cursor updates without user drop action produce zero layout transactions",
+  "initialConfig": {
+    "enableTiling": true,
+    "defaultLayout": "master-stack"
+  },
+  "initialScreens": [
+    {
+      "outputId": "HDMI-A-1",
+      "name": "HDMI-A-1",
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-1",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-2",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-2",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "flush"
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 500,
+        "y": 400
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 505,
+        "y": 402
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 510,
+        "y": 404
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 515,
+        "y": 406
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 520,
+        "y": 408
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 525,
+        "y": 410
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 530,
+        "y": 412
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 535,
+        "y": 414
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 540,
+        "y": 416
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 545,
+        "y": 418
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 550,
+        "y": 420
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 555,
+        "y": 422
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 560,
+        "y": 424
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 565,
+        "y": 426
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 570,
+        "y": 428
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 575,
+        "y": 430
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 580,
+        "y": 432
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 585,
+        "y": 434
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 590,
+        "y": 436
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 595,
+        "y": 438
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 600,
+        "y": 440
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 605,
+        "y": 442
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 610,
+        "y": 444
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 615,
+        "y": 446
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 620,
+        "y": 448
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 625,
+        "y": 450
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 630,
+        "y": 452
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 635,
+        "y": 454
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 640,
+        "y": 456
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 645,
+        "y": 458
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 650,
+        "y": 460
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 655,
+        "y": 462
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 660,
+        "y": 464
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 665,
+        "y": 466
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 670,
+        "y": 468
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 675,
+        "y": 470
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 680,
+        "y": 472
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 685,
+        "y": 474
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 690,
+        "y": 476
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 695,
+        "y": 478
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 700,
+        "y": 480
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 705,
+        "y": 482
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 710,
+        "y": 484
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 715,
+        "y": 486
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 720,
+        "y": 488
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 725,
+        "y": 490
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 730,
+        "y": 492
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 735,
+        "y": 494
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 740,
+        "y": 496
+      }
+    },
+    {
+      "type": "cursor-position-update",
+      "cursor": {
+        "x": 745,
+        "y": 498
+      }
+    },
+    {
+      "type": "flush"
+    }
+  ]
+}

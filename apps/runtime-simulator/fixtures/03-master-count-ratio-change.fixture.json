@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "03-master-count-ratio-change",
+  "description": "Dynamic master-count and master-ratio adjustments",
+  "initialConfig": {
+    "enableTiling": true,
+    "defaultLayout": "master-stack",
+    "masterRatio": 0.5,
+    "masterCount": 1
+  },
+  "initialScreens": [
+    {
+      "outputId": "HDMI-A-1",
+      "name": "HDMI-A-1",
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-1",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-2",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-2",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-3",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-3",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-4",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-4",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "flush"
+    },
+    {
+      "type": "master-ratio-change",
+      "outputId": "HDMI-A-1",
+      "ratio": 0.65
+    },
+    {
+      "type": "flush"
+    },
+    {
+      "type": "master-count-change",
+      "outputId": "HDMI-A-1",
+      "count": 2
+    },
+    {
+      "type": "flush"
+    }
+  ]
+}

@@ -23,12 +23,15 @@ import {
   type NormalizedWindowInput,
   type NormalizedScreenInput,
   type NormalizedEvent,
+  type Clock,
+  SystemClock,
   DEFAULT_GEOMETRY_TOLERANCE_PX,
   DEFAULT_ECHO_EXPIRY_MS,
   rectEqualsWithTolerance
 } from "./coordinator-types.js";
 import { getOrCreateRuleEngine } from "./qml-rules-compat.js";
 import { resolveScreenAffinity } from "./screen-affinity.js";
+import { TraceRecorder } from "./trace-recorder.js";
 
 interface InFlightEcho {
   readonly target: Rect;
@@ -42,6 +45,8 @@ export class RuntimeCoordinator {
   private readonly inFlightEchoes = new Map<RuntimeWindowId, InFlightEcho>();
   private readonly dirtyScreenIds = new Set<string>();
   private readonly pendingReasons = new Set<string>();
+  private readonly clock: Clock;
+  private readonly traceRecorder: TraceRecorder;
 
   private config: CoordinatorConfig;
   private currentEpoch = 0;
@@ -56,7 +61,13 @@ export class RuntimeCoordinator {
   private lastTransactionReasons: string[] = [];
   private lastAffectedScreenIds: string[] = [];
 
-  constructor(initialConfig?: Partial<CoordinatorConfig>) {
+  constructor(
+    initialConfig?: Partial<CoordinatorConfig>,
+    clock: Clock = new SystemClock(),
+    traceRecorder: TraceRecorder = new TraceRecorder()
+  ) {
+    this.clock = clock;
+    this.traceRecorder = traceRecorder;
     this.config = {
       enableTiling: initialConfig?.enableTiling ?? true,
       defaultLayout: initialConfig?.defaultLayout ?? "master-stack",
@@ -193,6 +204,7 @@ export class RuntimeCoordinator {
    */
   public ingestEvent(event: NormalizedEvent): { dirty: boolean; affectedScreens: string[]; isEcho: boolean } {
     this.totalNormalizedEvents++;
+    this.traceRecorder.recordEvent(event, this.clock.now());
 
     switch (event.type) {
       case "WindowDiscovered": {
@@ -497,6 +509,16 @@ export class RuntimeCoordinator {
         return { dirty: false, affectedScreens: [], isEcho: false };
       }
 
+      case "ScreenGapsChanged": {
+        const screen = this.screens.get(event.outputId);
+        if (screen) {
+          screen.gaps = { ...event.gaps };
+          this.markScreenDirty(event.outputId, "ScreenGapsChanged");
+          return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
+        }
+        return { dirty: false, affectedScreens: [], isEcho: false };
+      }
+
       case "GlobalConfigChanged": {
         this.updateConfig(event.config);
         return { dirty: true, affectedScreens: Array.from(this.screens.keys()), isEcho: false };
@@ -510,7 +532,7 @@ export class RuntimeCoordinator {
   public checkAndHandleEcho(
     windowId: RuntimeWindowId,
     newGeometry: Rect,
-    timestamp: number = Date.now()
+    timestamp: number = this.clock.now()
   ): { isEcho: boolean } {
     const entry = this.inFlightEchoes.get(windowId);
     if (!entry) return { isEcho: false };
@@ -546,7 +568,7 @@ export class RuntimeCoordinator {
     this.inFlightEchoes.set(windowId, {
       target: { ...target },
       epoch,
-      timestamp: Date.now()
+      timestamp: this.clock.now()
     });
   }
 
@@ -616,7 +638,7 @@ export class RuntimeCoordinator {
       return null;
     }
 
-    const startTime = Date.now();
+    const startTime = this.clock.now();
     const epoch = ++this.currentEpoch;
     const reasons = Array.from(this.pendingReasons);
     const affectedScreenIds = screensToReconcile.map(s => s.outputId);
@@ -720,7 +742,7 @@ export class RuntimeCoordinator {
     this.lastTransactionReasons = reasons;
     this.lastAffectedScreenIds = affectedScreenIds;
 
-    const durationMs = Date.now() - startTime;
+    const durationMs = this.clock.now() - startTime;
 
     return {
       epoch,
@@ -804,6 +826,54 @@ export class RuntimeCoordinator {
       screens
     });
     return this.reconcile();
+  }
+
+  public getClock(): Clock {
+    return this.clock;
+  }
+
+  public getTraceRecorder(): TraceRecorder {
+    return this.traceRecorder;
+  }
+
+  public isManualFloating(windowId: RuntimeWindowId): boolean {
+    return Boolean(this.windows.get(windowId)?.isManualFloating);
+  }
+
+  public setManualFloating(
+    windowId: RuntimeWindowId,
+    val: boolean
+  ): { dirty: boolean; affectedScreens: string[]; isEcho: boolean } {
+    const win = this.windows.get(windowId);
+    if (win) {
+      win.isManualFloating = val;
+    }
+    return this.ingestEvent({
+      type: "WindowStateChanged",
+      windowId,
+      updates: { isManualFloating: val }
+    });
+  }
+
+  public swapWindowOrder(
+    outputId: string,
+    forward: boolean
+  ): { dirty: boolean; affectedScreens: string[]; isEcho: boolean } {
+    const screen = this.screens.get(outputId);
+    if (!screen || screen.persistentOrder.length < 2) {
+      return { dirty: false, affectedScreens: [], isEcho: false };
+    }
+    const order = [...screen.persistentOrder];
+    if (forward) {
+      const first = order.shift()!;
+      order.push(first);
+    } else {
+      const last = order.pop()!;
+      order.unshift(last);
+    }
+    screen.persistentOrder = order;
+    this.markScreenDirty(outputId, "WindowOrderSwapped");
+    return { dirty: true, affectedScreens: [outputId], isEcho: false };
   }
 
   public getDiagnostics(): CoordinatorDiagnostics {
