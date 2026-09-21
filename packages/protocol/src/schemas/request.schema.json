@@ -36,6 +36,8 @@
       "type": "string",
       "enum": [
         "system.hello",
+        "system.subscribe",
+        "system.unsubscribe",
         "state.getSnapshot",
         "state.getDiagnostics",
         "state.getCapabilities",

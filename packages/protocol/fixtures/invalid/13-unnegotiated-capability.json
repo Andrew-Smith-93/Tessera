@@ -1,11 +1,16 @@
 {
-  "protocol": "tessera.ipc",
-  "majorVersion": 1,
-  "minorVersion": 0,
-  "kind": "request",
-  "id": "bad-13",
-  "method": "config.applyPatch",
-  "params": {
-    "patch": { "gapInner": 10 }
+  "expectedErrorCode": "CAPABILITY_NOT_NEGOTIATED",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-13",
+    "method": "config.applyPatch",
+    "params": {
+      "patch": {
+        "gapInner": 10
+      }
+    }
   }
 }

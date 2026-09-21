@@ -33,18 +33,17 @@ export function isProtocolError(err: unknown): err is ProtocolError {
   return err instanceof ProtocolError;
 }
 
+let internalCorrelationCounter = 0;
+
 export function toProtocolErrorData(err: unknown): ProtocolErrorData {
   if (isProtocolError(err)) {
     return err.toJSON();
   }
-  if (err instanceof Error) {
-    return {
-      code: ProtocolErrorCode.INTERNAL_ERROR,
-      message: err.message
-    };
-  }
+  internalCorrelationCounter++;
+  const correlationId = `err-${internalCorrelationCounter}`;
   return {
     code: ProtocolErrorCode.INTERNAL_ERROR,
-    message: String(err)
+    message: "An internal server error occurred",
+    details: { correlationId }
   };
 }

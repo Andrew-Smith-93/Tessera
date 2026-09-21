@@ -221,8 +221,6 @@ export function validateInvariants(
       w => w.outputId === screen.outputId && w.tileable && !w.minimized && !w.fullScreen && w.desiredGeometry
     );
 
-    const isVerticallySaturated = tileableOnScreen.length > 0 && screen.usableArea.height / tileableOnScreen.length < 60;
-
     for (let i = 0; i < tileableOnScreen.length; i++) {
       for (let j = i + 1; j < tileableOnScreen.length; j++) {
         const w1 = tileableOnScreen[i];
@@ -230,11 +228,23 @@ export function validateInvariants(
         const r1 = w1.desiredGeometry!;
         const r2 = w2.desiredGeometry!;
         if (rectsOverlap(r1, r2, tolerance)) {
-          // Narrow tolerance: only permit vertical overlap if both windows share the same column
-          // (horizontal span matches) AND vertical capacity is saturated (< 60px per window).
+          // Partition-aware saturation rule:
+          // 1. Windows MUST share the same column (exact same horizontal span).
+          // Cross-column or horizontal overlaps always violate the invariant.
           const isSameColumn = Math.abs(r1.x - r2.x) <= tolerance && Math.abs(r1.width - r2.width) <= tolerance;
-          if (isVerticallySaturated && isSameColumn) {
-            continue;
+          if (isSameColumn) {
+            // Count windows belonging to this specific column partition
+            const partitionWindows = tileableOnScreen.filter(w => {
+              const r = w.desiredGeometry!;
+              return Math.abs(r.x - r1.x) <= tolerance && Math.abs(r.width - r1.width) <= tolerance;
+            });
+            const partitionHeight = screen.usableArea.height;
+            const isPartitionUnsatisfiable = partitionWindows.length > 0 && (partitionHeight / partitionWindows.length) < 60;
+
+            // Only mathematically unsatisfiable partitions get vertical overlap tolerance
+            if (isPartitionUnsatisfiable) {
+              continue;
+            }
           }
 
           violations.push({

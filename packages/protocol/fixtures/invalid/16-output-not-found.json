@@ -1,0 +1,15 @@
+{
+  "expectedErrorCode": "OUTPUT_NOT_FOUND",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-16",
+    "method": "runtime.setLayout",
+    "params": {
+      "outputId": "NON_EXISTENT_DISPLAY",
+      "layout": "columns"
+    }
+  }
+}

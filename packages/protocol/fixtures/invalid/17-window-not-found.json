@@ -1,0 +1,15 @@
+{
+  "expectedErrorCode": "WINDOW_NOT_FOUND",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-17",
+    "method": "runtime.setWindowFloating",
+    "params": {
+      "windowId": "NON_EXISTENT_WINDOW_ID",
+      "floating": true
+    }
+  }
+}

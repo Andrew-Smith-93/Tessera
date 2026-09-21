@@ -1,8 +1,11 @@
 {
-  "protocol": "tessera.ipc",
-  "majorVersion": 1,
-  "minorVersion": 0,
-  "kind": "request",
-  "id": "bad-09",
-  "method": "unsupported.arbitraryMethod"
+  "expectedErrorCode": "UNKNOWN_METHOD",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-09",
+    "method": "unsupported.arbitraryMethod"
+  }
 }

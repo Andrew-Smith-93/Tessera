@@ -141,7 +141,7 @@ describe("Tessera Protocol V1 Validation Suite", () => {
   });
 
   it("11. Rejects payloads exceeding maximum nesting depth", () => {
-    let deeplyNested: any = { depth: 0 };
+    let deeplyNested: Record<string, unknown> = { depth: 0 };
     for (let i = 0; i < 35; i++) {
       deeplyNested = { child: deeplyNested };
     }
@@ -156,7 +156,7 @@ describe("Tessera Protocol V1 Validation Suite", () => {
       params: deeplyNested
     });
     expect(res.valid).toBe(false);
-    expect(res.error?.code).toBe(ProtocolErrorCode.INVALID_PAYLOAD);
+    expect(res.error?.code).toBe(ProtocolErrorCode.RESOURCE_LIMIT_EXCEEDED);
   });
 
   it("12. Validates method parameters", () => {
@@ -185,5 +185,75 @@ describe("Tessera Protocol V1 Validation Suite", () => {
     const res = validateAgainstSchema(validReq);
     expect(res.valid).toBe(true);
     expect(res.errors).toHaveLength(0);
+  });
+
+  it("14. Intentional schema changes directly affect runtime validation", () => {
+    // Demonstrates that validation logic is driven directly by schema objects, not hardcoded code
+    const customSchema = {
+      type: "object",
+      required: ["requiredField", "numericScore"],
+      properties: {
+        requiredField: { type: "string", minLength: 5 },
+        numericScore: { type: "number", minimum: 10, maximum: 100 }
+      },
+      additionalProperties: false
+    };
+
+    // Valid data passes
+    expect(validateAgainstSchema({ requiredField: "hello world", numericScore: 50 }, customSchema).valid).toBe(true);
+
+    // Failing constraints directly report schema violations
+    const invalidRes1 = validateAgainstSchema({ requiredField: "shrt", numericScore: 50 }, customSchema);
+    expect(invalidRes1.valid).toBe(false);
+    expect(invalidRes1.errors[0]).toContain("minLength");
+
+    const invalidRes2 = validateAgainstSchema({ requiredField: "valid-str", numericScore: 5 }, customSchema);
+    expect(invalidRes2.valid).toBe(false);
+    expect(invalidRes2.errors[0]).toContain("minimum 10");
+
+    const invalidRes3 = validateAgainstSchema({ requiredField: "valid-str", numericScore: 50, extra: true }, customSchema);
+    expect(invalidRes3.valid).toBe(false);
+    expect(invalidRes3.errors[0]).toContain("additional property is not permitted");
+  });
+
+  it("15. Canonical schemas are authoritative over generated JSON schema files", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { envelopeSchema, requestSchema } = await import("../src/schemas/canonical-schemas.js");
+
+    const schemasDir = path.resolve(__dirname, "../src/schemas");
+    const envelopeJson = JSON.parse(fs.readFileSync(path.join(schemasDir, "envelope.schema.json"), "utf8"));
+    const requestJson = JSON.parse(fs.readFileSync(path.join(schemasDir, "request.schema.json"), "utf8"));
+
+    // Verify generated JSON schemas match canonical TypeScript schema definitions identically
+    expect(envelopeJson).toEqual(envelopeSchema);
+    expect(requestJson).toEqual(requestSchema);
+
+    // Proves that modifying the schema dynamically changes serialized output
+    const modifiedSchema = { ...envelopeSchema, title: "ModifiedSchemaTitle" };
+    expect(JSON.stringify(modifiedSchema)).not.toEqual(JSON.stringify(envelopeSchema));
+    expect(JSON.stringify(modifiedSchema)).toContain("ModifiedSchemaTitle");
+  });
+
+  it("16. Method and event registries match canonical schema definitions", async () => {
+    const {
+      KNOWN_METHODS,
+      KNOWN_EVENTS,
+      envelopeSchema
+    } = await import("../src/schemas/canonical-schemas.js");
+
+    // Check that envelopeSchema includes all KNOWN_METHODS in request branch
+    const requestBranch = envelopeSchema.oneOf.find(
+      (branch: { properties?: { kind?: { const?: string } } }) => branch.properties?.kind?.const === "request"
+    );
+    expect(requestBranch).toBeDefined();
+    expect(requestBranch?.properties?.method?.enum).toEqual(KNOWN_METHODS);
+
+    // Check that envelopeSchema includes all KNOWN_EVENTS in event branch
+    const eventBranch = envelopeSchema.oneOf.find(
+      (branch: { properties?: { kind?: { const?: string } } }) => branch.properties?.kind?.const === "event"
+    );
+    expect(eventBranch).toBeDefined();
+    expect(eventBranch?.properties?.event?.enum).toEqual(KNOWN_EVENTS);
   });
 });

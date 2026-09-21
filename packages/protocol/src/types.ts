@@ -7,12 +7,16 @@ export const PROTOCOL_MINOR_VERSION = 0 as const;
 export const SUPPORTED_MINOR_VERSIONS: readonly number[] = [0] as const;
 
 // Conservative Security and Resource Limits
-export const MAX_FRAME_SIZE = 16 * 1024 * 1024; // 16 MB = 16,777,216 bytes
+export const DEFAULT_FRAME_LIMIT = 1024 * 1024; // 1 MiB
+export const MAX_FRAME_SIZE = 16 * 1024 * 1024; // 16 MB max frame size limit
+export const MAX_BUFFERED_BYTES = 2 * 1024 * 1024; // 2 MiB streaming buffer limit
 export const MAX_NESTING_DEPTH = 32;
 export const MAX_STRING_LENGTH = 65536; // 64 KB
 export const MAX_ARRAY_LENGTH = 10000;
 export const MAX_OUTSTANDING_REQUESTS = 1000;
 export const MAX_SUBSCRIPTION_COUNT = 100;
+export const MAX_QUEUE_LENGTH = 1000;
+export const MAX_IDEMPOTENCY_CACHE_SIZE = 1000;
 
 export type ProtocolName = typeof PROTOCOL_NAME;
 
@@ -28,6 +32,8 @@ export enum ProtocolErrorCode {
   FRAME_TOO_LARGE = "FRAME_TOO_LARGE",
   CONFIG_VALIDATION_FAILED = "CONFIG_VALIDATION_FAILED",
   REVISION_CONFLICT = "REVISION_CONFLICT",
+  IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT",
+  RESOURCE_LIMIT_EXCEEDED = "RESOURCE_LIMIT_EXCEEDED",
   WINDOW_NOT_FOUND = "WINDOW_NOT_FOUND",
   OUTPUT_NOT_FOUND = "OUTPUT_NOT_FOUND",
   TRACE_DISABLED = "TRACE_DISABLED",
@@ -116,6 +122,28 @@ export interface HelloResult {
   capabilities: string[];
   maxFrameSize: number;
   limits: ResourceLimits;
+}
+
+// ==========================================
+// Subscriptions: system.subscribe / system.unsubscribe
+// ==========================================
+
+export interface SystemSubscribeParams {
+  events?: string[];
+  channels?: string[];
+}
+
+export interface SystemSubscribeResult {
+  subscribed: string[];
+}
+
+export interface SystemUnsubscribeParams {
+  events?: string[];
+  channels?: string[];
+}
+
+export interface SystemUnsubscribeResult {
+  subscribed: string[];
 }
 
 // ==========================================

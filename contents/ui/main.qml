@@ -1435,6 +1435,9 @@ Item {
                             }
                             delete preTiledWindows[wid];
                             floatingWindows[wid] = false;
+                            if (coordinator) {
+                                coordinator.setManualFloating(wid, false);
+                            }
                             osdCall.notify("Maximized", "preferences-system-windows");
                         } else {
                             if (typeof w.setMaximize === "function") {
@@ -1443,6 +1446,9 @@ Item {
                             w.frameGeometry = Qt.rect(target.targetRect.x, target.targetRect.y, target.targetRect.width, target.targetRect.height);
                             preTiledWindows[wid] = true;
                             floatingWindows[wid] = false;
+                            if (coordinator) {
+                                coordinator.setManualFloating(wid, false);
+                            }
 
                             // Update window order on this screen
                             var scr = getScreenForPos(target.targetRect);
@@ -1504,6 +1510,9 @@ Item {
                         }
                         if (wasDraggingMaximized[wid]) {
                             floatingWindows[wid] = false;
+                            if (coordinator) {
+                                coordinator.setManualFloating(wid, false);
+                            }
                             delete preTiledWindows[wid];
                         }
                     }
@@ -1669,14 +1678,16 @@ Item {
                 coord.ingestEvent({ type: "WindowRemoved", windowId: wid });
             }
 
-            // Remove from persistentScreenOrder across all screens
-            for (var sName in persistentScreenOrder) {
-                var pList = persistentScreenOrder[sName] || [];
-                var filtered = [];
-                for (var i = 0; i < pList.length; i++) {
-                    if (pList[i] !== wid) filtered.push(pList[i]);
+            if (runtimeMode === "legacy-fallback") {
+                // Remove from persistentScreenOrder across all screens
+                for (var sName in persistentScreenOrder) {
+                    var pList = persistentScreenOrder[sName] || [];
+                    var filtered = [];
+                    for (var i = 0; i < pList.length; i++) {
+                        if (pList[i] !== wid) filtered.push(pList[i]);
+                    }
+                    persistentScreenOrder[sName] = filtered;
                 }
-                persistentScreenOrder[sName] = filtered;
             }
 
             scheduleReconcile("WindowRemoved");
@@ -1818,20 +1829,22 @@ Item {
         var toName = getScreenName(targetScreen);
         var wid = getWindowId(w);
 
-        // Remove from old screen's persistent order
-        var oldList = persistentScreenOrder[fromName] || [];
-        var cleanList = [];
-        for (var i = 0; i < oldList.length; i++) {
-            if (oldList[i] !== wid) cleanList.push(oldList[i]);
-        }
-        persistentScreenOrder[fromName] = cleanList;
+        if (runtimeMode === "legacy-fallback") {
+            // Remove from old screen's persistent order
+            var oldList = persistentScreenOrder[fromName] || [];
+            var cleanList = [];
+            for (var i = 0; i < oldList.length; i++) {
+                if (oldList[i] !== wid) cleanList.push(oldList[i]);
+            }
+            persistentScreenOrder[fromName] = cleanList;
 
-        // Add to new screen's persistent order
-        var newList = persistentScreenOrder[toName] || [];
-        if (newList.indexOf(wid) === -1) {
-            newList.push(wid);
+            // Add to new screen's persistent order
+            var newList = persistentScreenOrder[toName] || [];
+            if (newList.indexOf(wid) === -1) {
+                newList.push(wid);
+            }
+            persistentScreenOrder[toName] = newList;
         }
-        persistentScreenOrder[toName] = newList;
 
         var toArea = Workspace.clientArea(KWin.MaximizeArea, targetScreen, Workspace.currentDesktop);
         var curW = Math.min(w.frameGeometry.width, toArea.width - (config.gapOuter * 2));

@@ -7,7 +7,8 @@ import {
   validateAgainstSchema,
   encodeFrame,
   StreamingFrameDecoder,
-  ReferenceServer
+  ReferenceServer,
+  type ProtocolRequest
 } from "../src/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,38 +52,73 @@ describe("Tessera Protocol V1 Conformance Fixtures Suite", () => {
     }
   });
 
-  it("3. Every invalid fixture fails envelope validation, schema check, or endpoint execution", async () => {
+  it("3. Every invalid fixture declares exact expected error code and fails with that exact code through endpoint/decoder", async () => {
     const mockServer = new ReferenceServer({
-      getRetainedScreens: () => [],
+      getRetainedScreens: () => [
+        {
+          outputId: "HDMI-A-1",
+          name: "HDMI-A-1",
+          geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+          usableArea: { x: 0, y: 0, width: 1920, height: 1080 },
+          activeLayout: "master-stack",
+          masterCount: 1,
+          masterRatio: 0.5,
+          gaps: { inner: 0, outer: 0 },
+          orderedWindowIds: [],
+          persistentOrder: []
+        }
+      ],
       getRetainedWindows: () => [],
       getRetainedScreen: () => null,
       reconcile: () => null,
       getDiagnostics: () => ({})
     });
 
+    // Seed negotiated session with capabilities for testing mutation failures
+    const session = mockServer.getSession("conformance-session");
+    session.helloCompleted = true;
+    session.negotiatedCapabilities.add("runtime.control");
+    session.negotiatedCapabilities.add("config.mutate");
+
+    // Seed idempotency entry for 20-idempotency-conflict
+    await mockServer.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-seed-idem",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "columns", idempotencyKey: "test-idem-conflict" }
+    } as ProtocolRequest, "conformance-session");
+
     for (const file of invalidFiles) {
       const filePath = resolve(INVALID_DIR, file);
       const raw = readFileSync(filePath, "utf8");
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        // Syntax error is already an invalid fixture
-        continue;
-      }
+      const wrapped = JSON.parse(raw);
 
-      const envRes = validateEnvelope(parsed);
-      const schemaRes = validateAgainstSchema(parsed);
+      expect(wrapped.expectedErrorCode, `Fixture ${file} must declare expectedErrorCode`).toBeDefined();
+      const expectedCode = wrapped.expectedErrorCode;
+      const payload = wrapped.payload;
 
-      let failed = !envRes.valid || !schemaRes.valid;
-      if (!failed && typeof parsed === "object" && parsed !== null && (parsed as any).kind === "request") {
-        const resp = await mockServer.handleRequest(parsed as any, "unnegotiated-session");
-        if (!resp.ok) {
-          failed = true;
+      let actualCode: string | null = null;
+
+      // 1. Validate envelope / limits
+      const envRes = validateEnvelope(payload);
+      if (!envRes.valid && envRes.error) {
+        actualCode = envRes.error.code;
+      } else {
+        // 2. Dispatch through server endpoint
+        const sessionId = file.includes("unnegotiated") ? "unnegotiated-session" : "conformance-session";
+        const resp = await mockServer.handleRequest(payload as ProtocolRequest, sessionId);
+        if (!resp.ok && resp.error) {
+          actualCode = resp.error.code;
         }
       }
 
-      expect(failed, `Invalid fixture ${file} unexpectedly passed validation`).toBe(true);
+      expect(
+        actualCode,
+        `Invalid fixture ${file} did not produce expected error code ${expectedCode}`
+      ).toBe(expectedCode);
     }
   });
 });

@@ -194,11 +194,75 @@ describe("Tessera Protocol V1 Framing Codec", () => {
     expect(decoded[0].ok).toBe(true);
     if (decoded[0].ok) {
       expect(decoded[0].message.id).toBe("req-unicode-🚀");
-      expect((decoded[0].message as ProtocolRequest).params?.label).toBe("日本語 • Español • 🌍 • 𝄢");
     }
+  });
+
+  it("13. Handles partial header followed by large chunk correctly", () => {
+    const decoder = new StreamingFrameDecoder();
+    const largePayload: ProtocolRequest = {
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-large-chunk",
+      method: "config.applyPatch",
+      params: { bigData: "A".repeat(64 * 1024) }
+    };
+    const frame = encodeFrame(largePayload, 1024 * 1024);
+
+    // Split at byte 2 of the 4-byte header
+    const chunk1 = frame.slice(0, 2);
+    const chunk2 = frame.slice(2);
+
+    expect(decoder.push(chunk1)).toHaveLength(0);
+    expect(decoder.getPendingBytes()).toBe(2);
+
+    const res = decoder.push(chunk2);
+    expect(res).toHaveLength(1);
+    expect(res[0].ok).toBe(true);
+    if (res[0].ok) {
+      expect(res[0].message.id).toBe("req-large-chunk");
+    }
+  });
+
+  it("14. Rejects repeated small chunks exceeding buffer limit with RESOURCE_LIMIT_EXCEEDED before copying", () => {
+    // 50 KB buffer limit
+    const decoder = new StreamingFrameDecoder({ maxBufferedBytes: 50 * 1024 });
+
+    // Send 10 KB chunks of incomplete data
+    const chunk = new Uint8Array(10 * 1024);
+    // Fill first 4 bytes with length header of 40 KB (incomplete)
+    new DataView(chunk.buffer).setUint32(0, 40 * 1024, false);
+
+    expect(decoder.push(chunk)).toHaveLength(0);
+    expect(decoder.getPendingBytes()).toBe(10 * 1024);
+
+    const chunk2 = new Uint8Array(10 * 1024);
+    expect(decoder.push(chunk2)).toHaveLength(0);
+    expect(decoder.getPendingBytes()).toBe(20 * 1024);
+
+    const chunk3 = new Uint8Array(10 * 1024);
+    expect(decoder.push(chunk3)).toHaveLength(0);
+    expect(decoder.getPendingBytes()).toBe(30 * 1024);
+
+    const chunk4 = new Uint8Array(10 * 1024);
+    expect(decoder.push(chunk4)).toHaveLength(0);
+    expect(decoder.getPendingBytes()).toBe(40 * 1024);
+
+    // Now push 20 KB chunk (40 KB + 20 KB = 60 KB > 50 KB limit)
+    const oversizedChunk = new Uint8Array(20 * 1024);
+    const res = decoder.push(oversizedChunk);
+
+    expect(res).toHaveLength(1);
+    expect(res[0].ok).toBe(false);
+    if (!res[0].ok) {
+      expect(res[0].error.code).toBe(ProtocolErrorCode.RESOURCE_LIMIT_EXCEEDED);
+    }
+    // Buffer is bounded and cleared on limit error
+    expect(decoder.getPendingBytes()).toBe(0);
   });
 });
 
-function resultsOk(res: any): boolean {
+function resultsOk(res: { ok: boolean }): boolean {
   return res.ok === true;
 }

@@ -1,12 +1,16 @@
 {
-  "expectedErrorCode": "INVALID_ENVELOPE",
+  "expectedErrorCode": "CONFIG_VALIDATION_FAILED",
   "payload": {
     "protocol": "tessera.ipc",
     "majorVersion": 1,
     "minorVersion": 0,
     "kind": "request",
-    "id": "bad-10",
+    "id": "bad-18",
     "method": "config.applyPatch",
-    "params": "should-be-an-object"
+    "params": {
+      "patch": {
+        "gapInner": -10
+      }
+    }
   }
 }

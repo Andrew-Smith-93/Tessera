@@ -1,8 +1,11 @@
 {
-  "protocol": "tessera.ipc",
-  "majorVersion": 1,
-  "minorVersion": 99,
-  "kind": "request",
-  "id": "bad-03",
-  "method": "state.getSnapshot"
+  "expectedErrorCode": "UNSUPPORTED_MINOR_VERSION",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 99,
+    "kind": "request",
+    "id": "bad-03",
+    "method": "state.getSnapshot"
+  }
 }

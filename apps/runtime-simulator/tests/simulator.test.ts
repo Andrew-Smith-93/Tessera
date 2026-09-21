@@ -479,5 +479,140 @@ describe("Phase 3 Runtime Simulator & Trace Replay", () => {
     expect(result.passed).toBe(false);
     expect(result.violations.some(v => v.code === "TILED_WINDOWS_OVERLAP")).toBe(true);
   });
+
+  it("30. Invariant validation rejects vertical overlap when column has sufficient capacity", () => {
+    const screens = [
+      {
+        outputId: "HDMI-A-1",
+        name: "HDMI-A-1",
+        geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+        usableArea: { x: 0, y: 0, width: 1920, height: 1080 },
+        activeLayout: "master-stack",
+        masterCount: 1,
+        masterRatio: 0.5,
+        gaps: { inner: 0, outer: 0 },
+        orderedWindowIds: ["w-1", "w-2"],
+        persistentOrder: ["w-1", "w-2"]
+      }
+    ];
+
+    // Only 2 windows in the same column (540px capacity each >= 60px)
+    // They overlap vertically -> MUST fail
+    const windows = [
+      {
+        id: "w-1",
+        resourceClass: "app",
+        outputId: "HDMI-A-1",
+        classification: "tiled",
+        tileable: true,
+        minimized: false,
+        fullScreen: false,
+        noBorder: false,
+        maximizeMode: 0,
+        isManualFloating: false,
+        frameGeometry: { x: 0, y: 0, width: 960, height: 600 },
+        desiredGeometry: { x: 0, y: 0, width: 960, height: 600 },
+        preMinimizeGeometry: null
+      },
+      {
+        id: "w-2",
+        resourceClass: "app",
+        outputId: "HDMI-A-1",
+        classification: "tiled",
+        tileable: true,
+        minimized: false,
+        fullScreen: false,
+        noBorder: false,
+        maximizeMode: 0,
+        isManualFloating: false,
+        frameGeometry: { x: 0, y: 500, width: 960, height: 580 }, // Overlaps w-1 from y=500 to y=600
+        desiredGeometry: { x: 0, y: 500, width: 960, height: 580 },
+        preMinimizeGeometry: null
+      }
+    ];
+
+    const result = validateInvariants(screens, windows, []);
+    expect(result.passed).toBe(false);
+    expect(result.violations.some(v => v.code === "TILED_WINDOWS_OVERLAP")).toBe(true);
+  });
+
+  it("31. Invariant validation permits vertical overlap only for mathematically unsatisfiable partitions", () => {
+    const screens = [
+      {
+        outputId: "HDMI-A-1",
+        name: "HDMI-A-1",
+        geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+        usableArea: { x: 0, y: 0, width: 1920, height: 1080 },
+        activeLayout: "columns",
+        masterCount: 1,
+        masterRatio: 0.5,
+        gaps: { inner: 0, outer: 0 },
+        orderedWindowIds: Array.from({ length: 25 }, (_, i) => `w-${i}`),
+        persistentOrder: Array.from({ length: 25 }, (_, i) => `w-${i}`)
+      }
+    ];
+
+    // 25 windows sharing the exact same column (1080 / 25 = 43.2px < 60px, unsatisfiable partition)
+    const windows = Array.from({ length: 25 }, (_, i) => ({
+      id: `w-${i}`,
+      resourceClass: "app",
+      outputId: "HDMI-A-1",
+      classification: "tiled",
+      tileable: true,
+      minimized: false,
+      fullScreen: false,
+      noBorder: false,
+      maximizeMode: 0,
+      isManualFloating: false,
+      frameGeometry: { x: 0, y: i * 40, width: 1920, height: 50 }, // Overlaps next window by 10px
+      desiredGeometry: { x: 0, y: i * 40, width: 1920, height: 50 },
+      preMinimizeGeometry: null
+    }));
+
+    const result = validateInvariants(screens, windows, []);
+    expect(result.passed).toBe(true);
+    expect(result.violations).toHaveLength(0);
+  });
+
+  it("32. Invariant validation rejects horizontal or bounds violation", () => {
+    const screens = [
+      {
+        outputId: "HDMI-A-1",
+        name: "HDMI-A-1",
+        geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+        usableArea: { x: 0, y: 0, width: 1920, height: 1080 },
+        activeLayout: "columns",
+        masterCount: 1,
+        masterRatio: 0.5,
+        gaps: { inner: 0, outer: 0 },
+        orderedWindowIds: ["w-1"],
+        persistentOrder: ["w-1"]
+      }
+    ];
+
+    // Window exceeds usableArea bounds horizontally (x=1000, width=1000 => 2000 > 1920)
+    const windows = [
+      {
+        id: "w-1",
+        resourceClass: "app",
+        outputId: "HDMI-A-1",
+        classification: "tiled",
+        tileable: true,
+        minimized: false,
+        fullScreen: false,
+        noBorder: false,
+        maximizeMode: 0,
+        isManualFloating: false,
+        frameGeometry: { x: 1000, y: 0, width: 1000, height: 1080 },
+        desiredGeometry: { x: 1000, y: 0, width: 1000, height: 1080 },
+        preMinimizeGeometry: null
+      }
+    ];
+
+    const result = validateInvariants(screens, windows, []);
+    expect(result.passed).toBe(false);
+    expect(result.violations.some(v => v.code === "TILED_GEOMETRY_OUT_OF_BOUNDS")).toBe(true);
+  });
 });
+
 

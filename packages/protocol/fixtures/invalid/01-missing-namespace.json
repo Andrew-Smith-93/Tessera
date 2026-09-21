@@ -1,7 +1,10 @@
 {
-  "majorVersion": 1,
-  "minorVersion": 0,
-  "kind": "request",
-  "id": "bad-01",
-  "method": "state.getSnapshot"
+  "expectedErrorCode": "INVALID_ENVELOPE",
+  "payload": {
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-01",
+    "method": "state.getSnapshot"
+  }
 }

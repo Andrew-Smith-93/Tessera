@@ -49,6 +49,8 @@
           "type": "string",
           "enum": [
             "system.hello",
+            "system.subscribe",
+            "system.unsubscribe",
             "state.getSnapshot",
             "state.getDiagnostics",
             "state.getCapabilities",
@@ -83,9 +85,30 @@
           "minLength": 1
         },
         "ok": {
-          "type": "boolean"
+          "const": true
         },
         "result": {},
+        "metadata": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "replyTo",
+        "ok"
+      ]
+    },
+    {
+      "properties": {
+        "kind": {
+          "const": "response"
+        },
+        "replyTo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ok": {
+          "const": false
+        },
         "error": {
           "type": "object",
           "required": [
@@ -102,11 +125,15 @@
             },
             "details": {}
           }
+        },
+        "metadata": {
+          "type": "object"
         }
       },
       "required": [
         "replyTo",
-        "ok"
+        "ok",
+        "error"
       ]
     },
     {

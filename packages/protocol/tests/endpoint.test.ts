@@ -3,7 +3,11 @@ import {
   ReferenceServer,
   ReferenceClient,
   ProtocolErrorCode,
-  type CoordinatorRuntimeTarget
+  encodeFrame,
+  type CoordinatorRuntimeTarget,
+  type ProtocolRequest,
+  type StateCapabilitiesResult,
+  type RuntimeCommandAckResult
 } from "../src/index.js";
 
 describe("Tessera Protocol V1 Reference Endpoint & Command Queue", () => {
@@ -290,6 +294,7 @@ describe("Tessera Protocol V1 Reference Endpoint & Command Queue", () => {
   it("9. Asynchronous event subscription and notification delivery", async () => {
     const server = new ReferenceServer(mockRuntime);
     const client = new ReferenceClient(server);
+    await client.hello("test-client", "1.0");
 
     const received: any[] = [];
     const unsub = client.onEvent("runtime.transactionCommitted", (data: any) => {
@@ -315,5 +320,455 @@ describe("Tessera Protocol V1 Reference Endpoint & Command Queue", () => {
 
     // Session cleaned up
     expect(server.getSession("temp-client").helloCompleted).toBe(false);
+  });
+
+  it("11. Per-session event subscriptions filter events per client", async () => {
+    const server = new ReferenceServer(mockRuntime);
+    const clientA = new ReferenceClient(server, "client-A");
+    const clientB = new ReferenceClient(server, "client-B");
+
+    await clientA.hello("Client A", "1.0");
+    await clientB.hello("Client B", "1.0");
+
+    // Client A subscribes only to runtime.stateChanged
+    await clientA.unsubscribe([
+      "runtime.ready",
+      "runtime.transactionCommitted",
+      "runtime.configurationChanged",
+      "runtime.capabilitiesChanged",
+      "runtime.warning"
+    ]);
+
+    // Client B subscribes only to runtime.warning
+    await clientB.unsubscribe([
+      "runtime.ready",
+      "runtime.stateChanged",
+      "runtime.transactionCommitted",
+      "runtime.configurationChanged",
+      "runtime.capabilitiesChanged"
+    ]);
+
+    const eventsA: unknown[] = [];
+    const eventsB: unknown[] = [];
+
+    clientA.onEvent("runtime.stateChanged", data => eventsA.push(data));
+    clientA.onEvent("runtime.warning", data => eventsA.push(data));
+
+    clientB.onEvent("runtime.stateChanged", data => eventsB.push(data));
+    clientB.onEvent("runtime.warning", data => eventsB.push(data));
+
+    server.emitEvent("runtime.stateChanged", { tick: 1 });
+    server.emitEvent("runtime.warning", { code: "WARN_TEST", message: "Warning test" });
+
+    expect(eventsA).toHaveLength(1);
+    expect((eventsA[0] as { tick: number }).tick).toBe(1);
+
+    expect(eventsB).toHaveLength(1);
+    expect((eventsB[0] as { code: string }).code).toBe("WARN_TEST");
+  });
+
+  it("12. Subscribing beyond MAX_SUBSCRIPTION_COUNT returns RESOURCE_LIMIT_EXCEEDED", async () => {
+    const server = new ReferenceServer(mockRuntime);
+    const client = new ReferenceClient(server, "client-limit");
+    await client.hello("Client Limit", "1.0");
+
+    // Try to subscribe to 105 channels
+    const tooMany = Array.from({ length: 105 }, (_, i) => `custom.event.${i}`);
+    await expect(client.subscribe(tooMany)).rejects.toThrowError();
+
+    const req: ProtocolRequest = {
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-sub-limit",
+      method: "system.subscribe",
+      params: { events: tooMany }
+    };
+
+    const resp = await server.handleRequest(req, "client-limit");
+    expect(resp.ok).toBe(false);
+    expect(resp.error?.code).toBe(ProtocolErrorCode.RESOURCE_LIMIT_EXCEEDED);
+  });
+
+  it("13. Exceeding MAX_QUEUE_LENGTH returns RESOURCE_LIMIT_EXCEEDED", async () => {
+    const server = new ReferenceServer(mockRuntime);
+    const client = new ReferenceClient(server, "client-queue");
+    await client.hello("Client Queue", "1.0");
+
+    // Fill queue to limit
+    for (let i = 0; i < 1000; i++) {
+      const resp = await server.handleRequest({
+        protocol: "tessera.ipc",
+        majorVersion: 1,
+        minorVersion: 0,
+        kind: "request",
+        id: `req-fill-${i}`,
+        method: "runtime.requestReconcile",
+        params: {}
+      }, "client-queue");
+      expect(resp.ok).toBe(true);
+    }
+
+    // 1001st command should be rejected with RESOURCE_LIMIT_EXCEEDED
+    const overflowResp = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-overflow",
+      method: "runtime.requestReconcile",
+      params: {}
+    }, "client-queue");
+
+    expect(overflowResp.ok).toBe(false);
+    expect(overflowResp.error?.code).toBe(ProtocolErrorCode.RESOURCE_LIMIT_EXCEEDED);
+  });
+
+  it("14. Centralized outbound redaction verifies secret markers NEVER appear on wire bytes", async () => {
+    const sensitiveRuntime: CoordinatorRuntimeTarget = {
+      getRetainedScreens: () => [
+        {
+          outputId: "HDMI-A-1",
+          name: "HDMI-A-1",
+          geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+          usableArea: { x: 0, y: 0, width: 1920, height: 1080 },
+          activeLayout: "master-stack",
+          masterCount: 1,
+          masterRatio: 0.5,
+          gaps: { inner: 0, outer: 0 },
+          orderedWindowIds: ["win-secret-1"],
+          persistentOrder: ["win-secret-1"]
+        }
+      ],
+      getRetainedWindows: () => [
+        {
+          id: "win-secret-1",
+          title: "CONFIDENTIAL_BANK_RECORD_12345",
+          resourceClass: "SECRET_APP_CLASS_67890",
+          resourceName: "SECRET_APP_NAME_ABCDE",
+          appId: "SECRET_APP_ID_FGHIJ",
+          desktopFileName: "SECRET_DESKTOP_FILE_KLMNO",
+          role: "SECRET_ROLE_PQRST",
+          outputId: "HDMI-A-1",
+          classification: "tiled",
+          tileable: true,
+          minimized: false,
+          fullScreen: false,
+          noBorder: false,
+          maximizeMode: 0,
+          isManualFloating: false,
+          frameGeometry: { x: 0, y: 0, width: 960, height: 1080 },
+          desiredGeometry: { x: 0, y: 0, width: 960, height: 1080 },
+          preMinimizeGeometry: null
+        }
+      ],
+      getRetainedScreen: () => null,
+      reconcile: () => null,
+      getDiagnostics: () => ({ secretDiagKey: "SECRET_DIAG_VALUE" }),
+      getConfig: () => ({ redactIdentities: true }),
+      getTraceRecorder: () => ({
+        isEnabled: () => true,
+        getEntries: () => [
+          {
+            tick: 1,
+            event: { title: "SECRET_IN_TRACE_111", resourceClass: "SECRET_IN_TRACE_222" }
+          }
+        ],
+        clear: () => 0
+      })
+    };
+
+    const server = new ReferenceServer(sensitiveRuntime);
+    const client = new ReferenceClient(server, "redaction-tester");
+    await client.hello("Tester", "1.0");
+
+    // 1. Snapshot over wire
+    const snapshotBytes = await server.processBytes(
+      encodeFrame({
+        protocol: "tessera.ipc",
+        majorVersion: 1,
+        minorVersion: 0,
+        kind: "request",
+        id: "req-wire-snap",
+        method: "state.getSnapshot"
+      }),
+      "redaction-tester"
+    );
+
+    const wireTextSnapshot = new TextDecoder().decode(snapshotBytes[0]);
+    expect(wireTextSnapshot).not.toContain("CONFIDENTIAL_BANK_RECORD_12345");
+    expect(wireTextSnapshot).not.toContain("SECRET_APP_CLASS_67890");
+    expect(wireTextSnapshot).not.toContain("SECRET_APP_NAME_ABCDE");
+    expect(wireTextSnapshot).not.toContain("SECRET_APP_ID_FGHIJ");
+    expect(wireTextSnapshot).not.toContain("SECRET_DESKTOP_FILE_KLMNO");
+    expect(wireTextSnapshot).not.toContain("SECRET_ROLE_PQRST");
+
+    // 2. Trace over wire
+    const traceBytes = await server.processBytes(
+      encodeFrame({
+        protocol: "tessera.ipc",
+        majorVersion: 1,
+        minorVersion: 0,
+        kind: "request",
+        id: "req-wire-trace",
+        method: "trace.getRecent"
+      }),
+      "redaction-tester"
+    );
+
+    const wireTextTrace = new TextDecoder().decode(traceBytes[0]);
+    expect(wireTextTrace).not.toContain("SECRET_IN_TRACE_111");
+    expect(wireTextTrace).not.toContain("SECRET_IN_TRACE_222");
+  });
+
+  it("15. Safe internal errors never leak exception details or file paths across wire", async () => {
+    const errorRuntime: CoordinatorRuntimeTarget = {
+      getRetainedScreens: () => {
+        throw new Error("CRITICAL_DATABASE_FAILURE at /home/secret-victim/.private_keys/id_ed25519");
+      },
+      getRetainedWindows: () => [],
+      getRetainedScreen: () => null,
+      reconcile: () => null,
+      getDiagnostics: () => ({})
+    };
+
+    const server = new ReferenceServer(errorRuntime);
+    const client = new ReferenceClient(server, "error-tester");
+    await client.hello("Tester", "1.0");
+
+    const responseFrames = await server.processBytes(
+      encodeFrame({
+        protocol: "tessera.ipc",
+        majorVersion: 1,
+        minorVersion: 0,
+        kind: "request",
+        id: "req-fail",
+        method: "state.getSnapshot"
+      }),
+      "error-tester"
+    );
+
+    expect(responseFrames).toHaveLength(1);
+    const wireText = new TextDecoder().decode(responseFrames[0]);
+
+    // Sensitive error strings MUST NOT appear anywhere on wire
+    expect(wireText).not.toContain("secret-victim");
+    expect(wireText).not.toContain("private_keys");
+    expect(wireText).not.toContain("id_ed25519");
+    expect(wireText).not.toContain("CRITICAL_DATABASE_FAILURE");
+
+    // Must return generic message and correlation token
+    expect(wireText).toContain("INTERNAL_ERROR");
+    expect(wireText).toContain("An internal server error occurred");
+    expect(wireText).toContain("err-token-");
+  });
+
+  it("16. Validates target window and output existence before acknowledging commands", async () => {
+    const targetRuntime: CoordinatorRuntimeTarget = {
+      getRetainedScreens: () => [
+        {
+          outputId: "HDMI-A-1",
+          name: "HDMI-A-1",
+          geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+          usableArea: { x: 0, y: 0, width: 1920, height: 1080 },
+          activeLayout: "master-stack",
+          masterCount: 1,
+          masterRatio: 0.5,
+          gaps: { inner: 0, outer: 0 },
+          orderedWindowIds: ["win-1"],
+          persistentOrder: ["win-1"]
+        }
+      ],
+      getRetainedWindows: () => [
+        {
+          id: "win-1",
+          resourceClass: "terminal",
+          outputId: "HDMI-A-1",
+          classification: "tiled",
+          tileable: true,
+          minimized: false,
+          fullScreen: false,
+          noBorder: false,
+          maximizeMode: 0,
+          isManualFloating: false,
+          frameGeometry: { x: 0, y: 0, width: 960, height: 1080 },
+          desiredGeometry: { x: 0, y: 0, width: 960, height: 1080 },
+          preMinimizeGeometry: null
+        }
+      ],
+      getRetainedScreen: () => null,
+      reconcile: () => null,
+      getDiagnostics: () => ({})
+    };
+
+    const server = new ReferenceServer(targetRuntime);
+    const client = new ReferenceClient(server, "target-validator");
+    await client.hello("TargetValidator", "1.0");
+
+    // 1. Non-existent output
+    const layoutResp = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-missing-output",
+      method: "runtime.setLayout",
+      params: { outputId: "NON_EXISTENT_SCREEN", layout: "columns" }
+    }, "target-validator");
+
+    expect(layoutResp.ok).toBe(false);
+    expect(layoutResp.error?.code).toBe(ProtocolErrorCode.OUTPUT_NOT_FOUND);
+
+    // 2. Non-existent window
+    const floatResp = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-missing-window",
+      method: "runtime.setWindowFloating",
+      params: { windowId: "NON_EXISTENT_WINDOW", floating: true }
+    }, "target-validator");
+
+    expect(floatResp.ok).toBe(false);
+    expect(floatResp.error?.code).toBe(ProtocolErrorCode.WINDOW_NOT_FOUND);
+  });
+
+  it("17. Reads adapter capabilities dynamically from runtime target", async () => {
+    const customCapsRuntime: CoordinatorRuntimeTarget = {
+      getRetainedScreens: () => [],
+      getRetainedWindows: () => [],
+      getRetainedScreen: () => null,
+      reconcile: () => null,
+      getDiagnostics: () => ({}),
+      getCapabilities: () => 0x155 // Custom capability mask
+    };
+
+    const server = new ReferenceServer(customCapsRuntime);
+    const client = new ReferenceClient(server, "caps-client");
+    await client.hello("CapsClient", "1.0");
+
+    const capsResp = await client.sendRequest<StateCapabilitiesResult>("state.getCapabilities");
+    expect(capsResp.adapterCapabilities).toBe(0x155);
+  });
+
+  it("18. Reusing idempotency key with conflicting payload returns IDEMPOTENCY_CONFLICT", async () => {
+    const server = new ReferenceServer(mockRuntime);
+    const client = new ReferenceClient(server, "idempotency-client");
+    await client.hello("IdempotencyClient", "1.0");
+
+    const req1: ProtocolRequest = {
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-idem-1",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "columns", idempotencyKey: "idem-key-123" }
+    };
+
+    const resp1 = await server.handleRequest(req1, "idempotency-client");
+    expect(resp1.ok).toBe(true);
+
+    // Replay exact same payload: succeeds and returns cached response
+    const resp2 = await server.handleRequest({ ...req1, id: "req-idem-2" }, "idempotency-client");
+    expect(resp2.ok).toBe(true);
+    expect((resp2.result as RuntimeCommandAckResult).commandId).toBe((resp1.result as RuntimeCommandAckResult).commandId);
+
+    // Conflicting payload with SAME idempotency key: MUST fail with IDEMPOTENCY_CONFLICT
+    const reqConflicting: ProtocolRequest = {
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-idem-conflict",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "grid", idempotencyKey: "idem-key-123" }
+    };
+
+    const respConflict = await server.handleRequest(reqConflicting, "idempotency-client");
+    expect(respConflict.ok).toBe(false);
+    expect(respConflict.error?.code).toBe(ProtocolErrorCode.IDEMPOTENCY_CONFLICT);
+  });
+
+  it("19. Cross-client idempotency keys are isolated per client", async () => {
+    const server = new ReferenceServer(mockRuntime);
+    const clientA = new ReferenceClient(server, "client-A");
+    const clientB = new ReferenceClient(server, "client-B");
+
+    await clientA.hello("Client A", "1.0");
+    await clientB.hello("Client B", "1.0");
+
+    const respA = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-A",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "columns", idempotencyKey: "shared-key-name" }
+    }, "client-A");
+
+    const respB = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-B",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "rows", idempotencyKey: "shared-key-name" }
+    }, "client-B");
+
+    // Both succeed independently because idempotency scope is (client, method, key)
+    expect(respA.ok).toBe(true);
+    expect(respB.ok).toBe(true);
+    expect((respA.result as RuntimeCommandAckResult).commandId).not.toBe(
+      (respB.result as RuntimeCommandAckResult).commandId
+    );
+  });
+
+  it("20. Bounded idempotency cache uses FIFO eviction", async () => {
+    const server = new ReferenceServer(mockRuntime);
+    const client = new ReferenceClient(server, "cache-bounded");
+    await client.hello("CacheBounded", "1.0");
+
+    // Fill 1,000 keys (drain queue after each to stay under MAX_QUEUE_LENGTH)
+    for (let i = 0; i < 1000; i++) {
+      await server.handleRequest({
+        protocol: "tessera.ipc",
+        majorVersion: 1,
+        minorVersion: 0,
+        kind: "request",
+        id: `req-${i}`,
+        method: "runtime.setLayout",
+        params: { outputId: "HDMI-A-1", layout: "columns", idempotencyKey: `k-${i}` }
+      }, "cache-bounded");
+      server.advance();
+    }
+
+    // Insert 1001st key (should evict k-0)
+    await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-1001",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "columns", idempotencyKey: "k-1000" }
+    }, "cache-bounded");
+
+    // Reusing k-0 with different payload is now allowed (old key was evicted)
+    const resp = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-reuse-evicted",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "rows", idempotencyKey: "k-0" }
+    }, "cache-bounded");
+
+    expect(resp.ok).toBe(true);
   });
 });

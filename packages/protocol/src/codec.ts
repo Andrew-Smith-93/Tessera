@@ -1,5 +1,6 @@
 import {
-  MAX_FRAME_SIZE,
+  DEFAULT_FRAME_LIMIT,
+  MAX_BUFFERED_BYTES,
   ProtocolErrorCode,
   type ProtocolEnvelope
 } from "./types.js";
@@ -20,6 +21,11 @@ export interface FrameDecodeFailure {
 
 export type FrameDecodeResult = FrameDecodeSuccess | FrameDecodeFailure;
 
+export interface StreamingFrameDecoderOptions {
+  maxFrameSize?: number;
+  maxBufferedBytes?: number;
+}
+
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -27,15 +33,15 @@ const textDecoder = new TextDecoder("utf-8", { fatal: true });
  * Encodes a JSON envelope or pre-serialized JSON string into a length-prefixed frame.
  * [4-byte big-endian length uint32][UTF-8 JSON payload]
  */
-export function encodeFrame(payload: ProtocolEnvelope | string): Uint8Array {
+export function encodeFrame(payload: ProtocolEnvelope | string, maxFrameSize = DEFAULT_FRAME_LIMIT): Uint8Array {
   const jsonStr = typeof payload === "string" ? payload : JSON.stringify(payload);
   const payloadBytes = textEncoder.encode(jsonStr);
   const length = payloadBytes.byteLength;
 
-  if (length > MAX_FRAME_SIZE) {
+  if (length > maxFrameSize) {
     throw createProtocolError(
       ProtocolErrorCode.FRAME_TOO_LARGE,
-      `Frame payload size (${length} bytes) exceeds maximum limit (${MAX_FRAME_SIZE} bytes)`
+      `Frame payload size (${length} bytes) exceeds maximum limit (${maxFrameSize} bytes)`
     );
   }
 
@@ -52,6 +58,13 @@ export function encodeFrame(payload: ProtocolEnvelope | string): Uint8Array {
  */
 export class StreamingFrameDecoder {
   private buffer: Uint8Array = new Uint8Array(0);
+  private readonly maxFrameSize: number;
+  private readonly maxBufferedBytes: number;
+
+  constructor(options?: StreamingFrameDecoderOptions) {
+    this.maxFrameSize = options?.maxFrameSize ?? DEFAULT_FRAME_LIMIT;
+    this.maxBufferedBytes = options?.maxBufferedBytes ?? MAX_BUFFERED_BYTES;
+  }
 
   /**
    * Pushes a new byte chunk into the streaming buffer and returns all decoded frames or errors.
@@ -59,6 +72,20 @@ export class StreamingFrameDecoder {
   public push(chunk: Uint8Array): FrameDecodeResult[] {
     if (chunk.byteLength === 0) {
       return [];
+    }
+
+    // Reject oversized chunk before allocation or copying
+    if (this.buffer.byteLength + chunk.byteLength > this.maxBufferedBytes) {
+      this.buffer = new Uint8Array(0);
+      return [
+        {
+          ok: false,
+          error: createProtocolError(
+            ProtocolErrorCode.RESOURCE_LIMIT_EXCEEDED,
+            `Streaming buffer limit of ${this.maxBufferedBytes} bytes exceeded by incoming chunk`
+          )
+        }
+      ];
     }
 
     // Append chunk to internal buffer
@@ -74,12 +101,12 @@ export class StreamingFrameDecoder {
       const payloadLength = view.getUint32(0, false); // Big-endian
 
       // Check for oversized payload BEFORE allocation
-      if (payloadLength > MAX_FRAME_SIZE) {
+      if (payloadLength > this.maxFrameSize) {
         results.push({
           ok: false,
           error: createProtocolError(
             ProtocolErrorCode.FRAME_TOO_LARGE,
-            `Frame length header declares ${payloadLength} bytes, which exceeds maximum limit (${MAX_FRAME_SIZE} bytes)`
+            `Frame length header declares ${payloadLength} bytes, which exceeds maximum limit (${this.maxFrameSize} bytes)`
           )
         });
         // Discard buffer to prevent poison loop
@@ -163,7 +190,7 @@ export class StreamingFrameDecoder {
   }
 
   /**
-   * Finalizes the stream and returns any trailing error if unconsumed bytes remain.
+   * Finalizes the stream and returns trailing errors if unconsumed bytes remain.
    */
   public finalize(): FrameDecodeResult[] {
     if (this.buffer.byteLength > 0) {
