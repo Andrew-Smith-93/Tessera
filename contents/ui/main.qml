@@ -446,10 +446,14 @@ Item {
         }
     }
 
-    function scheduleReconcile(reason) {
+    function scheduleReconcile(reason, targetScreenName) {
         var coord = getCoordinator();
         if (coord && reason) {
-            coord.markScreenDirty("default", reason);
+            if (targetScreenName && targetScreenName !== "default") {
+                coord.markScreenDirty(targetScreenName, reason);
+            } else {
+                coord.invalidateAllScreens(reason);
+            }
         }
         if (!reconcileTimer.running) {
             reconcileTimer.start();
@@ -504,9 +508,18 @@ Item {
             normWin.isManualFloating = (floatingWindows[wid] === true);
             normWin.isDragging = (winObj === currentDraggingWindow);
 
-            if (!coord.getRetainedWindow(wid)) {
+            var retained = coord.getRetainedWindow(wid);
+            if (!retained) {
                 coord.ingestEvent({ type: "WindowDiscovered", window: normWin });
             } else {
+                if (normWin.outputId && retained.outputId !== normWin.outputId) {
+                    coord.ingestEvent({
+                        type: "WindowMovedOutput",
+                        windowId: wid,
+                        fromOutputId: retained.outputId,
+                        toOutputId: normWin.outputId
+                    });
+                }
                 coord.ingestEvent({
                     type: "WindowStateChanged",
                     windowId: wid,
@@ -524,6 +537,7 @@ Item {
         }
 
         // 3. Plan and compute reconciliation transaction
+        coord.invalidateAllScreens("ReconciliationPass");
         var tx = coord.reconcile();
         if (!tx || tx.operations.length === 0) {
             return;
@@ -567,7 +581,15 @@ Item {
         }
     }
 
-    function retileNow() {
+    function retileNow(targetScreenName) {
+        var coord = getCoordinator();
+        if (coord) {
+            if (targetScreenName && targetScreenName !== "default") {
+                coord.markScreenDirty(targetScreenName, "RetileNow");
+            } else {
+                coord.invalidateAllScreens("RetileNow");
+            }
+        }
         if (reconcileTimer.running) {
             reconcileTimer.stop();
         }
@@ -1605,10 +1627,7 @@ Item {
 
         var onOutputChanged = function() {
             if (!root || !root.coordinator || isArranging) return;
-            var evalRes = evaluateWindowTileability(w);
-            if (evalRes.changed) {
-                scheduleReconcile("WindowOutputChanged");
-            }
+            scheduleReconcile("WindowOutputChanged");
         };
 
         if (w.interactiveMoveResizeStarted) {
@@ -1746,6 +1765,12 @@ Item {
         var currentlyFloating = floatingWindows[wid] === true;
         floatingWindows[wid] = !currentlyFloating;
         delete preTiledWindows[wid];
+        log("toggleActiveFloating: " + (w.caption || wid) + " -> " + (floatingWindows[wid] ? "floating" : "tiled"));
+
+        var coord = getCoordinator();
+        if (coord) {
+            coord.setManualFloating(wid, floatingWindows[wid]);
+        }
 
         osdCall.notify(floatingWindows[wid] ? "Window Floating" : "Window Tiled", "preferences-system-windows");
         retileNow();

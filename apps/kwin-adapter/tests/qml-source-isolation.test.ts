@@ -210,5 +210,72 @@ describe("QML Source Isolation & Legacy Map Audit", () => {
     const onWindowRemovedMatch = content.match(/function\s+onWindowRemoved\s*\(\s*w\s*\)\s*\{[^}]*unhookWindow\(w\);/);
     expect(onWindowRemovedMatch).not.toBeNull();
   });
+
+  it("10. Every signal connected by hookWindow has a corresponding disconnect path in unhookWindow", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+    const requiredSignals = [
+      "interactiveMoveResizeStarted",
+      "interactiveMoveResizeStepped",
+      "interactiveMoveResizeFinished",
+      "minimizedChanged",
+      "frameGeometryChanged",
+      "fullScreenChanged",
+      "maximizedAboutToChange",
+      "maximizedChanged",
+      "noBorderChanged",
+      "outputChanged"
+    ];
+
+    for (const sig of requiredSignals) {
+      const connectRegex = new RegExp(`w\\.${sig}\\.connect\\s*\\(`, "m");
+      const disconnectRegex = new RegExp(`w\\.${sig}\\.disconnect\\s*\\(`, "m");
+      expect(connectRegex.test(content), `Signal ${sig} must have a connect call in hookWindow`).toBe(true);
+      expect(disconnectRegex.test(content), `Signal ${sig} must have a disconnect call in unhookWindow`).toBe(true);
+    }
+  });
+
+  it("11. Repeated hookWindow calls cannot accumulate duplicate callbacks", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+    // hookWindow must guard against duplicate attachment by unhooking if already hooked
+    expect(content).toMatch(/if\s*\(\s*w\._tesseraHooks\s*\)\s*\{\s*unhookWindow\s*\(\s*w\s*\);\s*\}/);
+  });
+
+  it("12. interactiveMoveResizeStepped and interactiveMoveResizeFinished do not mutate masterRatio", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+
+    // Extract hookWindow function body
+    const hookWindowStart = content.indexOf("function hookWindow(w)");
+    const hookWindowEnd = content.indexOf("function unhookWindow(w)");
+    const hookBody = content.substring(
+      hookWindowStart,
+      hookWindowEnd !== -1 && hookWindowEnd > hookWindowStart ? hookWindowEnd : content.indexOf("// 8. Workspace Global Event Handling")
+    );
+
+    // Assert that master ratio is never mutated during move/resize steps or finish
+    expect(hookBody).not.toMatch(/screenMasterRatios\[[^\]]+\]\s*=/);
+    expect(hookBody).not.toMatch(/config\.masterRatio\s*=/);
+  });
+
+  it("13. Normal explicit layout-ratio commands remain functional", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+
+    // adjustMasterRatio exists and mutates ratio intentionally
+    expect(content).toMatch(/function\s+adjustMasterRatio\s*\(\s*delta\s*\)/);
+    expect(content).toMatch(/adjustMasterRatio\(0\.05\)/);
+    expect(content).toMatch(/adjustMasterRatio\(-0\.05\)/);
+
+    // Shortcuts are registered
+    expect(content).toMatch(/name:\s*"Tessera:\s*Increase\s*Master\s*Ratio"/);
+    expect(content).toMatch(/name:\s*"Tessera:\s*Decrease\s*Master\s*Ratio"/);
+  });
+
+  it("14. Removal of border-drag mutation does not disable intended snap commit behavior", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+
+    // Drag finish must invoke overlayDialog.finishDrag() and apply targetRect
+    expect(content).toMatch(/overlayDialog\s*\?\s*overlayDialog\.finishDrag\(\)\s*:\s*null/);
+    expect(content).toMatch(/target\.targetRect/);
+    expect(content).toMatch(/preTiledWindows\[wid\]\s*=\s*true/);
+  });
 });
 
