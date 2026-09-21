@@ -378,6 +378,70 @@ impl RuntimeBackend for InMemoryTestBackend {
             }
         }
 
+        // Parameter validation matching canonical schemas
+        match method {
+            "runtime.setLayout" => {
+                let layout = params.get("layout").and_then(Value::as_str);
+                let output_id = params.get("outputId").and_then(Value::as_str);
+                if layout.is_none()
+                    || layout.unwrap().trim().is_empty()
+                    || output_id.is_none()
+                    || output_id.unwrap().trim().is_empty()
+                {
+                    return Err(ProtocolErrorData {
+                        code: error_codes::INVALID_PAYLOAD.to_string(),
+                        message:
+                            "runtime.setLayout requires non-empty string 'outputId' and 'layout'"
+                                .to_string(),
+                        details: None,
+                    });
+                }
+            }
+            "runtime.setMasterCount" => {
+                let count = params.get("count").and_then(Value::as_i64);
+                let output_id = params.get("outputId").and_then(Value::as_str);
+                if count.is_none()
+                    || count.unwrap() < 1
+                    || output_id.is_none()
+                    || output_id.unwrap().trim().is_empty()
+                {
+                    return Err(ProtocolErrorData {
+                        code: error_codes::INVALID_PAYLOAD.to_string(),
+                        message: "runtime.setMasterCount requires non-empty string 'outputId' and integer 'count' >= 1".to_string(),
+                        details: None,
+                    });
+                }
+            }
+            "runtime.setMasterRatio" => {
+                let ratio = params.get("ratio").and_then(Value::as_f64);
+                let output_id = params.get("outputId").and_then(Value::as_str);
+                if ratio.is_none()
+                    || !(0.05..=0.95).contains(&ratio.unwrap())
+                    || output_id.is_none()
+                    || output_id.unwrap().trim().is_empty()
+                {
+                    return Err(ProtocolErrorData {
+                        code: error_codes::INVALID_PAYLOAD.to_string(),
+                        message: "runtime.setMasterRatio requires non-empty string 'outputId' and number 'ratio' between 0.05 and 0.95".to_string(),
+                        details: None,
+                    });
+                }
+            }
+            "runtime.setWindowFloating" => {
+                let floating = params.get("floating").and_then(Value::as_bool);
+                let window_id = params.get("windowId").and_then(Value::as_str);
+                if floating.is_none() || window_id.is_none() || window_id.unwrap().trim().is_empty()
+                {
+                    return Err(ProtocolErrorData {
+                        code: error_codes::INVALID_PAYLOAD.to_string(),
+                        message: "runtime.setWindowFloating requires non-empty string 'windowId' and boolean 'floating'".to_string(),
+                        details: None,
+                    });
+                }
+            }
+            _ => {}
+        }
+
         // Target validation
         if let Some(obj) = params.as_object() {
             if let Some(out_val) = obj.get("outputId").and_then(Value::as_str) {
@@ -446,7 +510,19 @@ impl RuntimeBackend for InMemoryTestBackend {
         let mut q = self.queue.write().unwrap();
         let count = q.len();
         if count > 0 {
-            q.clear();
+            let cmds: Vec<_> = q.drain(..).collect();
+            for cmd in cmds {
+                if cmd.method == "config.applyPatch" {
+                    if let Some(patch_obj) = cmd.params.as_object() {
+                        let mut cfg = self.config.write().unwrap();
+                        if let Some(cfg_obj) = cfg.as_object_mut() {
+                            for (k, v) in patch_obj {
+                                cfg_obj.insert(k.clone(), v.clone());
+                            }
+                        }
+                    }
+                }
+            }
             self.revision.fetch_add(count as u64, Ordering::SeqCst);
         }
         count

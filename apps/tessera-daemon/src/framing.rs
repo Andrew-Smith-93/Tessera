@@ -63,7 +63,7 @@ impl FrameDecoder {
             // Reject frame length exceeding 1 MiB limit before allocating or buffering
             if payload_len > MAX_FRAME_SIZE {
                 return Err(FramingError {
-                    code: error_codes::RESOURCE_LIMIT_EXCEEDED,
+                    code: error_codes::FRAME_TOO_LARGE,
                     message: format!(
                         "Frame payload length of {} bytes exceeds maximum allowed frame limit of {} bytes",
                         payload_len, MAX_FRAME_SIZE
@@ -73,7 +73,7 @@ impl FrameDecoder {
 
             if payload_len == 0 {
                 return Err(FramingError {
-                    code: error_codes::INVALID_ENVELOPE,
+                    code: error_codes::DECODE_ERROR,
                     message: "Zero-length frame payload is invalid".to_string(),
                 });
             }
@@ -87,12 +87,12 @@ impl FrameDecoder {
             // Extract payload bytes
             let payload_slice = &self.buffer[4..total_frame_len];
             let text = std::str::from_utf8(payload_slice).map_err(|e| FramingError {
-                code: error_codes::INVALID_JSON,
+                code: error_codes::DECODE_ERROR,
                 message: format!("Frame payload is not valid UTF-8: {}", e),
             })?;
 
             let parsed: Value = serde_json::from_str(text).map_err(|e| FramingError {
-                code: error_codes::INVALID_JSON,
+                code: error_codes::DECODE_ERROR,
                 message: format!("Frame payload is not valid JSON: {}", e),
             })?;
 

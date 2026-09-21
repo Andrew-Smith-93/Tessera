@@ -31,32 +31,29 @@ pub const KNOWN_EVENTS: &[&str] = &[
 ];
 
 pub const V1_CAPABILITIES: &[&str] = &[
-    "state:read",
-    "config:read",
-    "config:write",
-    "runtime:control",
-    "trace:read",
-    "trace:write",
+    "state.inspect",
+    "config.mutate",
+    "runtime.control",
+    "trace.inspect",
 ];
 
 pub mod error_codes {
     pub const INVALID_ENVELOPE: &str = "INVALID_ENVELOPE";
-    pub const INVALID_PAYLOAD: &str = "INVALID_PAYLOAD";
-    pub const UNKNOWN_METHOD: &str = "UNKNOWN_METHOD";
-    pub const UNKNOWN_EVENT: &str = "UNKNOWN_EVENT";
     pub const UNSUPPORTED_MAJOR_VERSION: &str = "UNSUPPORTED_MAJOR_VERSION";
     pub const UNSUPPORTED_MINOR_VERSION: &str = "UNSUPPORTED_MINOR_VERSION";
     pub const CAPABILITY_NOT_NEGOTIATED: &str = "CAPABILITY_NOT_NEGOTIATED";
+    pub const UNKNOWN_METHOD: &str = "UNKNOWN_METHOD";
+    pub const INVALID_PAYLOAD: &str = "INVALID_PAYLOAD";
+    pub const FRAME_TOO_LARGE: &str = "FRAME_TOO_LARGE";
     pub const CONFIG_VALIDATION_FAILED: &str = "CONFIG_VALIDATION_FAILED";
     pub const REVISION_CONFLICT: &str = "REVISION_CONFLICT";
     pub const IDEMPOTENCY_CONFLICT: &str = "IDEMPOTENCY_CONFLICT";
     pub const RESOURCE_LIMIT_EXCEEDED: &str = "RESOURCE_LIMIT_EXCEEDED";
     pub const WINDOW_NOT_FOUND: &str = "WINDOW_NOT_FOUND";
     pub const OUTPUT_NOT_FOUND: &str = "OUTPUT_NOT_FOUND";
-    pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
-    pub const INVALID_JSON: &str = "INVALID_JSON";
-    pub const DECODE_ERROR: &str = "DECODE_ERROR";
     pub const TRACE_DISABLED: &str = "TRACE_DISABLED";
+    pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
+    pub const DECODE_ERROR: &str = "DECODE_ERROR";
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

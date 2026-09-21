@@ -371,8 +371,9 @@ export class ReferenceServer {
         const granted: string[] = [];
         session.negotiatedCapabilities.clear();
 
+        const adapterCaps = this.runtime.getCapabilities ? this.runtime.getCapabilities() : 1;
         for (const cap of V1_CAPABILITIES) {
-          if (requested.has(cap)) {
+          if (requested.has(cap) && adapterCaps > 0) {
             granted.push(cap);
             session.negotiatedCapabilities.add(cap);
           }

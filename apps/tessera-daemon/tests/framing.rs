@@ -91,7 +91,7 @@ fn test_zero_length_frame_rejected() {
     // 4-byte header specifying length 0
     let zero_header = 0u32.to_be_bytes();
     let err = decoder.push_bytes(&zero_header).unwrap_err();
-    assert_eq!(err.code, error_codes::INVALID_ENVELOPE);
+    assert_eq!(err.code, error_codes::DECODE_ERROR);
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn test_oversized_declared_frame_rejected() {
     // Length declared as 2 MiB (exceeds 1 MiB limit)
     let len = (MAX_FRAME_SIZE as u32 + 1024).to_be_bytes();
     let err = decoder.push_bytes(&len).unwrap_err();
-    assert_eq!(err.code, error_codes::RESOURCE_LIMIT_EXCEEDED);
+    assert_eq!(err.code, error_codes::FRAME_TOO_LARGE);
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn test_invalid_utf8_rejected() {
     let mut decoder = FrameDecoder::new();
     let invalid_bytes = [0x00, 0x00, 0x00, 0x04, 0xFF, 0xFE, 0xFD, 0xFC];
     let err = decoder.push_bytes(&invalid_bytes).unwrap_err();
-    assert_eq!(err.code, error_codes::INVALID_JSON);
+    assert_eq!(err.code, error_codes::DECODE_ERROR);
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn test_malformed_json_rejected() {
     chunk.extend_from_slice(bad_json);
 
     let err = decoder.push_bytes(&chunk).unwrap_err();
-    assert_eq!(err.code, error_codes::INVALID_JSON);
+    assert_eq!(err.code, error_codes::DECODE_ERROR);
 }
 
 #[test]

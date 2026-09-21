@@ -55,22 +55,21 @@ pub fn print_protocol_summary(backend_capabilities: u64) {
     println!("Protocol Error Taxonomy:");
     let errors = [
         error_codes::INVALID_ENVELOPE,
-        error_codes::INVALID_PAYLOAD,
-        error_codes::UNKNOWN_METHOD,
-        error_codes::UNKNOWN_EVENT,
         error_codes::UNSUPPORTED_MAJOR_VERSION,
         error_codes::UNSUPPORTED_MINOR_VERSION,
         error_codes::CAPABILITY_NOT_NEGOTIATED,
+        error_codes::UNKNOWN_METHOD,
+        error_codes::INVALID_PAYLOAD,
+        error_codes::FRAME_TOO_LARGE,
         error_codes::CONFIG_VALIDATION_FAILED,
         error_codes::REVISION_CONFLICT,
         error_codes::IDEMPOTENCY_CONFLICT,
         error_codes::RESOURCE_LIMIT_EXCEEDED,
         error_codes::WINDOW_NOT_FOUND,
         error_codes::OUTPUT_NOT_FOUND,
-        error_codes::INTERNAL_ERROR,
-        error_codes::INVALID_JSON,
-        error_codes::DECODE_ERROR,
         error_codes::TRACE_DISABLED,
+        error_codes::INTERNAL_ERROR,
+        error_codes::DECODE_ERROR,
     ];
     for err in errors {
         println!("  - {}", err);

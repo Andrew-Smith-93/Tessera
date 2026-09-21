@@ -315,7 +315,10 @@ impl ConnectionHandler {
                 self.create_success_response(
                     req_id,
                     req_id,
-                    json!({ "adapterCapabilities": caps }),
+                    json!({
+                        "capabilities": V1_CAPABILITIES,
+                        "adapterCapabilities": caps
+                    }),
                 )
             }
             "state.getSnapshot" => {
@@ -505,12 +508,10 @@ impl ConnectionHandler {
                     false // Disconnected backend advertises zero capabilities
                 } else {
                     match *cap {
-                        "state:read" => true,
-                        "config:read" => true,
-                        "config:write" => true,
-                        "runtime:control" => (backend_caps & 0x01) != 0 || backend_caps > 0,
-                        "trace:read" => true,
-                        "trace:write" => true,
+                        "state.inspect" => true,
+                        "config.mutate" => true,
+                        "runtime.control" => (backend_caps & 0x01) != 0 || backend_caps > 0,
+                        "trace.inspect" => true,
                         _ => false,
                     }
                 };
@@ -659,18 +660,17 @@ impl ConnectionHandler {
     }
 
     fn get_required_capability(&self, method: &str) -> Option<&'static str> {
-        match method {
-            "state.getSnapshot" | "state.getDiagnostics" => Some("state:read"),
-            "config.get" | "config.validatePatch" => Some("config:read"),
-            "config.applyPatch" => Some("config:write"),
-            "runtime.requestReconcile"
-            | "runtime.setLayout"
-            | "runtime.setMasterCount"
-            | "runtime.setMasterRatio"
-            | "runtime.setWindowFloating" => Some("runtime:control"),
-            "trace.getRecent" => Some("trace:read"),
-            "trace.clearRecent" => Some("trace:write"),
-            _ => None,
+        if method.starts_with("state.") || method == "runtime.getVersion" || method == "config.get"
+        {
+            Some("state.inspect")
+        } else if method.starts_with("config.") {
+            Some("config.mutate")
+        } else if method.starts_with("runtime.") {
+            Some("runtime.control")
+        } else if method.starts_with("trace.") {
+            Some("trace.inspect")
+        } else {
+            None
         }
     }
 
@@ -716,5 +716,18 @@ impl ConnectionHandler {
                 "details": sanitized_error.details
             }
         })
+    }
+
+    pub fn create_internal_error_test_response(&mut self, id: &str) -> Value {
+        self.create_error_response(
+            id,
+            id,
+            ProtocolErrorData {
+                code: error_codes::INTERNAL_ERROR.to_string(),
+                message: "Sensitive internal database stack trace /var/data/tessera.db:12"
+                    .to_string(),
+                details: None,
+            },
+        )
     }
 }

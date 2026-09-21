@@ -839,6 +839,72 @@ describe("Tessera Protocol V1 Reference Endpoint & Command Queue", () => {
     // Reconnecting/new session has clean idempotency slate:
     // Disconnecting session 1 removes connection state
     server.removeSession("conn-session-1");
-    // New connection reusing "conn-session-1" or fresh session starts fresh
+  });
+
+  it("22. Canonical capability inventory: colon aliases and unknown capabilities are rejected during hello", async () => {
+    const server = new ReferenceServer(mockRuntime);
+    const client = new ReferenceClient(server, "conn-caps");
+
+    const helloResp = await client.hello("CapsClient", "1.0", [
+      "state:read",
+      "runtime:control",
+      "config:mutate",
+      "unknown.capability",
+      "state.inspect"
+    ]);
+
+    expect(helloResp.capabilities).toEqual(["state.inspect"]);
+    expect(helloResp.capabilities).not.toContain("state:read");
+    expect(helloResp.capabilities).not.toContain("runtime:control");
+
+    // state.getCapabilities returns all 4 canonical capabilities
+    const getCapsResp = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-caps-query",
+      method: "state.getCapabilities"
+    }, "conn-caps");
+
+    expect(getCapsResp.ok).toBe(true);
+    const res = getCapsResp.result as StateCapabilitiesResult;
+    expect(res.capabilities).toEqual([
+      "state.inspect",
+      "config.mutate",
+      "runtime.control",
+      "trace.inspect"
+    ]);
+  });
+
+  it("23. Method authorization per capability: client without runtime.control cannot invoke runtime.setLayout", async () => {
+    const server = new ReferenceServer(mockRuntime);
+    const client = new ReferenceClient(server, "conn-auth");
+
+    await client.hello("AuthClient", "1.0", ["state.inspect"]);
+
+    // Allowed under state.inspect
+    const snapResp = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-snap-ok",
+      method: "state.getSnapshot"
+    }, "conn-auth");
+    expect(snapResp.ok).toBe(true);
+
+    // Forbidden without runtime.control
+    const layoutResp = await server.handleRequest({
+      protocol: "tessera.ipc",
+      majorVersion: 1,
+      minorVersion: 0,
+      kind: "request",
+      id: "req-layout-fail",
+      method: "runtime.setLayout",
+      params: { outputId: "HDMI-A-1", layout: "columns" }
+    }, "conn-auth");
+    expect(layoutResp.ok).toBe(false);
+    expect(layoutResp.error?.code).toBe(ProtocolErrorCode.CAPABILITY_NOT_NEGOTIATED);
   });
 });
