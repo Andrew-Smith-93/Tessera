@@ -381,4 +381,22 @@ describe("Phase 3 Runtime Simulator & Trace Replay", () => {
     // Ensure package.sh does not zip apps/runtime-simulator
     expect(packageScript).not.toContain("apps/runtime-simulator");
   });
+
+  it("26. Negative fixture for overlap rejects overlapping windows under normal capacity with TILED_WINDOWS_OVERLAP", () => {
+    const sim = new RuntimeSimulator();
+    const negOverlapPath = resolve(FIXTURES_DIR, "negative/overlap.fixture.json");
+    const fix = sim.loadFixture(negOverlapPath);
+    const res = sim.run(fix);
+    expect(res.invariants.passed).toBe(false);
+    expect(res.invariants.violations.some(v => v.code === "TILED_WINDOWS_OVERLAP")).toBe(true);
+  });
+
+  it("27. Negative fixture for out-of-bounds rejects invalid geometry with TILED_GEOMETRY_OUT_OF_BOUNDS", () => {
+    const sim = new RuntimeSimulator();
+    const negOutOfBoundsPath = resolve(FIXTURES_DIR, "negative/out-of-bounds.fixture.json");
+    const fix = sim.loadFixture(negOutOfBoundsPath);
+    const res = sim.run(fix);
+    expect(res.invariants.passed).toBe(false);
+    expect(res.invariants.violations.some(v => v.code === "TILED_GEOMETRY_OUT_OF_BOUNDS")).toBe(true);
+  });
 });

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "negative-out-of-bounds",
+  "description": "Negative fixture demonstrating detection of window geometry exceeding screen bounds",
+  "initialConfig": {
+    "enableTiling": true,
+    "defaultLayout": "master-stack"
+  },
+  "initialScreens": [
+    {
+      "outputId": "HDMI-A-1",
+      "name": "HDMI-A-1",
+      "geometry": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+      "usableArea": { "x": 0, "y": 0, "width": 1920, "height": 1080 }
+    }
+  ],
+  "events": [
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-1",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": { "x": 100, "y": 100, "width": 600, "height": 400 }
+      }
+    },
+    {
+      "type": "flush"
+    },
+    {
+      "type": "snap-commit",
+      "windowId": "win-1",
+      "outputId": "HDMI-A-1",
+      "geometry": { "x": 2500, "y": 10, "width": 946, "height": 1060 }
+    }
+  ]
+}

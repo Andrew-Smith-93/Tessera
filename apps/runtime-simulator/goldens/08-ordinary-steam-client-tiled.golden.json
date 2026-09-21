@@ -1,5 +1,5 @@
 {
-  "digest": "0e71347b4af25c710d8498f401d9de590ef133557d84524ae718fb70bee2f029",
+  "digest": "103f4139ad66bf1c1e7f707669d2dbbb8f1a47e5b7b7e3053bed0791d0942c60",
   "fixtureName": "08-ordinary-steam-client-tiled",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 2,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 2,

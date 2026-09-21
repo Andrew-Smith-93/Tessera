@@ -306,10 +306,36 @@ describe("Phase 2A Synthetic Performance & Structural Work Benchmarks", () => {
   });
 
   it("Benchmark 9: 100 snap-preview updates + 1 committed snap", async () => {
+    const coordinator = new RuntimeCoordinator();
+    coordinator.getOrCreateScreen(SCREEN_1);
+    coordinator.getOrCreateScreen(SCREEN_2);
+
+    // Initial setup: win-1 on Screen-1, win-2 on Screen-2
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: {
+        id: "snap-win-1",
+        outputId: "Screen-1",
+        frameGeometry: { x: 100, y: 100, width: 600, height: 400 }
+      }
+    });
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: {
+        id: "other-win-2",
+        outputId: "Screen-2",
+        frameGeometry: { x: 2600, y: 100, width: 600, height: 400 }
+      }
+    });
+    const initialTx = coordinator.reconcile();
+    expect(initialTx).not.toBeNull();
+    const initialWrites = coordinator.getDiagnostics().totalGeometryWrites;
+
     const { computeSnapZones, matchSnapZoneHover } = await import("../src/snap-zones.js");
     const area = SCREEN_1.usableArea;
     const zones = computeSnapZones(area, 10, 8);
 
+    // 100 preview updates (zero writes)
     const start = performance.now();
     let lastMatch = -1;
     for (let i = 0; i < 100; i++) {
@@ -319,12 +345,48 @@ describe("Phase 2A Synthetic Performance & Structural Work Benchmarks", () => {
     }
     const elapsed = performance.now() - start;
 
+    const writesAfterPreviews = coordinator.getDiagnostics().totalGeometryWrites;
+    expect(writesAfterPreviews).toBe(initialWrites); // Snap preview remains 0 writes
+
     // Committed snap
-    const chosenZone = zones[1]; // Left half
-    expect(chosenZone.id).toBe("left-half");
+    // Choose zone 2 (Right Half) which differs from current geometry of snap-win-1
+    const chosenZone = zones[2];
+    expect(chosenZone.id).toBe("right-half");
+
+    // Commit snap via applySnapCommit
+    const commitTx = coordinator.applySnapCommit(
+      "snap-win-1",
+      "Screen-1",
+      chosenZone.targetRect,
+      chosenZone.slotIndex
+    );
+    expect(commitTx).not.toBeNull();
+    expect(commitTx!.operations).toHaveLength(1); // Snap commit produces exactly 1 intentional write
+    expect(commitTx!.operations[0].targetRect).toEqual(chosenZone.targetRect); // Preview rect matches committed rect
+    expect(commitTx!.affectedScreens).toEqual(["Screen-1"]); // Unaffected screens (Screen-2) produce 0 writes
+
+    const writesAfterCommit = coordinator.getDiagnostics().totalGeometryWrites;
+    expect(writesAfterCommit).toBe(initialWrites + 1);
+
+    // Compositor echoes the matching committed geometry -> suppressed
+    const echoRes = coordinator.checkAndHandleEcho(
+      "snap-win-1",
+      chosenZone.targetRect
+    );
+    expect(echoRes.isEcho).toBe(true); // Matching echo suppressed
+
+    // Identical second snap commit produces 0 writes
+    const secondCommitTx = coordinator.applySnapCommit(
+      "snap-win-1",
+      "Screen-1",
+      chosenZone.targetRect,
+      chosenZone.slotIndex
+    );
+    expect(secondCommitTx).toBeNull(); // 0 writes
+    expect(coordinator.getDiagnostics().totalGeometryWrites).toBe(writesAfterCommit);
 
     console.log("\n--- Benchmark 9 Result (100 Snap Updates + Commit) ---");
-    console.log(`Duration: ${elapsed.toFixed(3)}ms, Committed Zone: ${chosenZone.title}`);
+    console.log(`100 previews (0 writes), 1 commit (1 write), echo suppressed, second commit 0 writes. Duration: ${elapsed.toFixed(3)}ms`);
     expect(elapsed).toBeLessThan(50);
   });
 });

@@ -1,26 +1,28 @@
 {
-  "digest": "bfa46f535778cdfca0559437a63d400613e95cdc848e1abf32a093de758efa58",
+  "digest": "5e2d6631ef7ac15c754f93c5e6fecd7c3136b49a7da8deb94354422c1352c991",
   "fixtureName": "23-snap-preview-and-commit",
   "finalTick": 0,
   "diagnostics": {
     "totalEvents": 6,
-    "totalTransactions": 1,
-    "totalLayoutComputations": 1,
-    "totalGeometryWrites": 2,
+    "totalTransactions": 2,
+    "totalLayoutComputations": 2,
+    "totalGeometryWrites": 3,
     "skippedWrites": 0,
-    "suppressedEchoes": 2,
-    "previewOnlyOperations": 2,
+    "suppressedEchoes": 3,
+    "previewOnlyOperations": 1,
+    "committedSnapOperations": 1,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
-      "previewOnlyOperations": 2,
+      "committedSnapOperations": 1,
+      "previewOnlyOperations": 1,
       "skippedWrites": 0,
-      "suppressedEchoes": 2,
+      "suppressedEchoes": 3,
       "totalEvents": 6,
-      "totalGeometryWrites": 2,
-      "totalLayoutComputations": 1,
-      "totalTransactions": 1,
+      "totalGeometryWrites": 3,
+      "totalLayoutComputations": 2,
+      "totalTransactions": 2,
       "unaffectedScreensRecomputed": 0
     },
     "finalTick": 0,
@@ -39,6 +41,35 @@
         "geometry": {
           "height": 1080,
           "width": 1920,
+          "x": 1920,
+          "y": 0
+        },
+        "masterCount": 1,
+        "masterRatio": 0.5,
+        "name": "DP-1",
+        "orderedWindowIds": [
+          "win-2"
+        ],
+        "outputId": "DP-1",
+        "persistentOrder": [
+          "win-2"
+        ],
+        "usableArea": {
+          "height": 1080,
+          "width": 1920,
+          "x": 1920,
+          "y": 0
+        }
+      },
+      {
+        "activeLayout": "master-stack",
+        "gaps": {
+          "inner": 8,
+          "outer": 10
+        },
+        "geometry": {
+          "height": 1080,
+          "width": 1920,
           "x": 0,
           "y": 0
         },
@@ -46,13 +77,11 @@
         "masterRatio": 0.5,
         "name": "HDMI-A-1",
         "orderedWindowIds": [
-          "win-1",
-          "win-2"
+          "win-1"
         ],
         "outputId": "HDMI-A-1",
         "persistentOrder": [
-          "win-1",
-          "win-2"
+          "win-1"
         ],
         "usableArea": {
           "height": 1080,
@@ -93,14 +122,14 @@
         "classification": "tiled",
         "desiredGeometry": {
           "height": 1060,
-          "width": 946,
-          "x": 964,
+          "width": 1900,
+          "x": 1930,
           "y": 10
         },
         "frameGeometry": {
           "height": 1060,
-          "width": 946,
-          "x": 964,
+          "width": 1900,
+          "x": 1930,
           "y": 10
         },
         "fullScreen": false,
@@ -109,8 +138,8 @@
         "maximizeMode": 0,
         "minimized": false,
         "noBorder": false,
-        "outputAffinity": "HDMI-A-1",
-        "outputId": "HDMI-A-1",
+        "outputAffinity": "DP-1",
+        "outputId": "DP-1",
         "preMinimizeGeometry": null,
         "resourceClass": "kitty",
         "tileable": true
@@ -120,7 +149,8 @@
     "transactions": [
       {
         "affectedScreens": [
-          "HDMI-A-1"
+          "HDMI-A-1",
+          "DP-1"
         ],
         "epoch": 1,
         "operations": [
@@ -133,7 +163,7 @@
             },
             "targetRect": {
               "height": 1060,
-              "width": 946,
+              "width": 1900,
               "x": 10,
               "y": 10
             },
@@ -143,13 +173,13 @@
             "previousRect": {
               "height": 400,
               "width": 600,
-              "x": 100,
+              "x": 2000,
               "y": 100
             },
             "targetRect": {
               "height": 1060,
-              "width": 946,
-              "x": 964,
+              "width": 1900,
+              "x": 1930,
               "y": 10
             },
             "windowId": "win-2"
@@ -157,6 +187,34 @@
         ],
         "reasons": [
           "WindowDiscovered"
+        ],
+        "skippedWrites": 0,
+        "tick": 0
+      },
+      {
+        "affectedScreens": [
+          "HDMI-A-1"
+        ],
+        "epoch": 2,
+        "operations": [
+          {
+            "previousRect": {
+              "height": 1060,
+              "width": 1900,
+              "x": 10,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 1060,
+              "width": 946,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-1"
+          }
+        ],
+        "reasons": [
+          "SnapCommitted"
         ],
         "skippedWrites": 0,
         "tick": 0

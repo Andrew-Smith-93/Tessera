@@ -1,5 +1,5 @@
 {
-  "digest": "d01e229d604c024ce6a9df62c596b568248b9643bd3db603537a4c6ad2454c21",
+  "digest": "b1e35bbfa7737dec6ca0c686abfd3b40363394f0a9aa9affa4e4da8a7f1223b6",
   "fixtureName": "20-expired-geometry-echo",
   "finalTick": 298,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 1,
     "suppressedEchoes": 0,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 1,
       "suppressedEchoes": 0,

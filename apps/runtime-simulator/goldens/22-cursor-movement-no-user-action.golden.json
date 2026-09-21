@@ -1,5 +1,5 @@
 {
-  "digest": "a299a0b188d48165d70b3640ecf761dcb211e0a5e0a38f2b87f26e5214f11686",
+  "digest": "4d57ff32c67ed587d11fd801ec6f66adb497ea81f63bee33761344b1d822d75c",
   "fixtureName": "22-cursor-movement-no-user-action",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 2,
     "previewOnlyOperations": 50,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 50,
       "skippedWrites": 0,
       "suppressedEchoes": 2,

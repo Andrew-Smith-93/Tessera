@@ -1,5 +1,5 @@
 {
-  "digest": "6ccc09eb75c202bd8eb194792a18bf4e10b2ba402b17aefa0fa20a0c71951d76",
+  "digest": "542006e8fa0b79091b447009d5e7507e00073d47c7482fc4e363509627d5a2fc",
   "fixtureName": "15-window-migration-between-outputs",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 6,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 6,

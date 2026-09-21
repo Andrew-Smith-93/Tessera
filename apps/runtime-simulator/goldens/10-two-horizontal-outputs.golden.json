@@ -1,5 +1,5 @@
 {
-  "digest": "f4f1642c78f973afc67cd0b323dcb192f2f542bb96df7a107a6aef4aaa94f262",
+  "digest": "474d72fdc677e3ae79a49fcfd0d16432b74f6b5e73bd3e33229bfdf01f4f73f9",
   "fixtureName": "10-two-horizontal-outputs",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 4,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 4,

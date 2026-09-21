@@ -1,5 +1,5 @@
 {
-  "digest": "a209691e08370d81632a76c30c470e2c3e3c35c91b6d97bf50faa9f461a105d6",
+  "digest": "1b3b30bac5af0ff5bdf9e9d541e790e0aee2ff78f71243b27f078d2494e6720f",
   "fixtureName": "14-panel-work-area-offset",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 2,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 2,

@@ -1,5 +1,5 @@
 {
-  "digest": "3010a918f6281ae212bf73a1e6879734faa70b3198c48bbacdd523062d413a59",
+  "digest": "c979d40b90fb025e68ab09536a5115eec3e8eac58755b829efbe00c97288415d",
   "fixtureName": "25-mixed-burst",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 6,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 6,

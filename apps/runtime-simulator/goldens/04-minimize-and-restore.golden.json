@@ -1,5 +1,5 @@
 {
-  "digest": "e5931c0d30eb158649facaa20bddac87de5559d11e6971d5a8421b3eb009e6b4",
+  "digest": "b63a8d96bd4b154576fac379edaf8a77995bd3614e7b81b72501d1e98c0731ff",
   "fixtureName": "04-minimize-and-restore",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 3,
     "suppressedEchoes": 5,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 3,
       "suppressedEchoes": 5,

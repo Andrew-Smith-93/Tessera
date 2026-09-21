@@ -202,4 +202,5 @@ export type NormalizedEvent =
   | { type: "ScreenLayoutChanged"; outputId: string; layout: LayoutAlgorithm }
   | { type: "ScreenMasterConfigChanged"; outputId: string; count?: number; ratio?: number }
   | { type: "ScreenGapsChanged"; outputId: string; gaps: GapConfig }
-  | { type: "GlobalConfigChanged"; config: Partial<CoordinatorConfig> };
+  | { type: "GlobalConfigChanged"; config: Partial<CoordinatorConfig> }
+  | { type: "WindowSnapCommitted"; windowId: RuntimeWindowId; outputId: string; targetRect: Rect; slotIndex?: number; timestamp?: number };

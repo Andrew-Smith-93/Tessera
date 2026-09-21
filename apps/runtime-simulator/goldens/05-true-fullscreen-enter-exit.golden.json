@@ -1,5 +1,5 @@
 {
-  "digest": "2806cfab34c48a4b014cb1e79a7f24a481189d8855503dc5049d4c7d995ae22b",
+  "digest": "ea0517c388081cb54a3d18cb208ddc10aff9a9ef49edc2259778c5fb39c28bec",
   "fixtureName": "05-true-fullscreen-enter-exit",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 1,
     "suppressedEchoes": 7,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 1,
       "suppressedEchoes": 7,

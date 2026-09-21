@@ -1,5 +1,5 @@
 {
-  "digest": "13b9023288f0c9b3cba43c24c9ecb0d912d655ec01c38a64a1972aaab3efc919",
+  "digest": "20356d64e61c0308073230c724fba08e5fd66b306913c6050bacd8e4c1635a8b",
   "fixtureName": "21-mismatched-external-geometry",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 0,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 0,

@@ -3,10 +3,12 @@ import {
   RuntimeCoordinator,
   LogicalClock,
   TraceRecorder,
+  computeSnapZones,
   type RetainedScreenState,
   type RetainedWindowState,
   type GeometryOperation
 } from "@tessera/kwin-adapter";
+import type { Rect } from "@tessera/protocol";
 import type {
   TraceFixture,
   SimulationResult,
@@ -81,6 +83,7 @@ export class RuntimeSimulator {
 
     const transactions: SerializableTransaction[] = [];
     let previewOnlyOperations = 0;
+    let committedSnapOperations = 0;
 
     // Helper to perform reconciliation and record transaction
     const performReconciliation = () => {
@@ -327,9 +330,62 @@ export class RuntimeSimulator {
         }
 
         case "cursor-position-update":
-        case "snap-preview":
-        case "snap-commit": {
+        case "snap-preview": {
           previewOnlyOperations++;
+          break;
+        }
+
+        case "snap-commit": {
+          committedSnapOperations++;
+          const targetScreen = event.outputId
+            ? coordinator.getRetainedScreen(event.outputId)
+            : coordinator.getRetainedScreens()[0];
+          if (!targetScreen) break;
+
+          const windowId = event.windowId || (coordinator.getRetainedWindows()[0]?.id);
+          if (!windowId) break;
+
+          let targetRect: Rect;
+          let slotIndex = 0;
+          if (event.geometry) {
+            targetRect = event.geometry;
+          } else {
+            const zones = computeSnapZones(
+              targetScreen.usableArea,
+              targetScreen.gaps.outer,
+              targetScreen.gaps.inner
+            );
+            const zoneIdx =
+              event.zoneIndex !== undefined && event.zoneIndex >= 0 && event.zoneIndex < zones.length
+                ? event.zoneIndex
+                : 1;
+            const selectedZone = zones[zoneIdx];
+            targetRect = selectedZone.targetRect;
+            slotIndex = selectedZone.slotIndex;
+          }
+
+          const tx = coordinator.applySnapCommit(
+            windowId,
+            targetScreen.outputId,
+            targetRect,
+            slotIndex
+          );
+          if (tx && tx.operations.length > 0) {
+            const serializableTx: SerializableTransaction = {
+              epoch: tx.epoch,
+              tick: clock.now(),
+              reasons: [...tx.reasons],
+              affectedScreens: [...tx.affectedScreens],
+              operations: tx.operations.map((op: GeometryOperation) => ({
+                windowId: op.windowId,
+                targetRect: { ...op.targetRect },
+                previousRect: op.previousRect ? { ...op.previousRect } : undefined
+              })),
+              skippedWrites: tx.skippedWrites
+            };
+            transactions.push(serializableTx);
+            session.applyOperations(serializableTx.operations, clock.now(), coordinator);
+          }
           break;
         }
 
@@ -403,6 +459,7 @@ export class RuntimeSimulator {
       skippedWrites: diag.skippedIdenticalWrites,
       suppressedEchoes: diag.suppressedGeometryEchoes,
       previewOnlyOperations,
+      committedSnapOperations,
       unaffectedScreensRecomputed: 0
     };
 

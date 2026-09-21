@@ -1,5 +1,5 @@
 {
-  "digest": "7041c22fe288c07dcacdcb5833a8fcc3eea1f1f30eb8b17231ddd8e084e741d2",
+  "digest": "2823e4465a19792b71d9856f1537b098e6679bd0d34949d3f6be024b4d35ad9e",
   "fixtureName": "16-output-removal-reassignment",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 1,
     "suppressedEchoes": 7,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 1,
       "suppressedEchoes": 7,

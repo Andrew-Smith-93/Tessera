@@ -1,5 +1,5 @@
 {
-  "digest": "b6d2f36b0ec3c7595237f06623377eb287f284817b582824f0bf9a7e9a65e6c9",
+  "digest": "2171f6646dcd7ec07b411eb5bd7e41e619f30736e1e62bc9de685180e13a937b",
   "fixtureName": "24-config-revision-invalidation",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 2,
     "suppressedEchoes": 2,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 2,
       "suppressedEchoes": 2,

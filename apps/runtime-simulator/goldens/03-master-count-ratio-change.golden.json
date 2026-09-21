@@ -1,5 +1,5 @@
 {
-  "digest": "e69d5c3a7786f63516f16c75eb1020fe319e32fa27d957d5c459403f27a703f7",
+  "digest": "18ed855eff54d17a4bbb557027d6ed624c0b6921a05307da15d85dfe4fbf70cb",
   "fixtureName": "03-master-count-ratio-change",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 12,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 12,

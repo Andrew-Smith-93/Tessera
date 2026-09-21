@@ -1402,6 +1402,49 @@ var ReconcilerModule = (() => {
           this.updateConfig(event.config);
           return { dirty: true, affectedScreens: Array.from(this.screens.keys()), isEcho: false };
         }
+        case "WindowSnapCommitted": {
+          const win = this.windows.get(event.windowId);
+          if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
+          const targetScreen = this.screens.get(event.outputId);
+          const oldOutputId = win.outputId;
+          win.outputId = event.outputId;
+          win.outputAffinity = event.outputId;
+          win.isDragging = false;
+          win.isManualFloating = false;
+          win.tileable = true;
+          win.classification = "tiled";
+          win.currentDesiredTiledGeometry = { ...event.targetRect };
+          this.setSavedTiledGeometry(event.windowId, event.targetRect);
+          if (targetScreen) {
+            if (oldOutputId && oldOutputId !== event.outputId) {
+              const oldScreen = this.screens.get(oldOutputId);
+              if (oldScreen) {
+                const oIdx = oldScreen.persistentOrder.indexOf(event.windowId);
+                if (oIdx !== -1) oldScreen.persistentOrder.splice(oIdx, 1);
+                const wIdx = oldScreen.orderedWindowIds.indexOf(event.windowId);
+                if (wIdx !== -1) oldScreen.orderedWindowIds.splice(wIdx, 1);
+              }
+            }
+            const curPIdx = targetScreen.persistentOrder.indexOf(event.windowId);
+            if (curPIdx !== -1) targetScreen.persistentOrder.splice(curPIdx, 1);
+            const curOIdx = targetScreen.orderedWindowIds.indexOf(event.windowId);
+            if (curOIdx !== -1) targetScreen.orderedWindowIds.splice(curOIdx, 1);
+            if (event.slotIndex === 0) {
+              targetScreen.persistentOrder.unshift(event.windowId);
+              targetScreen.orderedWindowIds.unshift(event.windowId);
+            } else {
+              targetScreen.persistentOrder.push(event.windowId);
+              targetScreen.orderedWindowIds.push(event.windowId);
+            }
+          }
+          this.markScreenDirty(event.outputId, "WindowSnapCommitted");
+          const affected = [event.outputId];
+          if (oldOutputId && oldOutputId !== event.outputId) {
+            this.markScreenDirty(oldOutputId, "WindowSnapCommittedSource");
+            affected.push(oldOutputId);
+          }
+          return { dirty: true, affectedScreens: affected, isEcho: false };
+        }
       }
     }
     /**
@@ -1591,6 +1634,58 @@ var ReconcilerModule = (() => {
         skippedWrites,
         durationMs
       };
+    }
+    /**
+     * Commits a window into a prospective snap target geometry and screen slot.
+     * Produces exactly 1 geometry operation if the window moves or resizes,
+     * arms inFlightEchoes for suppression of the compositor echo,
+     * or skips the write (0 operations) if the window is already at targetRect.
+     * Unaffected screens produce 0 writes.
+     */
+    applySnapCommit(windowId, outputId, targetRect, slotIndex) {
+      this.ingestEvent({
+        type: "WindowSnapCommitted",
+        windowId,
+        outputId,
+        targetRect,
+        slotIndex
+      });
+      const win = this.windows.get(windowId);
+      if (!win) return null;
+      const screen = this.screens.get(outputId);
+      if (!screen) return null;
+      const tolerance = this.config.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX;
+      const observedRect = win.lastObservedGeometry;
+      if (rectEqualsWithTolerance(targetRect, observedRect, tolerance) || win.lastRequestedGeometry && rectEqualsWithTolerance(targetRect, win.lastRequestedGeometry, tolerance)) {
+        this.skippedIdenticalWrites++;
+        screen.dirtyReasons.clear();
+        this.dirtyScreenIds.delete(outputId);
+        return null;
+      }
+      const epoch = ++this.currentEpoch;
+      const op = {
+        windowId: win.id,
+        targetRect: { ...targetRect },
+        previousRect: { ...observedRect }
+      };
+      this.totalGeometryWrites++;
+      win.lastRequestedGeometry = { ...targetRect };
+      win.lastAppliedTransactionEpoch = epoch;
+      this.recordCommand(win.id, targetRect, epoch);
+      screen.latestCommittedEpoch = epoch;
+      screen.dirtyReasons.clear();
+      this.dirtyScreenIds.delete(outputId);
+      const tx = {
+        epoch,
+        reasons: ["SnapCommitted"],
+        affectedScreens: [outputId],
+        operations: [op],
+        skippedWrites: 0
+      };
+      this.totalReconciliationTransactions++;
+      this.lastTransactionReasons = ["SnapCommitted"];
+      this.lastAffectedScreenIds = [outputId];
+      return tx;
     }
     getSavedTiledGeometry(windowId) {
       const win = this.windows.get(windowId);

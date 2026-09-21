@@ -1,5 +1,5 @@
 {
-  "digest": "3b68bbaa2bbfc761c47f2a30ba3ed83e47224803e92b44d318a69320b59d12ab",
+  "digest": "75a604e5777651a554f5ae4217e459eebb6430c91a9e4231d81c04804d3104c0",
   "fixtureName": "17-screen-geometry-change",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 4,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 4,

@@ -1,5 +1,5 @@
 {
-  "digest": "bb03fc380396f2322dc22dd5acf6d28a34051bfe0acfdc59ab673127f1ed2c4f",
+  "digest": "651e879ea870bb9bf70bc78697ea3c386dae81ff058876f75599a299b505838c",
   "fixtureName": "02-window-addition-removal",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 2,
     "suppressedEchoes": 5,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 2,
       "suppressedEchoes": 5,

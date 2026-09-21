@@ -1,5 +1,5 @@
 {
-  "digest": "c8fbb3f09815217b86ee7ff2707352770ad586a5e3af689716069dfa60ab30cc",
+  "digest": "28451ac2bce1c1e869b2cefcc2a52d5b4aaa1f3323e5e0b3b24749aec76731e2",
   "fixtureName": "09-generic-wine-config-tiled",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 2,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 2,

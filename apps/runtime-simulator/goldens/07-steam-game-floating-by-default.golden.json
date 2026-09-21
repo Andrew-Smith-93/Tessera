@@ -1,5 +1,5 @@
 {
-  "digest": "61fae9eb6dc0e39192506f9c24214915c10e26387c5f7db2828c2ad628df9118",
+  "digest": "50dc12fd509fda3efc52bb1d6186516c4b293136fc5fc4afd743c7db6273f102",
   "fixtureName": "07-steam-game-floating-by-default",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 1,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 1,

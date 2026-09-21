@@ -1,5 +1,5 @@
 {
-  "digest": "5ef0b855bb47d474b912751e18c7dcaec4c1ed57cd32ffdd9e84f1c0c7af28b5",
+  "digest": "f1a922a57da08bf23cd7edc4df048799e73816aec5ce3d001bef4185048436b0",
   "fixtureName": "01-single-screen-three-windows",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 3,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 3,

@@ -149,6 +149,7 @@ export interface SimulationDiagnostics {
   skippedWrites: number;
   suppressedEchoes: number;
   previewOnlyOperations: number;
+  committedSnapOperations: number;
   unaffectedScreensRecomputed: number;
 }
 

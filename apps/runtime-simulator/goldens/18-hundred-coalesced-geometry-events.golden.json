@@ -1,5 +1,5 @@
 {
-  "digest": "039d0f1815d2c14cbe0e2c5cc0d04e0e6356897088ef42f3e8ed34dd1161e347",
+  "digest": "82eecb4d7b7dd0e900118f599469c4805a368b0d081922bfaf9e25815ae15492",
   "fixtureName": "18-hundred-coalesced-geometry-events",
   "finalTick": 0,
   "diagnostics": {
@@ -10,10 +10,12 @@
     "skippedWrites": 0,
     "suppressedEchoes": 2,
     "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
   },
   "canonicalState": {
     "diagnostics": {
+      "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
       "skippedWrites": 0,
       "suppressedEchoes": 2,
