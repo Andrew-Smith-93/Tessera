@@ -28,6 +28,9 @@ var RuleEngine = (function () {
         "lutris",
         "heroic",
         "gamescope",
+        "tessera",
+        "tessera-settings",
+        "tessera_settings.py",
         "file-roller",
         "ark",
         "gwenview"

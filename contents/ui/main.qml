@@ -23,7 +23,7 @@ Item {
         nvidiaDebounceMs: 60,
         smoothResize: false,
         ignoreMinimized: true,
-        floatFilter: "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1,Steam,steam_app,steamwebhelper",
+        floatFilter: "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1,Steam,steam_app,steamwebhelper,tessera,tessera-settings,tessera_settings.py",
         customRulesJson: "[]",
         desktopLayoutsJson: "{}"
     })
@@ -35,13 +35,23 @@ Item {
     property bool isArranging: false
     property var currentDraggingWindow: null
 
-    function log(msg) {
-        console.log("[Tessera] " + msg);
+    // Visual Drag & Drop Snap Zones Overlay Loader
+    Loader {
+        id: zoneOverlayLoader
+        source: "ZoneOverlay.qml"
     }
 
-    // Visual Drag & Drop Snap Zones Overlay
-    ZoneOverlay {
-        id: zoneOverlay
+    // Top Notification HUD Loader
+    Loader {
+        id: topHudLoader
+        source: "TopNotification.qml"
+    }
+
+    Connections {
+        target: zoneOverlayLoader.item
+        function onLayoutSelected(layoutName) {
+            root.setActiveLayout(layoutName);
+        }
     }
 
     // Load configuration from KWin KConfig
@@ -78,6 +88,10 @@ Item {
         retileNow();
     }
 
+    function log(msg) {
+        console.log("[Tessera] " + msg);
+    }
+
     // Hook window move/resize events for visual snap zones
     function hookWindow(w) {
         if (!w || !w.managed || !w.normalWindow) return;
@@ -87,17 +101,21 @@ Item {
         if (w.interactiveMoveResizeStarted) {
             w.interactiveMoveResizeStarted.connect(function() {
                 currentDraggingWindow = w;
-                zoneOverlay.showOverlay(config.gapInner, config.gapOuter);
+                if (zoneOverlayLoader.item) {
+                    zoneOverlayLoader.item.showOverlay(getActiveLayout(), config.gapInner, config.gapOuter);
+                }
             });
         }
         if (w.interactiveMoveResizeStepped) {
             w.interactiveMoveResizeStepped.connect(function() {
-                zoneOverlay.updateHover(Workspace.cursorPos);
+                if (zoneOverlayLoader.item) {
+                    zoneOverlayLoader.item.updateHover(Workspace.cursorPos);
+                }
             });
         }
         if (w.interactiveMoveResizeFinished) {
             w.interactiveMoveResizeFinished.connect(function() {
-                var target = zoneOverlay.finishDrag();
+                var target = zoneOverlayLoader.item ? zoneOverlayLoader.item.finishDrag() : null;
                 if (target && currentDraggingWindow) {
                     var wid = currentDraggingWindow.internalId ? currentDraggingWindow.internalId.toString() : (currentDraggingWindow.caption + currentDraggingWindow.resourceClass);
                     floatingWindows[wid] = true;
@@ -111,6 +129,9 @@ Item {
                             currentDraggingWindow.setMaximize(false, false);
                         }
                         currentDraggingWindow.frameGeometry = Qt.rect(target.targetX, target.targetY, target.targetW, target.targetH);
+                    }
+                    if (topHudLoader.item) {
+                        topHudLoader.item.showMessage("Snapped: " + target.name);
                     }
                     osdCall.notify("Snapped: " + target.name, "preferences-desktop-virtual");
                 }
@@ -158,6 +179,9 @@ Item {
     function setActiveLayout(layoutName) {
         var key = getCurrentDesktopKey();
         desktopLayouts[key] = layoutName;
+        if (topHudLoader.item) {
+            topHudLoader.item.showMessage("LAYOUT: " + layoutName.toUpperCase());
+        }
         osdCall.notify("Layout: " + layoutName.toUpperCase(), "preferences-desktop-virtual");
         retileNow();
     }
@@ -413,14 +437,14 @@ Item {
     ShortcutHandler {
         name: "Tessera: Next Layout"
         text: "Tessera: Next Layout"
-        sequence: "Meta+Space"
+        sequence: "Ctrl+Space"
         onActivated: root.cycleLayout(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Previous Layout"
         text: "Tessera: Previous Layout"
-        sequence: "Meta+Shift+Space"
+        sequence: "Ctrl+Shift+Space"
         onActivated: root.cycleLayout(false)
     }
 

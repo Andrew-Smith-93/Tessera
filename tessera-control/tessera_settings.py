@@ -632,8 +632,8 @@ class TesseraControlWindow(QMainWindow):
 
         shortcuts = [
             ("Toggle Tiling Globally", "Meta + Shift + T"),
-            ("Cycle to Next Layout", "Meta + Space"),
-            ("Cycle to Previous Layout", "Meta + Shift + Space"),
+            ("Cycle to Next Layout", "Ctrl + Space"),
+            ("Cycle to Previous Layout", "Ctrl + Shift + Space"),
             ("Toggle Active Window Floating", "Meta + Shift + F"),
             ("Focus Next Window", "Meta + J  /  Meta + Down"),
             ("Focus Previous Window", "Meta + K  /  Meta + Up"),
