@@ -5,13 +5,13 @@ pkgver=1.0.1.r0
 pkgrel=1
 pkgdesc="Modern, GPU-optimized dynamic tiling window manager for KDE Plasma 6 with intuitive visual configuration"
 arch=('any')
-url="https://github.com/drew/tessera"
+url="https://github.com/Andrew-Smith-93/tiling-window-manager"
 license=('GPL3')
 depends=('kwin' 'plasma-workspace' 'python' 'python-pyqt5')
 makedepends=('git')
 provides=('kwin-script-tessera')
 conflicts=('kwin-script-tessera')
-source=("git+https://github.com/drew/tessera.git")
+source=("git+https://github.com/Andrew-Smith-93/tiling-window-manager.git")
 sha256sums=('SKIP')
 
 pkgver() {

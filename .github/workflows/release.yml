@@ -15,15 +15,41 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Run TypeScript Unit Tests
+        run: npm test
+
+      - name: Run TypeScript Typecheck
+        run: npm run typecheck
+
+      - name: Build Monorepo & Fresh JavaScript Layouts Bridge
+        run: npm run build
+
+      - name: Verify Generated Artifacts Up-To-Date
+        run: npm run verify:artifacts
+
       - name: Build Official .kwinscript Bundle
         run: |
           chmod +x package.sh
           ./package.sh
+
+      - name: Validate Package Archive Integrity
+        run: |
+          unzip -t dist/*.kwinscript
+          unzip -l dist/*.kwinscript | grep "contents/code/layouts.js"
 
       - name: Package Standalone Control Center
         run: |

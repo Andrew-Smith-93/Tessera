@@ -12,7 +12,7 @@
         "Id": "tessera",
         "Version": "1.0.1",
         "License": "GPL-3.0+",
-        "Website": "https://github.com/drew/tessera",
+        "Website": "https://github.com/Andrew-Smith-93/tiling-window-manager",
         "Category": "Window Management",
         "ServiceTypes": [
             "KWin/Script"

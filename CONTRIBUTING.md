@@ -8,8 +8,8 @@ Thank you for your interest in improving Tessera! We welcome bug reports, layout
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/drew/tessera.git
-   cd tessera
+   git clone https://github.com/Andrew-Smith-93/tiling-window-manager.git
+   cd tiling-window-manager
    ```
 
 2. **Run tests**:

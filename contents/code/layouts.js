@@ -24,7 +24,7 @@ var LayoutsModule = (() => {
     Layouts: () => Layouts
   });
 
-  // packages/layout-core/dist/geometry.js
+  // packages/layout-core/src/geometry.ts
   function applyGaps(rect, gaps, isLeft = true, isRight = true, isTop = true, isBottom = true) {
     const x = rect.x + (isLeft ? gaps.outer : Math.floor(gaps.inner / 2));
     const y = rect.y + (isTop ? gaps.outer : Math.floor(gaps.inner / 2));
@@ -38,7 +38,7 @@ var LayoutsModule = (() => {
     };
   }
 
-  // packages/layout-core/dist/tree.js
+  // packages/layout-core/src/tree.ts
   var nextNodeId = 1;
   function generateNodeId() {
     return `node-${nextNodeId++}`;
@@ -64,23 +64,19 @@ var LayoutsModule = (() => {
     };
   }
   function allLeaves(node) {
-    if (!node)
-      return [];
-    if (node.kind === "leaf")
-      return [node];
+    if (!node) return [];
+    if (node.kind === "leaf") return [node];
     return [...allLeaves(node.children[0]), ...allLeaves(node.children[1])];
   }
   function findLeafByWindow(node, windowId) {
-    if (!node)
-      return null;
+    if (!node) return null;
     if (node.kind === "leaf") {
       return node.windowId === windowId ? node : null;
     }
     return findLeafByWindow(node.children[0], windowId) || findLeafByWindow(node.children[1], windowId);
   }
   function findParent(root, targetId) {
-    if (!root || root.kind === "leaf")
-      return null;
+    if (!root || root.kind === "leaf") return null;
     if (root.children[0].id === targetId || root.children[1].id === targetId) {
       return root;
     }
@@ -88,12 +84,10 @@ var LayoutsModule = (() => {
   }
   function insertWindow(root, newWindowId, targetWindowId, direction = "horizontal", ratio = 0.5) {
     const newLeaf = createLeaf(newWindowId);
-    if (!root)
-      return newLeaf;
+    if (!root) return newLeaf;
     const target = targetWindowId ? findLeafByWindow(root, targetWindowId) : null;
     const insertTarget = target || allLeaves(root)[0];
-    if (!insertTarget)
-      return newLeaf;
+    if (!insertTarget) return newLeaf;
     if (insertTarget === root) {
       return createSplit(insertTarget, newLeaf, direction, ratio);
     }
@@ -111,12 +105,11 @@ var LayoutsModule = (() => {
     return root;
   }
 
-  // packages/layout-core/dist/solver.js
+  // packages/layout-core/src/solver.ts
   function solveBalancedGrid(area, windows, gaps) {
     const result = /* @__PURE__ */ new Map();
     const count = windows.length;
-    if (count === 0)
-      return result;
+    if (count === 0) return result;
     if (count === 1) {
       result.set(windows[0], applyGaps(area, gaps, true, true, true, true));
       return result;
@@ -207,7 +200,17 @@ var LayoutsModule = (() => {
       let currentY = area.y;
       for (let r = 0; r < numRows; r++) {
         const rh = r === numRows - 1 ? area.y + area.height - currentY : rowH;
-        result.set(windows[winIdx++], applyGaps({ x: currentX, y: currentY, width: cw, height: rh }, gaps, c === 0, c === numCols - 1, r === 0, r === numRows - 1));
+        result.set(
+          windows[winIdx++],
+          applyGaps(
+            { x: currentX, y: currentY, width: cw, height: rh },
+            gaps,
+            c === 0,
+            c === numCols - 1,
+            r === 0,
+            r === numRows - 1
+          )
+        );
         currentY += rh;
       }
       currentX += cw;
@@ -217,8 +220,7 @@ var LayoutsModule = (() => {
   function solveMasterStack(area, windows, gaps, options) {
     const result = /* @__PURE__ */ new Map();
     const count = windows.length;
-    if (count === 0)
-      return result;
+    if (count === 0) return result;
     const masterRatio = options?.masterRatio !== void 0 ? options.masterRatio : 0.5;
     const masterCount = Math.max(0, options?.masterCount !== void 0 ? options.masterCount : 1);
     if (count === 1) {
@@ -263,8 +265,7 @@ var LayoutsModule = (() => {
   }
   function solveTree(node, area, gaps) {
     const result = /* @__PURE__ */ new Map();
-    if (!node)
-      return result;
+    if (!node) return result;
     function traverse(n, r, isLeft, isRight, isTop, isBottom) {
       n.rect = r;
       if (n.kind === "leaf") {

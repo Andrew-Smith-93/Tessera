@@ -24,7 +24,7 @@ Tessera is built for frictionless distribution across the entire Linux ecosystem
    yay -S kwin-script-tessera-git
    ```
 3. **Official `.kwinscript` Bundle**:
-   - Download the latest standalone bundle from [GitHub Releases](https://github.com/drew/tessera/releases).
+   - Download the latest standalone bundle from [GitHub Releases](https://github.com/Andrew-Smith-93/tiling-window-manager/releases).
    - Install via terminal:
      ```bash
      kpackagetool6 --type KWin/Script --install tessera-v1.0.1.kwinscript
@@ -93,8 +93,8 @@ Most tiling window managers for Linux make huge sacrifices:
 Clone the repository and run the installer:
 
 ```bash
-git clone https://github.com/drew/tessera.git
-cd tessera
+git clone https://github.com/Andrew-Smith-93/tiling-window-manager.git
+cd tiling-window-manager
 ./install.sh
 ```
 

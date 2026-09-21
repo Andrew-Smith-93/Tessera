@@ -5,6 +5,12 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const packageAliases = {
+  "@tessera/protocol": resolve(__dirname, "../../packages/protocol/src/index.ts"),
+  "@tessera/layout-core": resolve(__dirname, "../../packages/layout-core/src/index.ts"),
+  "@tessera/rules-engine": resolve(__dirname, "../../packages/rules-engine/src/index.ts"),
+};
+
 async function bundle() {
   // 1. Standalone KWin Script Adapter
   await esbuild.build({
@@ -12,6 +18,7 @@ async function bundle() {
     bundle: true,
     platform: "neutral",
     mainFields: ["module", "main"],
+    alias: packageAliases,
     target: "es2022",
     format: "iife",
     outfile: resolve(__dirname, "../../dist/kwin-adapter.js"),
@@ -25,6 +32,7 @@ async function bundle() {
     bundle: true,
     platform: "neutral",
     mainFields: ["module", "main"],
+    alias: packageAliases,
     target: "es2022",
     format: "iife",
     globalName: "LayoutsModule",
