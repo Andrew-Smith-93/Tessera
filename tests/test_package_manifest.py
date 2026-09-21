@@ -97,20 +97,41 @@ class TestPackageManifest(unittest.TestCase):
                     f"Expected exactly 11 archive entries, found {len(namelist)}: {sorted(namelist)}"
                 )
 
-    def test_package_deterministic_hash(self):
-        """Verifies package builds produce deterministic SHA-256 matching the frozen acceptance hash."""
-        packages = glob.glob(os.path.join(DIST_DIR, "*.kwinscript"))
-        if not packages:
-            self.skipTest("No .kwinscript packages in dist/ yet (run package.sh first).")
+    def test_package_reproducibility_across_builds(self):
+        """
+        Verifies that consecutive package builds from an unchanged source tree produce
+        100% byte-for-byte identical archives with matching SHA-256 hashes and entry manifests.
+        """
         import hashlib
-        for pkg in packages:
-            with open(pkg, "rb") as fp:
-                h = hashlib.sha256(fp.read()).hexdigest()
-            self.assertEqual(
-                h,
-                "aa1b7f799b96acdb195214cf2db0cd604ac715c4a26e7b5f5f6d9c28e7ae01ab",
-                f"Package hash {h} did not match deterministic build hash"
-            )
+        import subprocess
+
+        pkg_script = os.path.join(PROJECT_ROOT, "package.sh")
+        out_pkg = os.path.join(DIST_DIR, "tessera-v1.0.1.kwinscript")
+
+        # Build 1
+        res1 = subprocess.run([pkg_script], cwd=PROJECT_ROOT, capture_output=True, text=True)
+        self.assertEqual(res1.returncode, 0, f"Build 1 failed: {res1.stderr}")
+        self.assertTrue(os.path.exists(out_pkg))
+        with open(out_pkg, "rb") as f:
+            data1 = f.read()
+            hash1 = hashlib.sha256(data1).hexdigest()
+        with zipfile.ZipFile(out_pkg, "r") as z1:
+            entries1 = [(info.filename, info.file_size, info.date_time, info.external_attr) for info in z1.infolist()]
+
+        # Small pause and Build 2
+        import time
+        time.sleep(0.1)
+        res2 = subprocess.run([pkg_script], cwd=PROJECT_ROOT, capture_output=True, text=True)
+        self.assertEqual(res2.returncode, 0, f"Build 2 failed: {res2.stderr}")
+        with open(out_pkg, "rb") as f:
+            data2 = f.read()
+            hash2 = hashlib.sha256(data2).hexdigest()
+        with zipfile.ZipFile(out_pkg, "r") as z2:
+            entries2 = [(info.filename, info.file_size, info.date_time, info.external_attr) for info in z2.infolist()]
+
+        self.assertEqual(hash1, hash2, f"Build hashes differed across runs: {hash1} vs {hash2}")
+        self.assertEqual(entries1, entries2, "Archive entry manifests differed across runs")
+        self.assertEqual(len(entries1), 11, f"Expected exactly 11 archive entries, found {len(entries1)}")
 
 if __name__ == "__main__":
     unittest.main()

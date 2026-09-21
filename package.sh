@@ -34,7 +34,12 @@ cp -r "$PROJECT_DIR/contents" "$BUILD_TMP/"
 # Validate KPackage structure with kpackagetool6 if available
 if command -v kpackagetool6 >/dev/null 2>&1; then
     echo "-> Validating package structure with kpackagetool6..."
-    kpackagetool6 --type KWin/Script --appstream-metainfo "$BUILD_TMP" >/dev/null 2>&1 || echo "Validation passed with warnings."
+    kpackagetool6 --type KWin/Script --appstream-metainfo "$BUILD_TMP" >/dev/null || {
+        echo "Error: kpackagetool6 package validation failed!" >&2
+        exit 1
+    }
+else
+    echo "-> kpackagetool6 not found; skipping package metadata validation."
 fi
 
 # Create standard zip-based .kwinscript bundle with deterministic ordering, mode, and timestamps

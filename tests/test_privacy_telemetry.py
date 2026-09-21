@@ -60,11 +60,18 @@ class TestPrivacyTelemetry(unittest.TestCase):
 
     def test_no_local_path_leakage_in_tracked_files(self):
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        import subprocess
-        output = subprocess.check_output(
-            ["git", "ls-files"], cwd=repo_root, text=True
-        )
-        tracked_files = [f.strip() for f in output.splitlines() if f.strip()]
+        try:
+            output = subprocess.check_output(
+                ["git", "ls-files"], cwd=repo_root, text=True, stderr=subprocess.DEVNULL
+            )
+            tracked_files = [f.strip() for f in output.splitlines() if f.strip()]
+        except Exception:
+            tracked_files = []
+            for root, dirs, files in os.walk(repo_root):
+                dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "target", "dist", ".gemini", "__pycache__")]
+                for f in files:
+                    rel = os.path.relpath(os.path.join(root, f), repo_root)
+                    tracked_files.append(rel)
         for relpath in tracked_files:
             # Skip test itself
             if relpath == "tests/test_privacy_telemetry.py":

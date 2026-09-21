@@ -5,11 +5,14 @@
       http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
     <kcfgfile name="kwinrc"/>
     <group name="Script-tessera">
+        <entry name="configSchemaVersion" type="Int">
+            <default>2</default>
+        </entry>
         <entry name="enableTiling" type="Bool">
             <default>true</default>
         </entry>
         <entry name="defaultLayout" type="String">
-            <default>master-stack</default>
+            <default>balanced-grid</default>
         </entry>
         <entry name="gapInner" type="Int">
             <default>8</default>
@@ -17,10 +20,10 @@
         <entry name="gapOuter" type="Int">
             <default>10</default>
         </entry>
-        <entry name="masterRatio" type="Double">
+        <entry name="primaryRegionRatio" type="Double">
             <default>0.50</default>
         </entry>
-        <entry name="masterCount" type="Int">
+        <entry name="primaryRegionCount" type="Int">
             <default>1</default>
         </entry>
         <entry name="perDesktopLayout" type="Bool">
@@ -32,11 +35,8 @@
         <entry name="showOsd" type="Bool">
             <default>true</default>
         </entry>
-        <entry name="nvidiaDebounceMs" type="Int">
+        <entry name="reconcileDebounceMs" type="Int">
             <default>60</default>
-        </entry>
-        <entry name="smoothResize" type="Bool">
-            <default>false</default>
         </entry>
         <entry name="ignoreMinimized" type="Bool">
             <default>true</default>
@@ -49,6 +49,19 @@
         </entry>
         <entry name="customRulesJson" type="String">
             <default>[]</default>
+        </entry>
+        <entry name="workspaceLayoutsJson" type="String">
+            <default>{}</default>
+        </entry>
+        <!-- Legacy compatibility entries -->
+        <entry name="masterRatio" type="Double">
+            <default>0.50</default>
+        </entry>
+        <entry name="masterCount" type="Int">
+            <default>1</default>
+        </entry>
+        <entry name="nvidiaDebounceMs" type="Int">
+            <default>60</default>
         </entry>
         <entry name="desktopLayoutsJson" type="String">
             <default>{}</default>
