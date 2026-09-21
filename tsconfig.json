@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/protocol" },
+    { "path": "./packages/layout-core" },
+    { "path": "./packages/rules-engine" },
+    { "path": "./apps/kwin-adapter" }
+  ]
+}

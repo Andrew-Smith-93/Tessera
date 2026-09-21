@@ -1,19 +1,66 @@
+# Dependencies
+node_modules/
+*/node_modules/
+*/*/node_modules/
+
+# Build outputs & artifacts
+dist/
+*/dist/
+build/
+*/build/
+out/
+*.tsbuildinfo
+
+# Rust target directories
+target/
+*/target/
+
 # Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Build outputs
-dist/
-build/
-
-# User local configs
-.cache/
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Git / OS
+# Environment, secrets & credentials
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+*.token
+id_rsa*
+id_ed25519*
+secrets.json
+credentials.json
+auth.json
+
+# Caches & local user configs
+.cache/
+.eslintcache
+.parcel-cache
+
+# OS & Editor files
 .DS_Store
+Thumbs.db
 *.swp
+*.swo
 *~
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace

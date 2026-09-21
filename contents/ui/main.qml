@@ -142,14 +142,15 @@ Item {
     property var screenMasterCounts: ({}) // screenName -> master count
 
     function getCurrentTargetScreen() {
-        // 1. First priority: Screen containing the currently focused active window
-        if (Workspace.activeWindow && Workspace.activeWindow.normalWindow) {
-            return getScreenForPos(Workspace.activeWindow.frameGeometry);
-        }
-        // 2. Second priority: Screen containing the mouse cursor
+        // 1. First priority: Screen containing the mouse cursor (where user is physically interacting)
         var curPos = Workspace.cursorPos;
         if (curPos) {
-            return getScreenForPos({x: curPos.x, y: curPos.y, width: 1, height: 1});
+            var mouseScreen = getScreenForPos({x: curPos.x, y: curPos.y, width: 1, height: 1});
+            if (mouseScreen) return mouseScreen;
+        }
+        // 2. Second priority: Screen containing the currently focused active window
+        if (Workspace.activeWindow && Workspace.activeWindow.normalWindow) {
+            return getScreenForPos(Workspace.activeWindow.frameGeometry);
         }
         // 3. Fallback: Workspace.activeScreen
         return Workspace.activeScreen || (Workspace.screens ? Workspace.screens[0] : null);
@@ -1561,7 +1562,7 @@ Item {
         var screens = Workspace.screens || [];
         if (screens.length <= 1) return;
 
-        var currentScreen = Workspace.activeScreen || screens[0];
+        var currentScreen = getCurrentTargetScreen();
         var currentIdx = screens.indexOf(currentScreen);
         if (currentIdx === -1) currentIdx = 0;
 
