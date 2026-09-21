@@ -71,6 +71,7 @@ jobs:
           unzip -l dist/*.kwinscript | grep "metadata.json"
           unzip -l dist/*.kwinscript | grep "contents/code/layouts.js"
           unzip -l dist/*.kwinscript | grep "contents/code/rules.js"
+          unzip -l dist/*.kwinscript | grep "contents/code/reconciler.js"
           unzip -l dist/*.kwinscript | grep "contents/ui/main.qml"
           ! unzip -l dist/*.kwinscript | grep -E "contents/code/main\.js|contents/ui/tessera\.qml|contents/ui/ZoneOverlay\.qml|contents/ui/TopNotification\.qml"
           python3 tests/test_package_manifest.py

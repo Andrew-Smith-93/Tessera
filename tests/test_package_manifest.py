@@ -30,6 +30,7 @@ REQUIRED_ACTIVE_FILES = [
     os.path.join(CONTENTS_DIR, "ui", "main.qml"),
     os.path.join(CONTENTS_DIR, "code", "layouts.js"),
     os.path.join(CONTENTS_DIR, "code", "rules.js"),
+    os.path.join(CONTENTS_DIR, "code", "reconciler.js"),
     os.path.join(CONTENTS_DIR, "ui", "config.ui"),
     os.path.join(CONTENTS_DIR, "config", "main.xml"),
 ]
@@ -74,6 +75,7 @@ class TestPackageManifest(unittest.TestCase):
                 self.assertIn("contents/ui/main.qml", namelist)
                 self.assertIn("contents/code/layouts.js", namelist)
                 self.assertIn("contents/code/rules.js", namelist)
+                self.assertIn("contents/code/reconciler.js", namelist)
 
                 # Assert pruned files are absent
                 self.assertNotIn("contents/code/main.js", namelist)

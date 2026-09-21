@@ -62,7 +62,25 @@ async function bundle() {
     treeShaking: true,
   });
 
-  console.log("✅ Successfully built standalone KWin Adapter and updated contents/code/layouts.js and contents/code/rules.js");
+  // 4. QML Reconciler Bridge for contents/code/reconciler.js
+  await esbuild.build({
+    entryPoints: [resolve(__dirname, "src/qml-reconciler-compat.ts")],
+    bundle: true,
+    platform: "neutral",
+    mainFields: ["module", "main"],
+    alias: packageAliases,
+    target: "es2022",
+    format: "iife",
+    globalName: "ReconcilerModule",
+    footer: {
+      js: "var ReconcilerBridge = ReconcilerModule.ReconcilerBridge;\nvar RuntimeCoordinator = ReconcilerModule.RuntimeCoordinator;"
+    },
+    outfile: resolve(__dirname, "../../contents/code/reconciler.js"),
+    sourcemap: false,
+    treeShaking: true,
+  });
+
+  console.log("✅ Successfully built standalone KWin Adapter and updated layouts.js, rules.js, and reconciler.js");
 }
 
 bundle().catch((err) => {

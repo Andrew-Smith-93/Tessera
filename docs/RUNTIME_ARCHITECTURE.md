@@ -73,21 +73,86 @@
 
 ---
 
-## 4. Inactive TypeScript Adapter
+## 4. Generated Reconciler Bridge (Phase 2A)
 
-- **Source Location**: [`apps/kwin-adapter/src/`](../apps/kwin-adapter/src/)
-- **Bundle Output**: `dist/kwin-adapter.js` (34 KB standalone self-executing bundle)
-- **Architecture**:
-  - [`TilingEngine`](../apps/kwin-adapter/src/tiling-engine.ts): Type-safe KWin 6.3.6 event coordinator.
-  - [`ScreenStateManager`](../apps/kwin-adapter/src/screen-state.ts): Isolated multi-screen state model.
-  - [`EchoFilter`](../apps/kwin-adapter/src/echo-filter.ts): Tokenized X11 `frameGeometryChanged` echo suppressor.
-  - [`registerShortcuts`](../apps/kwin-adapter/src/shortcuts.ts): KWin global shortcut binding.
-- **Current Status**: **Inactive** at runtime because `metadata.json` delegates execution to `ui/main.qml`.
-- **Purpose**: Serves as the foundation for the Phase 1/2 runtime convergence where KWin scripting logic transitions completely into TypeScript with verified type safety.
+- **Authoritative File**: [`contents/code/reconciler.js`](../contents/code/reconciler.js)
+- **Role**: Retained state coordinator and coalesced reconciliation pipeline bridge consumed by `main.qml`:
+  ```qml
+  import "../code/reconciler.js" as ReconcilerModule
+  ```
+- **Build Pipeline**: Generated automatically by `esbuild` from the TypeScript monorepo source ([`apps/kwin-adapter/src/qml-reconciler-compat.ts`](../apps/kwin-adapter/src/qml-reconciler-compat.ts)) which imports [`@tessera/layout-core`](../packages/layout-core), [`@tessera/rules-engine`](../packages/rules-engine), and [`RuntimeCoordinator`](../apps/kwin-adapter/src/runtime-coordinator.ts).
+- **Exported API**:
+  - `ReconcilerBridge.createCoordinator(config)`: Factory creating an isolated `RuntimeCoordinator`.
+  - `ReconcilerBridge.getOrCreateCoordinator(config)`: Singleton accessor.
+  - `ReconcilerBridge.toNormalizedWindow(w, screen, usableArea)`: Converts KWin window to serializable `NormalizedWindowInput`.
+  - `ReconcilerBridge.toNormalizedScreen(scr, usableArea)`: Converts KWin screen to serializable `NormalizedScreenInput`.
+- **Integrity Guarantee**: Enforced in CI and release workflows via `npm run verify:artifacts` (`git diff --exit-code HEAD -- contents/code/layouts.js contents/code/rules.js contents/code/reconciler.js`).
 
 ---
 
-## 5. Pruned Legacy Files (Phase 1B)
+## 5. Retained State Ownership & Coalesced Reconciliation Architecture
+
+Phase 2A introduces deterministic state retention and a coalesced transaction lifecycle:
+
+### Retained State Ownership
+- **QML Layer (`contents/ui/main.qml`)**: Owns KWin signal connections, UI visual dialogs (snap overlay and master HUD), KWin object normalization into serializable data, invoking the coordinator, and applying planned `win.frameGeometry` mutations. QML retains zero window/screen object pointers in durable state.
+- **TypeScript Coordinator Layer (`apps/kwin-adapter/src/runtime-coordinator.ts`)**: Owns normalized retained state, event reduction, dirty-scope calculation, transaction planning, geometry diffing, echo suppression, and diagnostics counters.
+
+### Event-to-Transaction Lifecycle
+```
+KWin Signal (e.g. windowAdded, fullScreenChanged, frameGeometryChanged)
+  ↓
+Normalize to serializable NormalizedWindowInput / NormalizedEvent
+  ↓
+Coordinator.ingestEvent(event)
+  ├─ Check in-flight echo suppression (suppresses redundant echoes)
+  ├─ Update RetainedWindowState / RetainedScreenState
+  ├─ Reclassify only if classification inputs or config changed
+  └─ Mark affected screen scope dirty & accumulate pending reasons
+  ↓
+QML scheduleReconcile() [Debounced/coalesced via single-shot Timer]
+  ↓
+Coordinator.reconcile()
+  ├─ Snapshot dirty screens (unaffected screens are skipped)
+  ├─ Extract ordered tileable windows (preserving persistentSlotOrder)
+  ├─ Compute desired layout via @tessera/layout-core
+  ├─ Diff desired vs lastObservedGeometry using documented pixel tolerance (1px)
+  ├─ Generate GeometryOperation[] only for genuine delta
+  └─ Increment transaction epoch & record in-flight echoes
+  ↓
+Apply geometry writes to KWin windows (guarded by isArranging flag)
+```
+
+### Dirty-Scope Rules
+1. **Local Window Events**: An event for a window located on Output A (e.g. geometry change, maximize, border change) marks only Output A dirty. Output B is untouched and zero layout calculations are executed for it.
+2. **Output Migration**: Moving a window from Output A to Output B marks both Output A (vacated slot) and Output B (new occupant) dirty.
+3. **Global Configuration Changes**: Changes to inner/outer gaps, master ratios, or display topology invalidate all screens.
+4. **No-Op Elimination**: If a dirty screen computation yields desired geometries that equal observed geometries (within 1px tolerance), zero writes are generated and no feedback loops occur.
+
+### Geometry Echo Suppression
+- When a geometry write is applied, the target rectangle is recorded in `inFlightEchoes` tagged with the current transaction epoch and timestamp.
+- Incoming `frameGeometryChanged` events matching the recorded target (within 1px tolerance and 300ms window) are recognized as echoes, updating `lastObservedGeometry` without marking the screen dirty or scheduling a reconciliation pass.
+- Mismatched external geometry changes (e.g. user manually moving a window) are not suppressed and properly invalidate the screen.
+
+### Remaining Legacy / Runtime Duplication
+- `contents/ui/main.qml` retains a synchronous fallback `retileLegacyFallback()` used only if the reconciler module fails to instantiate.
+- Visual overlays (`PlasmaCore.Dialog`) remain implemented directly in QML pending Phase 3 UI component convergence.
+
+---
+
+## 6. Inactive TypeScript Adapter (Phase 3+ Target)
+
+- **Source Location**: [`apps/kwin-adapter/src/`](../apps/kwin-adapter/src/)
+- **Bundle Output**: `dist/kwin-adapter.js` (standalone self-executing bundle)
+- **Architecture**:
+  - [`TilingEngine`](../apps/kwin-adapter/src/tiling-engine.ts): Type-safe KWin 6.3.6 event coordinator.
+  - [`ScreenStateManager`](../apps/kwin-adapter/src/screen-state.ts): Isolated multi-screen state model.
+  - [`RuntimeCoordinator`](../apps/kwin-adapter/src/runtime-coordinator.ts): State retention and transaction planner.
+- **Current Status**: TypeScript engine is active via generated bridges (`layouts.js`, `rules.js`, `reconciler.js`) in `ui/main.qml`. Standalone adapter mode is reserved for future native TS runner.
+
+---
+
+## 7. Pruned Legacy Files (Phase 1B)
 
 During Phase 1B (Runtime Surface Pruning), the following dead candidate files were rigorously audited across all imports, packaging scripts, manifest definitions, and runtime loaders. Having been proven completely inactive, they were permanently pruned from the codebase:
 
@@ -102,7 +167,7 @@ Absence of these files is enforced by automated packaging assertions in `.github
 
 ---
 
-## 6. Intended Migration Boundary
+## 8. Intended Migration Boundary
 
 Future convergence will separate concerns across strict architectural layers:
 
@@ -125,12 +190,12 @@ Future convergence will separate concerns across strict architectural layers:
 │          Cold-Path Companion Daemon (Phase 3+)         │
 │  - Configuration persistence, CLI tooling, IPC         │
 │  - Zero IPC on KWin layout hot path                    │
-└────────────────────────────────────────────────────────┘
+│└───────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 7. Critical Features to Preserve During Migration
+## 9. Critical Features to Preserve During Migration
 
 Any subsequent convergence or refactoring MUST preserve the following runtime invariants:
 

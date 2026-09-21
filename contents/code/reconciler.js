@@ -1,0 +1,1386 @@
+"use strict";
+var ReconcilerModule = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+  // apps/kwin-adapter/src/qml-reconciler-compat.ts
+  var qml_reconciler_compat_exports = {};
+  __export(qml_reconciler_compat_exports, {
+    ReconcilerBridge: () => ReconcilerBridge,
+    createCoordinator: () => createCoordinator,
+    getOrCreateCoordinator: () => getOrCreateCoordinator,
+    toNormalizedScreen: () => toNormalizedScreen,
+    toNormalizedWindow: () => toNormalizedWindow
+  });
+
+  // packages/layout-core/src/geometry.ts
+  function applyGaps(rect, gaps, isLeft = true, isRight = true, isTop = true, isBottom = true) {
+    const x = rect.x + (isLeft ? gaps.outer : Math.floor(gaps.inner / 2));
+    const y = rect.y + (isTop ? gaps.outer : Math.floor(gaps.inner / 2));
+    const r = rect.x + rect.width - (isRight ? gaps.outer : Math.ceil(gaps.inner / 2));
+    const b = rect.y + rect.height - (isBottom ? gaps.outer : Math.ceil(gaps.inner / 2));
+    return {
+      x,
+      y,
+      width: Math.max(80, r - x),
+      height: Math.max(60, b - y)
+    };
+  }
+
+  // packages/layout-core/src/tree.ts
+  var nextNodeId = 1;
+  function generateNodeId() {
+    return `node-${nextNodeId++}`;
+  }
+  function createLeaf(windowId, id) {
+    return {
+      kind: "leaf",
+      id: id || generateNodeId(),
+      windowId,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      dirty: true
+    };
+  }
+  function createSplit(left, right, direction = "horizontal", ratio = 0.5, id) {
+    return {
+      kind: "split",
+      id: id || generateNodeId(),
+      direction,
+      ratio: Math.max(0.05, Math.min(0.95, ratio)),
+      children: [left, right],
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      dirty: true
+    };
+  }
+  function allLeaves(node) {
+    if (!node) return [];
+    if (node.kind === "leaf") return [node];
+    return [...allLeaves(node.children[0]), ...allLeaves(node.children[1])];
+  }
+  function findLeafByWindow(node, windowId) {
+    if (!node) return null;
+    if (node.kind === "leaf") {
+      return node.windowId === windowId ? node : null;
+    }
+    return findLeafByWindow(node.children[0], windowId) || findLeafByWindow(node.children[1], windowId);
+  }
+  function findParent(root, targetId) {
+    if (!root || root.kind === "leaf") return null;
+    if (root.children[0].id === targetId || root.children[1].id === targetId) {
+      return root;
+    }
+    return findParent(root.children[0], targetId) || findParent(root.children[1], targetId);
+  }
+  function insertWindow(root, newWindowId, targetWindowId, direction = "horizontal", ratio = 0.5) {
+    const newLeaf = createLeaf(newWindowId);
+    if (!root) return newLeaf;
+    const target = targetWindowId ? findLeafByWindow(root, targetWindowId) : null;
+    const insertTarget = target || allLeaves(root)[0];
+    if (!insertTarget) return newLeaf;
+    if (insertTarget === root) {
+      return createSplit(insertTarget, newLeaf, direction, ratio);
+    }
+    const parent = findParent(root, insertTarget.id);
+    if (!parent) {
+      return createSplit(root, newLeaf, direction, ratio);
+    }
+    const newSubSplit = createSplit(insertTarget, newLeaf, direction, ratio);
+    if (parent.children[0].id === insertTarget.id) {
+      parent.children[0] = newSubSplit;
+    } else {
+      parent.children[1] = newSubSplit;
+    }
+    parent.dirty = true;
+    return root;
+  }
+
+  // packages/layout-core/src/solver.ts
+  function solveBalancedGrid(area, windows, gaps) {
+    const result = /* @__PURE__ */ new Map();
+    const count = windows.length;
+    if (count === 0) return result;
+    if (count === 1) {
+      result.set(windows[0], applyGaps(area, gaps, true, true, true, true));
+      return result;
+    }
+    if (count === 2) {
+      const w0 = Math.floor(area.width / 2);
+      const w1 = area.width - w0;
+      result.set(windows[0], applyGaps({ x: area.x, y: area.y, width: w0, height: area.height }, gaps, true, false, true, true));
+      result.set(windows[1], applyGaps({ x: area.x + w0, y: area.y, width: w1, height: area.height }, gaps, false, true, true, true));
+      return result;
+    }
+    if (count === 3) {
+      const colW2 = Math.floor(area.width / 3);
+      for (let c = 0; c < 3; c++) {
+        const cx = area.x + c * colW2;
+        const cw = c === 2 ? area.width - 2 * colW2 : colW2;
+        result.set(windows[c], applyGaps({ x: cx, y: area.y, width: cw, height: area.height }, gaps, c === 0, c === 2, true, true));
+      }
+      return result;
+    }
+    if (count === 4) {
+      const colW2 = Math.floor(area.width / 2);
+      const rowH = Math.floor(area.height / 2);
+      let idx = 0;
+      for (let row = 0; row < 2; row++) {
+        const ry = area.y + row * rowH;
+        const rh = row === 1 ? area.height - rowH : rowH;
+        for (let col = 0; col < 2; col++) {
+          const cx = area.x + col * colW2;
+          const cw = col === 1 ? area.width - colW2 : colW2;
+          result.set(windows[idx++], applyGaps({ x: cx, y: ry, width: cw, height: rh }, gaps, col === 0, col === 1, row === 0, row === 1));
+        }
+      }
+      return result;
+    }
+    if (count === 5) {
+      const colW2 = Math.floor(area.width / 3);
+      const colW0 = colW2;
+      const colW1 = colW2;
+      const colW22 = area.width - (colW0 + colW1);
+      const rowH = Math.floor(area.height / 2);
+      result.set(windows[0], applyGaps({ x: area.x, y: area.y, width: colW0, height: rowH }, gaps, true, false, true, false));
+      result.set(windows[1], applyGaps({ x: area.x, y: area.y + rowH, width: colW0, height: area.height - rowH }, gaps, true, false, false, true));
+      result.set(windows[2], applyGaps({ x: area.x + colW0, y: area.y, width: colW1, height: area.height }, gaps, false, false, true, true));
+      const rightX = area.x + colW0 + colW1;
+      result.set(windows[3], applyGaps({ x: rightX, y: area.y, width: colW22, height: rowH }, gaps, false, true, true, false));
+      result.set(windows[4], applyGaps({ x: rightX, y: area.y + rowH, width: colW22, height: area.height - rowH }, gaps, false, true, false, true));
+      return result;
+    }
+    let numCols = 3;
+    if (count >= 8 && count <= 10) {
+      numCols = count === 9 ? 3 : 4;
+    } else if (count > 10) {
+      numCols = Math.ceil(Math.sqrt(count * (area.width / area.height)));
+    }
+    const countsPerCol = new Array(numCols).fill(Math.floor(count / numCols));
+    let rem = count % numCols;
+    if (rem === 1) {
+      countsPerCol[Math.floor(numCols / 2)]++;
+    } else if (rem === 2 && numCols === 3) {
+      countsPerCol[0]++;
+      countsPerCol[2]++;
+    } else if (rem > 0) {
+      let left = 0;
+      let right = numCols - 1;
+      while (rem > 0) {
+        countsPerCol[left]++;
+        rem--;
+        if (rem > 0 && left !== right) {
+          countsPerCol[right]++;
+          rem--;
+        }
+        left++;
+        right--;
+        if (left > right) {
+          left = 0;
+          right = numCols - 1;
+        }
+      }
+    }
+    const colW = Math.floor(area.width / numCols);
+    let currentX = area.x;
+    let winIdx = 0;
+    for (let c = 0; c < numCols; c++) {
+      const cw = c === numCols - 1 ? area.x + area.width - currentX : colW;
+      const numRows = countsPerCol[c];
+      const rowH = Math.floor(area.height / numRows);
+      let currentY = area.y;
+      for (let r = 0; r < numRows; r++) {
+        const rh = r === numRows - 1 ? area.y + area.height - currentY : rowH;
+        result.set(
+          windows[winIdx++],
+          applyGaps(
+            { x: currentX, y: currentY, width: cw, height: rh },
+            gaps,
+            c === 0,
+            c === numCols - 1,
+            r === 0,
+            r === numRows - 1
+          )
+        );
+        currentY += rh;
+      }
+      currentX += cw;
+    }
+    return result;
+  }
+  function solveMasterStack(area, windows, gaps, options) {
+    const result = /* @__PURE__ */ new Map();
+    const count = windows.length;
+    if (count === 0) return result;
+    const masterRatio = options?.masterRatio !== void 0 ? options.masterRatio : 0.5;
+    const masterCount = Math.max(0, options?.masterCount !== void 0 ? options.masterCount : 1);
+    if (count === 1) {
+      result.set(windows[0], applyGaps(area, gaps, true, true, true, true));
+      return result;
+    }
+    if (masterCount === 0) {
+      return solveBalancedGrid(area, windows, gaps);
+    }
+    if (count === 2) {
+      const halfW = Math.floor(area.width / 2);
+      result.set(windows[0], applyGaps({ x: area.x, y: area.y, width: halfW, height: area.height }, gaps, true, false, true, true));
+      result.set(windows[1], applyGaps({ x: area.x + halfW, y: area.y, width: area.width - halfW, height: area.height }, gaps, false, true, true, true));
+      return result;
+    }
+    const actualMasters = Math.min(count, masterCount);
+    const stackCount = count - actualMasters;
+    if (stackCount === 0) {
+      const colWidth = Math.floor(area.width / actualMasters);
+      for (let c = 0; c < actualMasters; c++) {
+        const cx = area.x + c * colWidth;
+        const cw = c === actualMasters - 1 ? area.width - c * colWidth : colWidth;
+        result.set(windows[c], applyGaps({ x: cx, y: area.y, width: cw, height: area.height }, gaps, c === 0, c === actualMasters - 1, true, true));
+      }
+      return result;
+    }
+    const masterWidth = Math.floor(area.width * masterRatio);
+    const stackWidth = area.width - masterWidth;
+    const masterHeight = Math.floor(area.height / actualMasters);
+    for (let m = 0; m < actualMasters; m++) {
+      const my = area.y + m * masterHeight;
+      const mh = m === actualMasters - 1 ? area.height - m * masterHeight : masterHeight;
+      result.set(windows[m], applyGaps({ x: area.x, y: my, width: masterWidth, height: mh }, gaps, true, false, m === 0, m === actualMasters - 1));
+    }
+    const stackHeight = Math.floor(area.height / stackCount);
+    for (let s = 0; s < stackCount; s++) {
+      const sy = area.y + s * stackHeight;
+      const sh = s === stackCount - 1 ? area.height - s * stackHeight : stackHeight;
+      result.set(windows[actualMasters + s], applyGaps({ x: area.x + masterWidth, y: sy, width: stackWidth, height: sh }, gaps, false, true, s === 0, s === stackCount - 1));
+    }
+    return result;
+  }
+  function solveTree(node, area, gaps) {
+    const result = /* @__PURE__ */ new Map();
+    if (!node) return result;
+    function traverse(n, r, isLeft, isRight, isTop, isBottom) {
+      n.rect = r;
+      if (n.kind === "leaf") {
+        result.set(n.windowId, applyGaps(r, gaps, isLeft, isRight, isTop, isBottom));
+        return;
+      }
+      if (n.direction === "horizontal") {
+        const w0 = Math.floor(r.width * n.ratio);
+        const w1 = r.width - w0;
+        traverse(n.children[0], { x: r.x, y: r.y, width: w0, height: r.height }, isLeft, false, isTop, isBottom);
+        traverse(n.children[1], { x: r.x + w0, y: r.y, width: w1, height: r.height }, false, isRight, isTop, isBottom);
+      } else {
+        const h0 = Math.floor(r.height * n.ratio);
+        const h1 = r.height - h0;
+        traverse(n.children[0], { x: r.x, y: r.y, width: r.width, height: h0 }, isLeft, isRight, isTop, false);
+        traverse(n.children[1], { x: r.x, y: r.y + h0, width: r.width, height: h1 }, isLeft, isRight, false, isBottom);
+      }
+    }
+    traverse(node, area, true, true, true, true);
+    return result;
+  }
+  function solveLayout(algorithm, area, windows, gaps, options, treeNode) {
+    switch (algorithm) {
+      case "balanced-grid":
+      case "grid":
+        return solveBalancedGrid(area, windows, gaps);
+      case "master-stack":
+        return solveMasterStack(area, windows, gaps, options);
+      case "binary-split":
+        return treeNode ? solveTree(treeNode, area, gaps) : solveBalancedGrid(area, windows, gaps);
+      case "columns": {
+        const res = /* @__PURE__ */ new Map();
+        const colW = Math.floor(area.width / windows.length);
+        for (let i = 0; i < windows.length; i++) {
+          const cw = i === windows.length - 1 ? area.width - i * colW : colW;
+          res.set(windows[i], applyGaps({ x: area.x + i * colW, y: area.y, width: cw, height: area.height }, gaps, i === 0, i === windows.length - 1, true, true));
+        }
+        return res;
+      }
+      case "rows": {
+        const res = /* @__PURE__ */ new Map();
+        const rowH = Math.floor(area.height / windows.length);
+        for (let i = 0; i < windows.length; i++) {
+          const rh = i === windows.length - 1 ? area.height - i * rowH : rowH;
+          res.set(windows[i], applyGaps({ x: area.x, y: area.y + i * rowH, width: area.width, height: rh }, gaps, true, true, i === 0, i === windows.length - 1));
+        }
+        return res;
+      }
+      case "monocle": {
+        const res = /* @__PURE__ */ new Map();
+        const full = applyGaps(area, gaps, true, true, true, true);
+        for (const w of windows) {
+          res.set(w, full);
+        }
+        return res;
+      }
+      case "floating":
+      default:
+        return /* @__PURE__ */ new Map();
+    }
+  }
+
+  // apps/kwin-adapter/src/coordinator-types.ts
+  var DEFAULT_GEOMETRY_TOLERANCE_PX = 1;
+  var DEFAULT_ECHO_EXPIRY_MS = 500;
+  function rectEqualsWithTolerance(a, b, tolerance = DEFAULT_GEOMETRY_TOLERANCE_PX) {
+    return Math.abs(a.x - b.x) <= tolerance && Math.abs(a.y - b.y) <= tolerance && Math.abs(a.width - b.width) <= tolerance && Math.abs(a.height - b.height) <= tolerance;
+  }
+
+  // packages/rules-engine/src/rules.ts
+  function normalizeAction(action) {
+    const a = (action || "").toLowerCase().trim();
+    if (a === "tile" || a === "tiled") return "tiled";
+    if (a === "float" || a === "floating") return "floating";
+    if (a === "dialog") return "dialog";
+    if (a === "fullscreen") return "fullscreen";
+    if (a === "fullscreen-like") return "fullscreen-like";
+    if (a === "ignored" || a === "ignore") return "ignored";
+    return "tiled";
+  }
+  function isGameIdentity(input, customGamePatterns = []) {
+    const rClass = (input.resourceClass || input.windowClass || "").toLowerCase();
+    const rName = (input.resourceName || "").toLowerCase();
+    const appId = (input.appId || "").toLowerCase();
+    const desktopFile = (input.desktopFileName || "").toLowerCase();
+    const isOrdinarySteam = rClass === "steam" && !rName.startsWith("steam_app") && !desktopFile.includes("steam_app") || rClass === "steamwebhelper" || rName === "steamwebhelper" || appId === "steamwebhelper";
+    if (isOrdinarySteam) {
+      return { isGame: false };
+    }
+    if (rClass.startsWith("steam_app_") || rClass.includes("steam_app_") || rName.startsWith("steam_app_") || rName.includes("steam_app_") || appId.startsWith("steam_app_") || appId.includes("steam_app_") || desktopFile.includes("steam_app_")) {
+      return { isGame: true, matchedPattern: "steam_app_*" };
+    }
+    if (rClass.includes("gamescope") || rName.includes("gamescope") || appId.includes("gamescope")) {
+      return { isGame: true, matchedPattern: "gamescope" };
+    }
+    for (const pat of customGamePatterns) {
+      const p = pat.toLowerCase().trim();
+      if (p.length > 0 && (rClass.includes(p) || rName.includes(p) || appId.includes(p) || desktopFile.includes(p))) {
+        return { isGame: true, matchedPattern: pat };
+      }
+    }
+    return { isGame: false };
+  }
+  function isFullscreenLike(input) {
+    if (input.fullScreen === true) return false;
+    if (input.noBorder !== true) return false;
+    const maxMode = input.maximizeMode ?? 0;
+    if (maxMode !== 0) return false;
+    const frame = input.frameGeometry;
+    const out = input.outputGeometry ?? input.outputUsableArea;
+    if (!frame || !out) return false;
+    const frameArea = frame.width * frame.height;
+    const outArea = out.width * out.height;
+    if (outArea <= 0 || frameArea <= 0) return false;
+    const coverageRatio = frameArea / outArea;
+    const coversAlmostAll = coverageRatio >= 0.98;
+    const xDiff = Math.abs(frame.x - out.x);
+    const yDiff = Math.abs(frame.y - out.y);
+    const wDiff = Math.abs(frame.width - out.width);
+    const hDiff = Math.abs(frame.height - out.height);
+    const withinTolerance = xDiff <= 5 && yDiff <= 5 && wDiff <= 5 && hDiff <= 5;
+    return coversAlmostAll || withinTolerance;
+  }
+  var WindowRuleEngine = class _WindowRuleEngine {
+    userFilterTokens = [];
+    customRules = [];
+    gameWindowPolicy = "floating";
+    customGamePatterns = [];
+    /**
+     * Only Tessera Control Center itself floats by default so user can configure the system.
+     */
+    static DEFAULT_FLOAT_PATTERNS = Object.freeze([
+      "tessera",
+      "tessera-settings",
+      "tessera_settings.py"
+    ]);
+    constructor(options = {}) {
+      this.updateOptions(options);
+    }
+    updateOptions(options) {
+      if (options.userFilterString !== void 0) {
+        this.userFilterTokens = options.userFilterString.split(",").map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0);
+      } else if (options.userFilterPatterns !== void 0) {
+        this.userFilterTokens = options.userFilterPatterns.flatMap((p) => p.split(",")).map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0);
+      }
+      if (options.customRules !== void 0) {
+        this.customRules = [...options.customRules];
+      }
+      if (options.gameWindowPolicy !== void 0) {
+        this.gameWindowPolicy = options.gameWindowPolicy;
+      }
+      if (options.customGamePatterns !== void 0) {
+        this.customGamePatterns = [...options.customGamePatterns];
+      }
+    }
+    /**
+     * Determine if a window surface should be completely ignored by the window manager.
+     */
+    isIgnored(window) {
+      const res = this.classify(window);
+      return res.classification === "ignored";
+    }
+    /**
+     * Determine if a window should float by default.
+     */
+    shouldFloat(window) {
+      const res = this.classify(window);
+      return res.classification === "floating" || res.classification === "fullscreen" || res.classification === "fullscreen-like";
+    }
+    /**
+     * Single authoritative classification entrypoint.
+     *
+     * Precedence order:
+     * 1. Unmanaged / non-normal system surfaces -> "ignored" (source: "runtime")
+     * 2. True fullscreen (fullScreen === true) -> "fullscreen" (source: "runtime", cannot be overridden by user tile rule)
+     * 3. Explicit user rules (custom rules / user filter) -> "user-rule"
+     * 4. Fullscreen-like borderless state -> "fullscreen-like" (source: "runtime")
+     * 5. Default game recognition -> follows gameWindowPolicy (source: "default-rule")
+     * 6. Dialog / transient -> "dialog" (source: "runtime")
+     * 7. Default float patterns (Tessera Control Center) -> "floating" (source: "default-rule")
+     * 8. Default fallback -> "tiled" (source: "fallback")
+     */
+    classify(window) {
+      const input = window;
+      const isManaged = input.managed !== void 0 ? input.managed : input.isManaged !== void 0 ? input.isManaged : true;
+      if (!isManaged) {
+        return {
+          classification: "ignored",
+          reason: "Window is not managed by KWin",
+          source: "runtime"
+        };
+      }
+      const isNormal = input.normalWindow !== void 0 ? input.normalWindow : input.isNormal !== void 0 ? input.isNormal : true;
+      if (!isNormal || input.desktopWindow || input.dock || input.splash || input.notification || input.onScreenDisplay || input.popupMenu || input.tooltip || input.specialWindow) {
+        return {
+          classification: "ignored",
+          reason: "Surface is a non-normal system surface or transient popup",
+          source: "runtime"
+        };
+      }
+      if (input.fullScreen === true) {
+        return {
+          classification: "fullscreen",
+          reason: "Window is in true fullscreen state",
+          source: "runtime"
+        };
+      }
+      const rClass = (input.resourceClass || input.windowClass || "").toLowerCase();
+      const rName = (input.resourceName || "").toLowerCase();
+      const appId = (input.appId || "").toLowerCase();
+      const desktopFile = (input.desktopFileName || "").toLowerCase();
+      const title = (input.caption || input.title || "").toLowerCase();
+      const role = (input.windowRole || input.role || "").toLowerCase();
+      for (const rule of this.customRules) {
+        let target = "";
+        switch (rule.matchType) {
+          case "class":
+            target = rClass || rName || appId || desktopFile;
+            break;
+          case "app":
+            target = appId || rClass;
+            break;
+          case "title":
+            target = title;
+            break;
+          case "role":
+            target = role;
+            break;
+        }
+        let matched = false;
+        if (rule.isRegex) {
+          try {
+            const re = new RegExp(rule.pattern, "i");
+            matched = re.test(target);
+          } catch {
+            matched = target.includes(rule.pattern.toLowerCase());
+          }
+        } else {
+          matched = target.includes(rule.pattern.toLowerCase());
+        }
+        if (matched) {
+          const normalized = normalizeAction(rule.action);
+          return {
+            classification: normalized,
+            reason: `Matched user custom rule (${rule.pattern})`,
+            source: "user-rule",
+            matchedRuleId: rule.id,
+            matchedPattern: rule.pattern
+          };
+        }
+      }
+      for (const token of this.userFilterTokens) {
+        if (rClass && rClass.includes(token) || rName && rName.includes(token) || appId && appId.includes(token) || title && title.includes(token) || desktopFile && desktopFile.includes(token)) {
+          return {
+            classification: "floating",
+            reason: `Matched user filter token (${token})`,
+            source: "user-rule",
+            matchedPattern: token
+          };
+        }
+      }
+      if (isFullscreenLike(input)) {
+        return {
+          classification: "fullscreen-like",
+          reason: "Window is borderless and occupies physical display area",
+          source: "runtime"
+        };
+      }
+      const gameCheck = isGameIdentity(input, this.customGamePatterns);
+      if (gameCheck.isGame) {
+        return {
+          classification: this.gameWindowPolicy,
+          reason: `Identified game window; applying game window policy (${this.gameWindowPolicy})`,
+          source: "default-rule",
+          matchedPattern: gameCheck.matchedPattern
+        };
+      }
+      for (const pat of _WindowRuleEngine.DEFAULT_FLOAT_PATTERNS) {
+        if (rClass.includes(pat) || rName.includes(pat) || appId.includes(pat) || title.includes(pat)) {
+          return {
+            classification: "floating",
+            reason: `Matched default float pattern (${pat})`,
+            source: "default-rule",
+            matchedPattern: pat
+          };
+        }
+      }
+      return {
+        classification: "tiled",
+        reason: "Default tiling fallback",
+        source: "fallback"
+      };
+    }
+  };
+  var WindowClassificationTracker = class {
+    classifications = /* @__PURE__ */ new Map();
+    tileability = /* @__PURE__ */ new Map();
+    evaluate(windowId, result) {
+      const prevClassification = this.classifications.get(windowId);
+      const prevTileable = this.tileability.get(windowId);
+      const isTileable = result.classification === "tiled";
+      this.classifications.set(windowId, result.classification);
+      this.tileability.set(windowId, isTileable);
+      const changed = prevTileable !== void 0 && prevTileable !== isTileable || prevClassification !== void 0 && prevClassification !== result.classification;
+      return {
+        changed,
+        isTileable,
+        classification: result.classification,
+        previousClassification: prevClassification,
+        result
+      };
+    }
+    forget(windowId) {
+      this.classifications.delete(windowId);
+      this.tileability.delete(windowId);
+    }
+    getClassification(windowId) {
+      return this.classifications.get(windowId);
+    }
+    isTileable(windowId) {
+      return this.tileability.get(windowId);
+    }
+    clear() {
+      this.classifications.clear();
+      this.tileability.clear();
+    }
+  };
+
+  // apps/kwin-adapter/src/qml-rules-compat.ts
+  function toWindowRuleInput(w, options) {
+    if (!w) return { managed: false };
+    return {
+      windowId: w.internalId ? String(w.internalId) : w.windowId || "",
+      resourceClass: w.resourceClass ? String(w.resourceClass) : w.windowClass ? String(w.windowClass) : "",
+      resourceName: w.resourceName ? String(w.resourceName) : "",
+      appId: w.appId ? String(w.appId) : "",
+      desktopFileName: w.desktopFileName ? String(w.desktopFileName) : "",
+      title: w.caption ? String(w.caption) : w.title ? String(w.title) : "",
+      caption: w.caption ? String(w.caption) : w.title ? String(w.title) : "",
+      windowRole: w.windowRole ? String(w.windowRole) : w.role ? String(w.role) : "",
+      role: w.windowRole ? String(w.windowRole) : w.role ? String(w.role) : "",
+      managed: w.managed !== void 0 ? Boolean(w.managed) : w.isManaged !== void 0 ? Boolean(w.isManaged) : true,
+      normalWindow: w.normalWindow !== void 0 ? Boolean(w.normalWindow) : w.isNormal !== void 0 ? Boolean(w.isNormal) : true,
+      dialog: Boolean(w.dialog),
+      transient: Boolean(w.transient),
+      fullScreen: Boolean(w.fullScreen),
+      noBorder: Boolean(w.noBorder),
+      maximizeMode: typeof w.maximizeMode === "number" ? w.maximizeMode : 0,
+      minimized: Boolean(w.minimized),
+      frameGeometry: w.frameGeometry ? {
+        x: Number(w.frameGeometry.x || 0),
+        y: Number(w.frameGeometry.y || 0),
+        width: Number(w.frameGeometry.width || 0),
+        height: Number(w.frameGeometry.height || 0)
+      } : void 0,
+      outputGeometry: options?.outputGeometry || (w.output?.geometry ? {
+        x: Number(w.output.geometry.x || 0),
+        y: Number(w.output.geometry.y || 0),
+        width: Number(w.output.geometry.width || 0),
+        height: Number(w.output.geometry.height || 0)
+      } : void 0),
+      outputUsableArea: options?.outputUsableArea,
+      desktopWindow: Boolean(w.desktopWindow),
+      dock: Boolean(w.dock),
+      splash: Boolean(w.splash),
+      notification: Boolean(w.notification),
+      onScreenDisplay: Boolean(w.onScreenDisplay),
+      popupMenu: Boolean(w.popupMenu),
+      tooltip: Boolean(w.tooltip),
+      specialWindow: Boolean(w.specialWindow)
+    };
+  }
+  function parseCustomRules(rules) {
+    if (!rules) return [];
+    if (Array.isArray(rules)) return rules;
+    if (typeof rules === "string") {
+      try {
+        const parsed = JSON.parse(rules);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+  var cachedEngine = null;
+  var cachedSignature = "";
+  var tracker = new WindowClassificationTracker();
+  function computeConfigSignature(options) {
+    if (!options) return "default";
+    const customRulesStr = typeof options.customRules === "string" ? options.customRules : JSON.stringify(options.customRules || []);
+    const filterStr = options.userFilterString || (options.userFilterPatterns ? options.userFilterPatterns.join(",") : "");
+    const policyStr = options.gameWindowPolicy || "floating";
+    const gamePatsStr = options.customGamePatterns ? options.customGamePatterns.join(",") : "";
+    return `${policyStr}|${filterStr}|${customRulesStr}|${gamePatsStr}`;
+  }
+  function getOrCreateRuleEngine(options) {
+    const sig = computeConfigSignature(options);
+    if (!cachedEngine || cachedSignature !== sig) {
+      const parsedRules = parseCustomRules(options?.customRules);
+      const filterPatterns = options?.userFilterPatterns || (options?.userFilterString ? [options.userFilterString] : []);
+      cachedEngine = new WindowRuleEngine({
+        customRules: parsedRules,
+        userFilterPatterns: filterPatterns,
+        gameWindowPolicy: options?.gameWindowPolicy || "floating",
+        customGamePatterns: options?.customGamePatterns
+      });
+      cachedSignature = sig;
+    }
+    return cachedEngine;
+  }
+  var RuleEngine = {
+    classify(w, options) {
+      const engine = getOrCreateRuleEngine(options);
+      const input = toWindowRuleInput(w, options);
+      return engine.classify(input);
+    },
+    evaluate(w, options) {
+      const input = toWindowRuleInput(w, options);
+      const engine = getOrCreateRuleEngine(options);
+      const result = engine.classify(input);
+      const wid = input.windowId || (w?.internalId ? String(w.internalId) : "unknown");
+      return tracker.evaluate(wid, result);
+    },
+    forget(w) {
+      const wid = typeof w === "string" ? w : w?.internalId ? String(w.internalId) : w?.windowId || "";
+      if (wid) {
+        tracker.forget(wid);
+      }
+    },
+    shouldFloat(w, userFilterString, customRulesJson, gameWindowPolicy) {
+      const result = this.classify(w, {
+        userFilterString,
+        customRules: customRulesJson,
+        gameWindowPolicy: gameWindowPolicy || "floating"
+      });
+      return result.classification === "floating" || result.classification === "fullscreen" || result.classification === "fullscreen-like";
+    },
+    isIgnored(w) {
+      const result = this.classify(w);
+      return result.classification === "ignored";
+    },
+    defaultFloatPatterns: WindowRuleEngine.DEFAULT_FLOAT_PATTERNS,
+    getCachedSignature() {
+      return cachedSignature;
+    },
+    clearCache() {
+      cachedEngine = null;
+      cachedSignature = "";
+      tracker.clear();
+    },
+    tracker
+  };
+  globalThis.RuleEngine = RuleEngine;
+
+  // apps/kwin-adapter/src/runtime-coordinator.ts
+  var RuntimeCoordinator = class {
+    windows = /* @__PURE__ */ new Map();
+    screens = /* @__PURE__ */ new Map();
+    inFlightEchoes = /* @__PURE__ */ new Map();
+    dirtyScreenIds = /* @__PURE__ */ new Set();
+    pendingReasons = /* @__PURE__ */ new Set();
+    config;
+    currentEpoch = 0;
+    // Diagnostics counters
+    totalNormalizedEvents = 0;
+    totalReconciliationTransactions = 0;
+    totalLayoutComputations = 0;
+    totalGeometryWrites = 0;
+    skippedIdenticalWrites = 0;
+    suppressedGeometryEchoes = 0;
+    lastTransactionReasons = [];
+    lastAffectedScreenIds = [];
+    constructor(initialConfig) {
+      this.config = {
+        enableTiling: initialConfig?.enableTiling ?? true,
+        defaultLayout: initialConfig?.defaultLayout ?? "master-stack",
+        gapInner: initialConfig?.gapInner ?? 8,
+        gapOuter: initialConfig?.gapOuter ?? 10,
+        masterRatio: initialConfig?.masterRatio ?? 0.5,
+        masterCount: initialConfig?.masterCount ?? 1,
+        ignoreMinimized: initialConfig?.ignoreMinimized ?? true,
+        gameWindowPolicy: initialConfig?.gameWindowPolicy ?? "floating",
+        floatFilter: initialConfig?.floatFilter ?? "tessera,tessera-settings,tessera_settings.py",
+        customRules: initialConfig?.customRules ?? "[]",
+        customGamePatterns: initialConfig?.customGamePatterns ?? [],
+        geometryTolerancePx: initialConfig?.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX,
+        echoExpiryMs: initialConfig?.echoExpiryMs ?? DEFAULT_ECHO_EXPIRY_MS
+      };
+    }
+    getConfig() {
+      return { ...this.config };
+    }
+    updateConfig(updates) {
+      this.config = { ...this.config, ...updates };
+      this.invalidateAllScreens("GlobalConfigChanged");
+    }
+    getRetainedWindow(id) {
+      return this.windows.get(id);
+    }
+    getRetainedWindows() {
+      return Array.from(this.windows.values());
+    }
+    getRetainedScreen(outputId) {
+      return this.screens.get(outputId);
+    }
+    getRetainedScreens() {
+      return Array.from(this.screens.values());
+    }
+    getOrCreateScreen(input) {
+      let screen = this.screens.get(input.outputId);
+      if (!screen) {
+        screen = {
+          outputId: input.outputId,
+          name: input.name || input.outputId,
+          geometry: { ...input.geometry },
+          usableArea: { ...input.usableArea },
+          activeDesktopId: input.activeDesktopId || "1",
+          activeActivityId: input.activeActivityId,
+          activeLayout: this.config.defaultLayout,
+          masterCount: this.config.masterCount,
+          masterRatio: this.config.masterRatio,
+          gaps: { inner: this.config.gapInner, outer: this.config.gapOuter },
+          orderedWindowIds: [],
+          persistentOrder: [],
+          dirtyReasons: /* @__PURE__ */ new Set(),
+          latestCommittedEpoch: 0
+        };
+        this.screens.set(input.outputId, screen);
+      } else {
+        if (input.name) screen.name = input.name;
+        screen.geometry = { ...input.geometry };
+        screen.usableArea = { ...input.usableArea };
+        if (input.activeDesktopId) screen.activeDesktopId = input.activeDesktopId;
+        if (input.activeActivityId) screen.activeActivityId = input.activeActivityId;
+      }
+      return screen;
+    }
+    markScreenDirty(outputId, reason) {
+      const screen = this.screens.get(outputId);
+      if (screen) {
+        screen.dirtyReasons.add(reason);
+        this.dirtyScreenIds.add(outputId);
+      }
+      this.pendingReasons.add(reason);
+    }
+    invalidateAllScreens(reason) {
+      for (const screen of this.screens.values()) {
+        screen.dirtyReasons.add(reason);
+        this.dirtyScreenIds.add(screen.outputId);
+      }
+      this.pendingReasons.add(reason);
+    }
+    classifyWindow(input, screen) {
+      const ruleInput = {
+        windowId: input.id,
+        resourceClass: input.resourceClass,
+        resourceName: input.resourceName,
+        appId: input.appId,
+        desktopFileName: input.desktopFileName,
+        title: input.title,
+        caption: input.title,
+        windowRole: input.role,
+        role: input.role,
+        managed: input.managed !== void 0 ? input.managed : true,
+        normalWindow: input.normalWindow !== void 0 ? input.normalWindow : true,
+        dialog: Boolean(input.dialog),
+        transient: Boolean(input.transient),
+        fullScreen: Boolean(input.fullScreen),
+        noBorder: Boolean(input.noBorder),
+        maximizeMode: input.maximizeMode ?? 0,
+        minimized: Boolean(input.minimized),
+        frameGeometry: input.frameGeometry,
+        outputGeometry: input.outputGeometry || screen?.geometry,
+        outputUsableArea: input.outputUsableArea || screen?.usableArea,
+        desktopWindow: Boolean(input.desktopWindow),
+        dock: Boolean(input.dock),
+        splash: Boolean(input.splash),
+        notification: Boolean(input.notification),
+        onScreenDisplay: Boolean(input.onScreenDisplay),
+        popupMenu: Boolean(input.popupMenu),
+        tooltip: Boolean(input.tooltip),
+        specialWindow: Boolean(input.specialWindow)
+      };
+      const engine = getOrCreateRuleEngine({
+        gameWindowPolicy: this.config.gameWindowPolicy,
+        userFilterString: this.config.floatFilter,
+        customRules: this.config.customRules,
+        customGamePatterns: this.config.customGamePatterns
+      });
+      return engine.classify(ruleInput);
+    }
+    /**
+     * Primary event ingestion entrypoint. Normalizes and updates state.
+     */
+    ingestEvent(event) {
+      this.totalNormalizedEvents++;
+      switch (event.type) {
+        case "WindowDiscovered": {
+          const winInput = event.window;
+          const outputId = winInput.outputId || "default";
+          const screen = this.screens.get(outputId);
+          const classification = this.classifyWindow(winInput, screen);
+          const tileable = classification.classification === "tiled";
+          const geom = winInput.frameGeometry || { x: 0, y: 0, width: 800, height: 600 };
+          const retained = {
+            id: winInput.id,
+            resourceClass: winInput.resourceClass || "",
+            resourceName: winInput.resourceName || "",
+            appId: winInput.appId || "",
+            desktopFileName: winInput.desktopFileName || "",
+            title: winInput.title || "",
+            role: winInput.role || "",
+            outputId,
+            desktopId: winInput.desktopId || "1",
+            activityId: winInput.activityId,
+            minimized: Boolean(winInput.minimized),
+            fullScreen: Boolean(winInput.fullScreen),
+            noBorder: Boolean(winInput.noBorder),
+            maximizeMode: winInput.maximizeMode ?? 0,
+            frameGeometry: { ...geom },
+            outputGeometry: winInput.outputGeometry,
+            classification: classification.classification,
+            tileable,
+            isManualFloating: Boolean(winInput.isManualFloating),
+            isDragging: Boolean(winInput.isDragging),
+            lastObservedGeometry: { ...geom },
+            lastRequestedGeometry: null,
+            lastAppliedTransactionEpoch: 0
+          };
+          this.windows.set(winInput.id, retained);
+          if (screen) {
+            if (!screen.persistentOrder.includes(winInput.id)) {
+              screen.persistentOrder.push(winInput.id);
+            }
+          }
+          this.markScreenDirty(outputId, "WindowDiscovered");
+          return { dirty: true, affectedScreens: [outputId], isEcho: false };
+        }
+        case "WindowRemoved": {
+          const retained = this.windows.get(event.windowId);
+          const outputId = retained ? retained.outputId : void 0;
+          this.windows.delete(event.windowId);
+          this.inFlightEchoes.delete(event.windowId);
+          const affected = [];
+          for (const screen of this.screens.values()) {
+            const idx = screen.persistentOrder.indexOf(event.windowId);
+            if (idx !== -1) {
+              screen.persistentOrder.splice(idx, 1);
+              screen.dirtyReasons.add("WindowRemoved");
+              this.dirtyScreenIds.add(screen.outputId);
+              affected.push(screen.outputId);
+            }
+            const oIdx = screen.orderedWindowIds.indexOf(event.windowId);
+            if (oIdx !== -1) {
+              screen.orderedWindowIds.splice(oIdx, 1);
+            }
+          }
+          if (outputId && !affected.includes(outputId)) {
+            this.markScreenDirty(outputId, "WindowRemoved");
+            affected.push(outputId);
+          }
+          this.pendingReasons.add("WindowRemoved");
+          return { dirty: affected.length > 0, affectedScreens: affected, isEcho: false };
+        }
+        case "WindowGeometryChanged": {
+          const echoCheck = this.checkAndHandleEcho(event.windowId, event.geometry, event.timestamp);
+          if (echoCheck.isEcho) {
+            return { dirty: false, affectedScreens: [], isEcho: true };
+          }
+          const win = this.windows.get(event.windowId);
+          if (!win) {
+            return { dirty: false, affectedScreens: [], isEcho: false };
+          }
+          win.lastObservedGeometry = { ...event.geometry };
+          win.frameGeometry = { ...event.geometry };
+          const screen = this.screens.get(win.outputId);
+          const prevTileable = win.tileable;
+          const prevClass = win.classification;
+          const newClassResult = this.classifyWindow({
+            id: win.id,
+            resourceClass: win.resourceClass,
+            title: win.title,
+            noBorder: win.noBorder,
+            maximizeMode: win.maximizeMode,
+            fullScreen: win.fullScreen,
+            minimized: win.minimized,
+            frameGeometry: event.geometry,
+            outputGeometry: screen?.geometry,
+            outputUsableArea: screen?.usableArea
+          }, screen);
+          win.classification = newClassResult.classification;
+          win.tileable = newClassResult.classification === "tiled";
+          if (prevTileable !== win.tileable || prevClass !== win.classification) {
+            this.markScreenDirty(win.outputId, "TileabilityChanged");
+            return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
+          }
+          this.markScreenDirty(win.outputId, "WindowGeometryChanged");
+          return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
+        }
+        case "WindowStateChanged": {
+          const win = this.windows.get(event.windowId);
+          if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
+          const prevTileable = win.tileable;
+          const prevClass = win.classification;
+          if (event.updates.resourceClass !== void 0) win.resourceClass = event.updates.resourceClass;
+          if (event.updates.title !== void 0) win.title = event.updates.title;
+          if (event.updates.minimized !== void 0) win.minimized = event.updates.minimized;
+          if (event.updates.fullScreen !== void 0) win.fullScreen = event.updates.fullScreen;
+          if (event.updates.noBorder !== void 0) win.noBorder = event.updates.noBorder;
+          if (event.updates.maximizeMode !== void 0) win.maximizeMode = event.updates.maximizeMode;
+          if (event.updates.frameGeometry !== void 0) {
+            win.frameGeometry = { ...event.updates.frameGeometry };
+            win.lastObservedGeometry = { ...event.updates.frameGeometry };
+          }
+          if (event.updates.isManualFloating !== void 0) win.isManualFloating = event.updates.isManualFloating;
+          if (event.updates.isDragging !== void 0) win.isDragging = event.updates.isDragging;
+          const screen = this.screens.get(win.outputId);
+          const newClassResult = this.classifyWindow({
+            id: win.id,
+            resourceClass: win.resourceClass,
+            title: win.title,
+            noBorder: win.noBorder,
+            maximizeMode: win.maximizeMode,
+            fullScreen: win.fullScreen,
+            minimized: win.minimized,
+            frameGeometry: win.frameGeometry,
+            outputGeometry: screen?.geometry,
+            outputUsableArea: screen?.usableArea
+          }, screen);
+          win.classification = newClassResult.classification;
+          win.tileable = newClassResult.classification === "tiled";
+          const changed = prevTileable !== win.tileable || prevClass !== win.classification || event.updates.minimized !== void 0;
+          if (changed) {
+            const reason = win.fullScreen ? "WindowFullscreenEntered" : !win.fullScreen && prevClass === "fullscreen" ? "WindowFullscreenExited" : "WindowStateChanged";
+            this.markScreenDirty(win.outputId, reason);
+            return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
+          }
+          return { dirty: false, affectedScreens: [], isEcho: false };
+        }
+        case "WindowMovedOutput": {
+          const win = this.windows.get(event.windowId);
+          if (win) {
+            win.outputId = event.toOutputId;
+          }
+          const oldScreen = this.screens.get(event.fromOutputId);
+          if (oldScreen) {
+            const idx = oldScreen.persistentOrder.indexOf(event.windowId);
+            if (idx !== -1) oldScreen.persistentOrder.splice(idx, 1);
+            oldScreen.dirtyReasons.add("WindowMovedOutputSource");
+            this.dirtyScreenIds.add(oldScreen.outputId);
+          }
+          const newScreen = this.screens.get(event.toOutputId);
+          if (newScreen) {
+            if (!newScreen.persistentOrder.includes(event.windowId)) {
+              newScreen.persistentOrder.push(event.windowId);
+            }
+            newScreen.dirtyReasons.add("WindowMovedOutputTarget");
+            this.dirtyScreenIds.add(newScreen.outputId);
+          }
+          this.pendingReasons.add("WindowMovedOutput");
+          return { dirty: true, affectedScreens: [event.fromOutputId, event.toOutputId], isEcho: false };
+        }
+        case "WindowMovedDesktop": {
+          const win = this.windows.get(event.windowId);
+          if (win) {
+            win.desktopId = event.toDesktopId;
+            this.markScreenDirty(win.outputId, "WindowMovedDesktop");
+            return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
+          }
+          return { dirty: false, affectedScreens: [], isEcho: false };
+        }
+        case "ScreenTopologyChanged": {
+          const seenIds = /* @__PURE__ */ new Set();
+          for (const s of event.screens) {
+            seenIds.add(s.outputId);
+            this.getOrCreateScreen(s);
+          }
+          for (const existingId of this.screens.keys()) {
+            if (!seenIds.has(existingId)) {
+              this.screens.delete(existingId);
+              this.dirtyScreenIds.delete(existingId);
+            }
+          }
+          this.invalidateAllScreens("ScreenTopologyChanged");
+          return { dirty: true, affectedScreens: Array.from(this.screens.keys()), isEcho: false };
+        }
+        case "ScreenLayoutChanged": {
+          const screen = this.screens.get(event.outputId);
+          if (screen) {
+            screen.activeLayout = event.layout;
+            this.markScreenDirty(event.outputId, "ScreenLayoutChanged");
+            return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
+          }
+          return { dirty: false, affectedScreens: [], isEcho: false };
+        }
+        case "ScreenMasterConfigChanged": {
+          const screen = this.screens.get(event.outputId);
+          if (screen) {
+            if (event.count !== void 0) screen.masterCount = Math.max(0, event.count);
+            if (event.ratio !== void 0) screen.masterRatio = Math.max(0.1, Math.min(0.9, event.ratio));
+            this.markScreenDirty(event.outputId, "ScreenMasterConfigChanged");
+            return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
+          }
+          return { dirty: false, affectedScreens: [], isEcho: false };
+        }
+        case "GlobalConfigChanged": {
+          this.updateConfig(event.config);
+          return { dirty: true, affectedScreens: Array.from(this.screens.keys()), isEcho: false };
+        }
+      }
+    }
+    /**
+     * Geometry echo detection and suppression.
+     */
+    checkAndHandleEcho(windowId, newGeometry, timestamp = Date.now()) {
+      const entry = this.inFlightEchoes.get(windowId);
+      if (!entry) return { isEcho: false };
+      const elapsed = timestamp - entry.timestamp;
+      const maxAge = this.config.echoExpiryMs ?? DEFAULT_ECHO_EXPIRY_MS;
+      if (elapsed > maxAge) {
+        this.inFlightEchoes.delete(windowId);
+        return { isEcho: false };
+      }
+      const tolerance = this.config.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX;
+      if (rectEqualsWithTolerance(entry.target, newGeometry, tolerance)) {
+        this.inFlightEchoes.delete(windowId);
+        this.suppressedGeometryEchoes++;
+        const win = this.windows.get(windowId);
+        if (win) {
+          win.lastObservedGeometry = { ...newGeometry };
+          win.frameGeometry = { ...newGeometry };
+        }
+        return { isEcho: true };
+      }
+      return { isEcho: false };
+    }
+    /**
+     * Records a programmatic geometry assignment to filter its subsequent echo.
+     */
+    recordCommand(windowId, target, epoch) {
+      this.inFlightEchoes.set(windowId, {
+        target: { ...target },
+        epoch,
+        timestamp: Date.now()
+      });
+    }
+    /**
+     * Determines tileable windows for a screen according to slot persistence.
+     */
+    getTileableWindowsForScreen(screen) {
+      const candidateWins = [];
+      for (const win of this.windows.values()) {
+        if (win.outputId !== screen.outputId) continue;
+        if (!win.tileable) continue;
+        if (win.isManualFloating) continue;
+        if (this.config.ignoreMinimized && win.minimized) continue;
+        if (win.fullScreen) continue;
+        if (win.maximizeMode !== 0) continue;
+        candidateWins.push(win);
+      }
+      const ordered = [];
+      const remaining = new Set(candidateWins);
+      for (const wid of screen.persistentOrder) {
+        const match = candidateWins.find((w) => w.id === wid);
+        if (match) {
+          ordered.push(match);
+          remaining.delete(match);
+        }
+      }
+      for (const newWin of remaining) {
+        ordered.push(newWin);
+        if (!screen.persistentOrder.includes(newWin.id)) {
+          screen.persistentOrder.push(newWin.id);
+        }
+      }
+      screen.orderedWindowIds = ordered.map((w) => w.id);
+      return ordered;
+    }
+    /**
+     * Executes a coalesced reconciliation pass for dirty screens.
+     */
+    reconcile(forceScreenId) {
+      if (!this.config.enableTiling) {
+        this.dirtyScreenIds.clear();
+        this.pendingReasons.clear();
+        return null;
+      }
+      const screensToReconcile = [];
+      if (forceScreenId) {
+        const scr = this.screens.get(forceScreenId);
+        if (scr) screensToReconcile.push(scr);
+      } else {
+        for (const scrId of this.dirtyScreenIds) {
+          const scr = this.screens.get(scrId);
+          if (scr) screensToReconcile.push(scr);
+        }
+      }
+      if (screensToReconcile.length === 0) {
+        return null;
+      }
+      const startTime = Date.now();
+      const epoch = ++this.currentEpoch;
+      const reasons = Array.from(this.pendingReasons);
+      const affectedScreenIds = screensToReconcile.map((s) => s.outputId);
+      const operations = [];
+      let skippedWrites = 0;
+      const tolerance = this.config.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX;
+      for (const screen of screensToReconcile) {
+        if (screen.activeLayout === "floating") {
+          screen.dirtyReasons.clear();
+          this.dirtyScreenIds.delete(screen.outputId);
+          continue;
+        }
+        const area = screen.usableArea;
+        if (area.width <= 0 || area.height <= 0) continue;
+        const tileableWindows = this.getTileableWindowsForScreen(screen);
+        if (tileableWindows.length === 0) {
+          screen.dirtyReasons.clear();
+          this.dirtyScreenIds.delete(screen.outputId);
+          continue;
+        }
+        this.totalLayoutComputations++;
+        const ids = tileableWindows.map((w) => w.id);
+        let solution = /* @__PURE__ */ new Map();
+        switch (screen.activeLayout) {
+          case "master-stack":
+            solution = solveMasterStack(area, ids, screen.gaps, {
+              masterRatio: screen.masterRatio,
+              masterCount: screen.masterCount
+            });
+            break;
+          case "balanced-grid":
+          case "grid":
+            solution = solveBalancedGrid(area, ids, screen.gaps);
+            break;
+          case "binary-split":
+          case "bsp": {
+            let root = null;
+            for (const wid of ids) {
+              root = insertWindow(root, wid);
+            }
+            solution = solveTree(root, area, screen.gaps);
+            break;
+          }
+          case "columns":
+            solution = solveLayout("columns", area, ids, screen.gaps);
+            break;
+          case "rows":
+            solution = solveLayout("rows", area, ids, screen.gaps);
+            break;
+          case "monocle":
+            solution = solveLayout("monocle", area, ids, screen.gaps);
+            break;
+          default:
+            solution = solveMasterStack(area, ids, screen.gaps, {
+              masterRatio: screen.masterRatio,
+              masterCount: screen.masterCount
+            });
+            break;
+        }
+        for (const win of tileableWindows) {
+          if (win.isDragging) continue;
+          const desiredRect = solution.get(win.id);
+          if (!desiredRect) continue;
+          const observedRect = win.lastObservedGeometry;
+          if (rectEqualsWithTolerance(desiredRect, observedRect, tolerance)) {
+            skippedWrites++;
+            this.skippedIdenticalWrites++;
+          } else {
+            operations.push({
+              windowId: win.id,
+              targetRect: { ...desiredRect },
+              previousRect: { ...observedRect }
+            });
+            this.totalGeometryWrites++;
+            win.lastRequestedGeometry = { ...desiredRect };
+            win.lastAppliedTransactionEpoch = epoch;
+            this.recordCommand(win.id, desiredRect, epoch);
+          }
+        }
+        screen.latestCommittedEpoch = epoch;
+        screen.dirtyReasons.clear();
+        this.dirtyScreenIds.delete(screen.outputId);
+      }
+      this.pendingReasons.clear();
+      this.totalReconciliationTransactions++;
+      this.lastTransactionReasons = reasons;
+      this.lastAffectedScreenIds = affectedScreenIds;
+      const durationMs = Date.now() - startTime;
+      return {
+        epoch,
+        reasons,
+        affectedScreens: affectedScreenIds,
+        operations,
+        skippedWrites,
+        durationMs
+      };
+    }
+    getDiagnostics() {
+      return {
+        totalNormalizedEvents: this.totalNormalizedEvents,
+        totalReconciliationTransactions: this.totalReconciliationTransactions,
+        totalLayoutComputations: this.totalLayoutComputations,
+        totalGeometryWrites: this.totalGeometryWrites,
+        skippedIdenticalWrites: this.skippedIdenticalWrites,
+        suppressedGeometryEchoes: this.suppressedGeometryEchoes,
+        lastTransactionReasons: [...this.lastTransactionReasons],
+        lastAffectedScreenIds: [...this.lastAffectedScreenIds],
+        retainedWindowCount: this.windows.size,
+        retainedScreenCount: this.screens.size
+      };
+    }
+  };
+
+  // apps/kwin-adapter/src/qml-reconciler-compat.ts
+  function toNormalizedWindow(w, screen, usableArea) {
+    if (!w) return { id: "unknown", managed: false, normalWindow: false };
+    const wid = w.internalId ? String(w.internalId) : w.caption ? `${w.caption}_${w.resourceClass || ""}` : w.id || "unknown";
+    return {
+      id: wid,
+      resourceClass: w.resourceClass ? String(w.resourceClass) : "",
+      resourceName: w.resourceName ? String(w.resourceName) : "",
+      appId: w.appId ? String(w.appId) : "",
+      desktopFileName: w.desktopFileName ? String(w.desktopFileName) : "",
+      title: w.caption ? String(w.caption) : w.title ? String(w.title) : "",
+      role: w.windowRole ? String(w.windowRole) : "",
+      outputId: screen?.name ? String(screen.name) : w.output?.name ? String(w.output.name) : "default",
+      desktopId: w.desktops && w.desktops.length > 0 ? String(w.desktops[0]) : "1",
+      activityId: w.activities && w.activities.length > 0 ? String(w.activities[0]) : void 0,
+      minimized: Boolean(w.minimized),
+      fullScreen: Boolean(w.fullScreen),
+      noBorder: Boolean(w.noBorder),
+      maximizeMode: typeof w.maximizeMode === "number" ? w.maximizeMode : 0,
+      frameGeometry: w.frameGeometry ? {
+        x: Number(w.frameGeometry.x || 0),
+        y: Number(w.frameGeometry.y || 0),
+        width: Number(w.frameGeometry.width || 0),
+        height: Number(w.frameGeometry.height || 0)
+      } : void 0,
+      outputGeometry: screen?.geometry ? {
+        x: Number(screen.geometry.x || 0),
+        y: Number(screen.geometry.y || 0),
+        width: Number(screen.geometry.width || 0),
+        height: Number(screen.geometry.height || 0)
+      } : void 0,
+      outputUsableArea: usableArea ? {
+        x: Number(usableArea.x || 0),
+        y: Number(usableArea.y || 0),
+        width: Number(usableArea.width || 0),
+        height: Number(usableArea.height || 0)
+      } : void 0,
+      managed: w.managed !== void 0 ? Boolean(w.managed) : true,
+      normalWindow: w.normalWindow !== void 0 ? Boolean(w.normalWindow) : true,
+      dialog: Boolean(w.dialog),
+      transient: Boolean(w.transient),
+      desktopWindow: Boolean(w.desktopWindow),
+      dock: Boolean(w.dock),
+      splash: Boolean(w.splash),
+      notification: Boolean(w.notification),
+      onScreenDisplay: Boolean(w.onScreenDisplay),
+      popupMenu: Boolean(w.popupMenu),
+      tooltip: Boolean(w.tooltip),
+      specialWindow: Boolean(w.specialWindow),
+      isManualFloating: Boolean(w.isManualFloating),
+      isDragging: Boolean(w.isDragging)
+    };
+  }
+  function toNormalizedScreen(scr, usableArea) {
+    const outputId = scr?.name ? String(scr.name) : "default";
+    const geom = scr?.geometry ? {
+      x: Number(scr.geometry.x || 0),
+      y: Number(scr.geometry.y || 0),
+      width: Number(scr.geometry.width || 0),
+      height: Number(scr.geometry.height || 0)
+    } : { x: 0, y: 0, width: 1920, height: 1080 };
+    const area = usableArea ? {
+      x: Number(usableArea.x || 0),
+      y: Number(usableArea.y || 0),
+      width: Number(usableArea.width || 0),
+      height: Number(usableArea.height || 0)
+    } : geom;
+    return {
+      outputId,
+      name: scr?.name ? String(scr.name) : outputId,
+      geometry: geom,
+      usableArea: area
+    };
+  }
+  var activeCoordinator = null;
+  function getOrCreateCoordinator(config) {
+    if (!activeCoordinator) {
+      activeCoordinator = new RuntimeCoordinator(config);
+    } else if (config) {
+      activeCoordinator.updateConfig(config);
+    }
+    return activeCoordinator;
+  }
+  function createCoordinator(config) {
+    return new RuntimeCoordinator(config);
+  }
+  var ReconcilerBridge = {
+    createCoordinator,
+    getOrCreateCoordinator,
+    toNormalizedWindow,
+    toNormalizedScreen,
+    RuntimeCoordinator
+  };
+  globalThis.ReconcilerModule = ReconcilerBridge;
+  globalThis.RuntimeCoordinator = RuntimeCoordinator;
+  return __toCommonJS(qml_reconciler_compat_exports);
+})();
+var ReconcilerBridge = ReconcilerModule.ReconcilerBridge;
+var RuntimeCoordinator = ReconcilerModule.RuntimeCoordinator;
