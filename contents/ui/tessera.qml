@@ -35,22 +35,42 @@ Item {
     property bool isArranging: false
     property var currentDraggingWindow: null
 
+    // References to overlay and HUD windows
+    property var overlayItem: null
+    property var hudItem: null
+
     // Visual Drag & Drop Snap Zones Overlay Loader
     Loader {
         id: zoneOverlayLoader
-        source: "ZoneOverlay.qml"
+        source: Qt.resolvedUrl("ZoneOverlay.qml")
+        onLoaded: {
+            console.log("[Tessera] ZoneOverlay Loaded successfully!");
+            root.overlayItem = item;
+            if (item) {
+                item.layoutSelected.connect(function(layoutName) {
+                    root.setActiveLayout(layoutName);
+                });
+            }
+        }
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                console.error("[Tessera] ZoneOverlay Loader Error: " + errorString());
+            }
+        }
     }
 
     // Top Notification HUD Loader
     Loader {
         id: topHudLoader
-        source: "TopNotification.qml"
-    }
-
-    Connections {
-        target: zoneOverlayLoader.item
-        function onLayoutSelected(layoutName) {
-            root.setActiveLayout(layoutName);
+        source: Qt.resolvedUrl("TopNotification.qml")
+        onLoaded: {
+            console.log("[Tessera] TopNotification Loaded successfully!");
+            root.hudItem = item;
+        }
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                console.error("[Tessera] TopNotification Loader Error: " + errorString());
+            }
         }
     }
 
@@ -101,21 +121,23 @@ Item {
         if (w.interactiveMoveResizeStarted) {
             w.interactiveMoveResizeStarted.connect(function() {
                 currentDraggingWindow = w;
-                if (zoneOverlayLoader.item) {
-                    zoneOverlayLoader.item.showOverlay(getActiveLayout(), config.gapInner, config.gapOuter);
+                console.log("[Tessera] Drag started for: " + w.caption + ", overlay=" + root.overlayItem);
+                if (root.overlayItem) {
+                    root.overlayItem.showOverlay(getActiveLayout(), config.gapInner, config.gapOuter);
                 }
             });
         }
         if (w.interactiveMoveResizeStepped) {
             w.interactiveMoveResizeStepped.connect(function() {
-                if (zoneOverlayLoader.item) {
-                    zoneOverlayLoader.item.updateHover(Workspace.cursorPos);
+                if (root.overlayItem && root.overlayItem.visible) {
+                    root.overlayItem.updateHover(Workspace.cursorPos);
                 }
             });
         }
         if (w.interactiveMoveResizeFinished) {
             w.interactiveMoveResizeFinished.connect(function() {
-                var target = zoneOverlayLoader.item ? zoneOverlayLoader.item.finishDrag() : null;
+                console.log("[Tessera] Drag finished for: " + w.caption);
+                var target = root.overlayItem ? root.overlayItem.finishDrag() : null;
                 if (target && currentDraggingWindow) {
                     var wid = currentDraggingWindow.internalId ? currentDraggingWindow.internalId.toString() : (currentDraggingWindow.caption + currentDraggingWindow.resourceClass);
                     floatingWindows[wid] = true;
@@ -130,8 +152,8 @@ Item {
                         }
                         currentDraggingWindow.frameGeometry = Qt.rect(target.targetX, target.targetY, target.targetW, target.targetH);
                     }
-                    if (topHudLoader.item) {
-                        topHudLoader.item.showMessage("Snapped: " + target.name);
+                    if (root.hudItem) {
+                        root.hudItem.showMessage("Snapped: " + target.name);
                     }
                     osdCall.notify("Snapped: " + target.name, "preferences-desktop-virtual");
                 }
@@ -179,8 +201,8 @@ Item {
     function setActiveLayout(layoutName) {
         var key = getCurrentDesktopKey();
         desktopLayouts[key] = layoutName;
-        if (topHudLoader.item) {
-            topHudLoader.item.showMessage("LAYOUT: " + layoutName.toUpperCase());
+        if (root.hudItem) {
+            root.hudItem.showMessage("LAYOUT: " + layoutName.toUpperCase());
         }
         osdCall.notify("Layout: " + layoutName.toUpperCase(), "preferences-desktop-virtual");
         retileNow();
