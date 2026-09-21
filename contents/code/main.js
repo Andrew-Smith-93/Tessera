@@ -1,7 +1,7 @@
 /**
  * Tessera Tiling Window Manager for KDE Plasma 6
- * Modern, GPU-optimized dynamic tiling window manager with pre-tiling,
- * live multi-window snapping preview, and native compositor outline.
+ * Real Dynamic Tiling Window Manager with Pre-Tiling, Full Slot Snapping,
+ * Live Multi-Window Preview, Compositor Outline, and Plasma Top OSD.
  */
 
 (function () {
@@ -270,6 +270,7 @@
 
     var desktopLayouts = {};
     var floatingWindows = {}; // internalId -> boolean
+    var screenTiledWindows = {}; // screenName -> ordered array of tiled window objects
     var currentLayoutList = ["master-stack", "bsp", "columns", "rows", "monocle", "floating"];
     var isArranging = false;
 
@@ -369,6 +370,10 @@
         return w.internalId ? w.internalId.toString() : (w.caption + "_" + w.resourceClass);
     }
 
+    function getScreenName(screen) {
+        return screen ? (screen.name || "default") : "default";
+    }
+
     function isWindowOnCurrentDesktop(w) {
         if (!w) return false;
         if (w.onAllDesktops) return true;
@@ -381,30 +386,52 @@
         return true;
     }
 
-    function getTileableWindows(screen) {
-        var allWindows = workspace.stackingOrder || [];
-        var tileables = [];
+    /**
+     * Synchronizes and maintains the explicit ordered list of tiled windows for a screen.
+     */
+    function syncTileableWindows(screen) {
+        var sName = getScreenName(screen);
+        var existing = screenTiledWindows[sName] || [];
+        var allWins = workspace.stackingOrder || [];
 
-        for (var i = 0; i < allWindows.length; i++) {
-            var w = allWindows[i];
-            if (!w) continue;
-
-            if (RuleEngine.isIgnored(w)) continue;
+        // 1. Keep existing valid windows in their preserved order
+        var valid = [];
+        for (var i = 0; i < existing.length; i++) {
+            var w = existing[i];
+            if (!w || !w.managed || !w.normalWindow || RuleEngine.isIgnored(w)) continue;
             if (!isWindowOnCurrentDesktop(w)) continue;
-
-            var sName = screen ? (screen.name || "") : "";
-            var wName = w.output ? (w.output.name || "") : "";
-            if (sName && wName && sName !== wName) continue;
-
-            if (config.ignoreMinimized && w.minimized) continue;
 
             var wid = getWindowId(w);
             if (floatingWindows[wid] === true) continue;
-            if (RuleEngine.shouldFloat(w, config.floatFilter, config.customRulesJson)) continue;
+            if (config.ignoreMinimized && w.minimized) continue;
 
-            tileables.push(w);
+            if (valid.indexOf(w) === -1) {
+                valid.push(w);
+            }
         }
-        return tileables;
+
+        // 2. Discover any new tileable windows that belong on this screen
+        for (var j = 0; j < allWins.length; j++) {
+            var win = allWins[j];
+            if (!win || !win.managed || !win.normalWindow || RuleEngine.isIgnored(win)) continue;
+            if (!isWindowOnCurrentDesktop(win)) continue;
+
+            var winScreen = win.output ? (win.output.name || "") : "";
+            if (winScreen && sName && winScreen !== sName) continue;
+
+            if (config.ignoreMinimized && win.minimized) continue;
+
+            var wId = getWindowId(win);
+            if (floatingWindows[wId] === true) continue;
+            if (RuleEngine.shouldFloat(win, config.floatFilter, config.customRulesJson)) continue;
+
+            if (valid.indexOf(win) === -1) {
+                valid.push(win);
+            }
+        }
+
+        screenTiledWindows[sName] = valid;
+        return valid;
     }
 
     function getScreenForPos(pos) {
@@ -422,9 +449,9 @@
     }
 
     // =========================================================================
-    // 4. Pre-Tiling Zone & Preview Geometry Calculator
+    // 4. Real Tiling Slot Finder & Pre-Tiling Calculator
     // =========================================================================
-    function getPreTileTarget(screen, pos) {
+    function findSlotForCursor(screen, pos, otherWindows, draggedWin) {
         if (!screen || !pos) return null;
         var area = workspace.clientArea(0, screen, workspace.currentDesktop);
         if (!area || area.width <= 0 || area.height <= 0) return null;
@@ -439,8 +466,8 @@
         var halfW = Math.floor(area.width / 2);
         var halfH = Math.floor(area.height / 2);
 
-        // 1. Top Edge: Layout Switcher Zone (top 45px or top 5% of screen)
-        if (normY < 0.05 || relY < 45) {
+        // 1. Top Edge: Layout Switcher Zone (top 40px or top 5% of screen)
+        if (relY < 40 || normY < 0.05) {
             var layouts = ["master-stack", "bsp", "columns", "rows", "monocle", "floating"];
             var segIdx = Math.min(layouts.length - 1, Math.max(0, Math.floor(normX * layouts.length)));
             var chosenLayout = layouts[segIdx];
@@ -459,61 +486,90 @@
             };
         }
 
-        // 2. Corner Quarters (within 25% horizontal & vertical of corners)
-        if (normX < 0.25 && normY < 0.30) {
-            return {
-                type: "top_left",
-                name: "Top-Left Quarter",
-                rect: {
-                    x: area.x + go,
-                    y: area.y + go,
-                    width: halfW - go - Math.floor(gi / 2),
-                    height: halfH - go - Math.floor(gi / 2)
+        var options = {
+            gapInner: config.gapInner,
+            gapOuter: config.gapOuter,
+            masterRatio: config.masterRatio,
+            masterCount: config.masterCount
+        };
+
+        var totalCount = otherWindows.length + 1;
+
+        // 2. Multi-Window Tiling Mode:
+        // Every tile slot is a clear, intuitive snap zone covering the screen.
+        if (otherWindows.length > 0) {
+            var layoutName = getActiveLayout();
+            var rects = Layouts.compute(layoutName, area, totalCount, options);
+
+            var bestSlot = 0;
+            var minDist = 99999999;
+
+            for (var i = 0; i < rects.length; i++) {
+                var r = rects[i];
+                // Direct hit test with generous gap tolerance
+                if (pos.x >= (r.x - gi) && pos.x <= (r.x + r.width + gi) &&
+                    pos.y >= (r.y - gi) && pos.y <= (r.y + r.height + gi)) {
+                    bestSlot = i;
+                    minDist = 0;
+                    break;
                 }
+                // Fallback to nearest slot center
+                var cx = r.x + (r.width / 2);
+                var cy = r.y + (r.height / 2);
+                var dist = Math.hypot(pos.x - cx, pos.y - cy);
+                if (dist < minDist) {
+                    minDist = dist;
+                    bestSlot = i;
+                }
+            }
+
+            var slotName = "Slot " + (bestSlot + 1);
+            if (layoutName === "master-stack") {
+                slotName = (bestSlot === 0) ? "Master (Left)" : ("Stack #" + bestSlot);
+            } else if (layoutName === "bsp") {
+                slotName = "BSP Branch #" + (bestSlot + 1);
+            } else if (layoutName === "columns") {
+                slotName = "Column #" + (bestSlot + 1);
+            } else if (layoutName === "rows") {
+                slotName = "Row #" + (bestSlot + 1);
+            }
+
+            return {
+                type: "tile_slot",
+                slotIndex: bestSlot,
+                name: slotName,
+                rect: rects[bestSlot],
+                allRects: rects
             };
         }
 
-        if (normX < 0.25 && normY > 0.70) {
-            return {
-                type: "bot_left",
-                name: "Bottom-Left Quarter",
-                rect: {
-                    x: area.x + go,
-                    y: area.y + halfH + Math.ceil(gi / 2),
-                    width: halfW - go - Math.floor(gi / 2),
-                    height: halfH - go - Math.ceil(gi / 2)
-                }
-            };
-        }
-
-        if (normX > 0.75 && normY < 0.30) {
-            return {
-                type: "top_right",
-                name: "Top-Right Quarter",
-                rect: {
-                    x: area.x + halfW + Math.ceil(gi / 2),
-                    y: area.y + go,
-                    width: halfW - go - Math.ceil(gi / 2),
-                    height: halfH - go - Math.floor(gi / 2)
-                }
-            };
-        }
-
-        if (normX > 0.75 && normY > 0.70) {
-            return {
-                type: "bot_right",
-                name: "Bottom-Right Quarter",
-                rect: {
-                    x: area.x + halfW + Math.ceil(gi / 2),
-                    y: area.y + halfH + Math.ceil(gi / 2),
-                    width: halfW - go - Math.ceil(gi / 2),
-                    height: halfH - go - Math.ceil(gi / 2)
-                }
-            };
-        }
-
-        // 3. Side Halves (Left Half = Master, Right Half = Stack)
-        if (normX < 0.25) {
+        // 3. Single-Window Pre-Tiling Mode (No other windows present):
+        // Wide, intuitive halves and quarters across the entire screen.
+        if (normX < 0.45) {
+            if (normY < 0.35) {
+                return {
+                    type: "top_left",
+                    name: "Top-Left Quarter",
+                    rect: {
+                        x: area.x + go,
+                        y: area.y + go,
+                        width: halfW - go - Math.floor(gi / 2),
+                        height: halfH - go - Math.floor(gi / 2)
+                    }
+                };
+            }
+            if (normY > 0.65) {
+                return {
+                    type: "bot_left",
+                    name: "Bottom-Left Quarter",
+                    rect: {
+                        x: area.x + go,
+                        y: area.y + halfH + Math.ceil(gi / 2),
+                        width: halfW - go - Math.floor(gi / 2),
+                        height: halfH - go - Math.ceil(gi / 2)
+                    }
+                };
+            }
             return {
                 type: "left_half",
                 name: "Left Half (Master)",
@@ -526,7 +582,31 @@
             };
         }
 
-        if (normX > 0.75) {
+        if (normX > 0.55) {
+            if (normY < 0.35) {
+                return {
+                    type: "top_right",
+                    name: "Top-Right Quarter",
+                    rect: {
+                        x: area.x + halfW + Math.ceil(gi / 2),
+                        y: area.y + go,
+                        width: halfW - go - Math.ceil(gi / 2),
+                        height: halfH - go - Math.floor(gi / 2)
+                    }
+                };
+            }
+            if (normY > 0.65) {
+                return {
+                    type: "bot_right",
+                    name: "Bottom-Right Quarter",
+                    rect: {
+                        x: area.x + halfW + Math.ceil(gi / 2),
+                        y: area.y + halfH + Math.ceil(gi / 2),
+                        width: halfW - go - Math.ceil(gi / 2),
+                        height: halfH - go - Math.ceil(gi / 2)
+                    }
+                };
+            }
             return {
                 type: "right_half",
                 name: "Right Half (Stack)",
@@ -539,24 +619,19 @@
             };
         }
 
-        // 4. Center Area -> Free Float (no snap zone)
+        // Center area (free float)
         return null;
     }
 
     /**
-     * Live Preview of ALL other windows while holding the mouse.
-     * Repositions other windows in real time to show prospective layout.
+     * Live Preview of all other windows while holding the mouse.
+     * Guarantees 100% exact mathematical consistency with the final dropped positions.
      */
-    function previewSnapping(screen, targetZone, draggedWin) {
-        if (!screen) return;
+    function previewSnapping(screen, targetZone, draggedWin, otherWindows) {
+        if (!screen || otherWindows.length === 0) return;
+
         var area = workspace.clientArea(0, screen, workspace.currentDesktop);
         if (!area) return;
-
-        var otherWindows = getTileableWindows(screen).filter(function (win) {
-            return win !== draggedWin;
-        });
-
-        if (otherWindows.length === 0) return;
 
         var options = {
             gapInner: config.gapInner,
@@ -575,7 +650,7 @@
         }
 
         if (targetZone.type === "top_edge") {
-            // Preview prospective layout selected at top edge
+            // Preview layout chosen at top edge
             var prospectiveRects = Layouts.compute(targetZone.layoutName, area, otherWindows.length, options);
             for (var p = 0; p < otherWindows.length && p < prospectiveRects.length; p++) {
                 otherWindows[p].frameGeometry = prospectiveRects[p];
@@ -583,46 +658,21 @@
             return;
         }
 
-        // For snap zones (halves / quarters), shift other windows into complementary area
-        var compArea = null;
-        var halfW = Math.floor(area.width / 2);
-        var halfH = Math.floor(area.height / 2);
+        if (targetZone.type === "tile_slot") {
+            // Dragged window is shown by outline at targetZone.slotIndex.
+            // The remaining windows smoothly shift into all remaining slots.
+            var rects = targetZone.allRects;
+            var otherIdx = 0;
 
-        if (targetZone.type === "left_half") {
-            // Dragged window takes Left Half -> Other windows occupy Right Half
-            compArea = {
-                x: area.x + halfW,
-                y: area.y,
-                width: area.width - halfW,
-                height: area.height
-            };
-        } else if (targetZone.type === "right_half") {
-            // Dragged window takes Right Half -> Other windows occupy Left Half
-            compArea = {
-                x: area.x,
-                y: area.y,
-                width: halfW,
-                height: area.height
-            };
-        } else if (targetZone.type === "top_left" || targetZone.type === "bot_left") {
-            compArea = {
-                x: area.x + halfW,
-                y: area.y,
-                width: area.width - halfW,
-                height: area.height
-            };
-        } else {
-            compArea = {
-                x: area.x,
-                y: area.y,
-                width: halfW,
-                height: area.height
-            };
-        }
-
-        var previewRects = Layouts.compute(getActiveLayout(), compArea, otherWindows.length, options);
-        for (var i = 0; i < otherWindows.length && i < previewRects.length; i++) {
-            otherWindows[i].frameGeometry = previewRects[i];
+            for (var i = 0; i < rects.length; i++) {
+                if (i === targetZone.slotIndex) {
+                    continue; // Reserved slot for dragged window
+                }
+                if (otherIdx < otherWindows.length) {
+                    otherWindows[otherIdx].frameGeometry = rects[i];
+                    otherIdx++;
+                }
+            }
         }
     }
 
@@ -643,6 +693,13 @@
                 return;
             }
 
+            var options = {
+                gapInner: config.gapInner,
+                gapOuter: config.gapOuter,
+                masterRatio: config.masterRatio,
+                masterCount: config.masterCount
+            };
+
             for (var s = 0; s < screens.length; s++) {
                 var screen = screens[s];
                 if (!screen) continue;
@@ -650,30 +707,21 @@
                 var area = workspace.clientArea(0, screen, workspace.currentDesktop);
                 if (!area || area.width <= 0 || area.height <= 0) continue;
 
-                var windows = getTileableWindows(screen);
+                var windows = syncTileableWindows(screen);
                 if (windows.length === 0) continue;
-
-                var options = {
-                    gapInner: config.gapInner,
-                    gapOuter: config.gapOuter,
-                    masterRatio: config.masterRatio,
-                    masterCount: config.masterCount
-                };
 
                 var rects = Layouts.compute(layoutName, area, windows.length, options);
 
                 for (var w = 0; w < windows.length && w < rects.length; w++) {
                     var win = windows[w];
-                    var r = rects[w];
-
                     if (typeof win.setMaximize === "function") {
                         win.setMaximize(false, false);
                     }
-                    win.frameGeometry = r;
+                    win.frameGeometry = rects[w];
                 }
             }
         } catch (err) {
-            console.error("[Tessera] Retile error: " + err);
+            log("Retile error: " + err);
         } finally {
             isArranging = false;
         }
@@ -703,38 +751,44 @@
 
                 var pos = workspace.cursorPos;
                 var screen = getScreenForPos(pos);
-                var targetZone = getPreTileTarget(screen, pos);
+                var allTiled = syncTileableWindows(screen);
+                var otherWins = allTiled.filter(function (win) {
+                    return win !== currentDraggingWindow;
+                });
+
+                var targetZone = findSlotForCursor(screen, pos, otherWins, currentDraggingWindow);
 
                 if (targetZone) {
-                    // Show compositor outline at target rect
+                    // Show compositor outline at the exact target slot rect
                     if (typeof workspace.showOutline === "function") {
                         workspace.showOutline(targetZone.rect);
                     }
 
                     if (targetZone.type === "top_edge") {
-                        // Dragging across top edge switches layouts
                         if (lastTopLayoutIndex !== targetZone.layoutIndex) {
                             lastTopLayoutIndex = targetZone.layoutIndex;
                             notify(targetZone.name, "preferences-desktop-virtual");
                         }
                     } else {
                         lastTopLayoutIndex = -1;
-                        if (!lastActiveZone || lastActiveZone.type !== targetZone.type) {
+                        var zoneKey = targetZone.type + (targetZone.slotIndex !== undefined ? ("_" + targetZone.slotIndex) : "");
+                        var lastKey = lastActiveZone ? (lastActiveZone.type + (lastActiveZone.slotIndex !== undefined ? ("_" + lastActiveZone.slotIndex) : "")) : "";
+                        if (zoneKey !== lastKey) {
                             notify("Snap: " + targetZone.name, "preferences-system-windows");
                         }
                     }
 
                     lastActiveZone = targetZone;
 
-                    // Live rearrange preview of other windows
-                    previewSnapping(screen, targetZone, currentDraggingWindow);
+                    // Live multi-window rearrangement preview
+                    previewSnapping(screen, targetZone, currentDraggingWindow, otherWins);
                 } else {
-                    // Hovering center: hide outline and revert other windows
+                    // Hovering free float area: hide outline & revert other windows
                     if (lastActiveZone) {
                         if (typeof workspace.hideOutline === "function") {
                             workspace.hideOutline();
                         }
-                        previewSnapping(screen, null, currentDraggingWindow);
+                        previewSnapping(screen, null, currentDraggingWindow, otherWins);
                         lastActiveZone = null;
                         lastTopLayoutIndex = -1;
                         lastOsdMessage = "";
@@ -754,51 +808,61 @@
                     var wid = getWindowId(currentDraggingWindow);
                     var pos = workspace.cursorPos;
                     var screen = getScreenForPos(pos);
-                    var targetZone = lastActiveZone || getPreTileTarget(screen, pos);
+                    var sName = getScreenName(screen);
+                    var allTiled = syncTileableWindows(screen);
+                    var otherWins = allTiled.filter(function (win) {
+                        return win !== currentDraggingWindow;
+                    });
+
+                    var targetZone = lastActiveZone || findSlotForCursor(screen, pos, otherWins, currentDraggingWindow);
 
                     if (targetZone) {
                         log("Applying drop target: " + targetZone.name + " (" + targetZone.type + ")");
-                        var otherWins = getTileableWindows(screen).filter(function (win) {
-                            return win !== currentDraggingWindow;
-                        });
 
                         if (targetZone.type === "top_edge") {
-                            // Top drop: Apply chosen layout and retile all windows
+                            // Top drop: Apply chosen layout and retile
                             setActiveLayout(targetZone.layoutName);
                             floatingWindows[wid] = false;
                             if (typeof currentDraggingWindow.setMaximize === "function") {
                                 currentDraggingWindow.setMaximize(false, false);
                             }
-                        } else if (otherWins.length === 0) {
-                            // Single-window pre-tiling mode:
-                            // Pin manual half/quarter geometry so user can test tiling without other windows
+                        } else if (targetZone.type === "tile_slot") {
+                            // Multi-window slot drop:
+                            // Commit the exact window ordering previewed live!
+                            var newList = [];
+                            var otherIdx = 0;
+                            for (var k = 0; k < targetZone.allRects.length; k++) {
+                                if (k === targetZone.slotIndex) {
+                                    newList.push(currentDraggingWindow);
+                                } else if (otherIdx < otherWins.length) {
+                                    newList.push(otherWins[otherIdx]);
+                                    otherIdx++;
+                                }
+                            }
+                            screenTiledWindows[sName] = newList;
+                            floatingWindows[wid] = false;
+
+                            for (var m = 0; m < newList.length; m++) {
+                                var wItem = newList[m];
+                                if (typeof wItem.setMaximize === "function") {
+                                    wItem.setMaximize(false, false);
+                                }
+                                wItem.frameGeometry = targetZone.allRects[m];
+                            }
+                            notify("Snapped: " + targetZone.name, "preferences-system-windows");
+                        } else {
+                            // Single-window pre-tiling drop (halves / quarters):
+                            // Pin exact geometry so user can test tiling without other windows
                             if (typeof currentDraggingWindow.setMaximize === "function") {
                                 currentDraggingWindow.setMaximize(false, false);
                             }
                             currentDraggingWindow.frameGeometry = targetZone.rect;
                             floatingWindows[wid] = true;
                             notify("Snapped: " + targetZone.name, "preferences-system-windows");
-                        } else {
-                            // Multi-window snapping mode:
-                            if (targetZone.type === "left_half") {
-                                // Dragged to master slot: unfloat and promote
-                                floatingWindows[wid] = false;
-                                workspace.activeWindow = currentDraggingWindow;
-                                notify("Snapped: Master (Left)", "preferences-system-windows");
-                            } else if (targetZone.type === "right_half") {
-                                // Dragged to stack slot: unfloat
-                                floatingWindows[wid] = false;
-                                notify("Snapped: Stack (Right)", "preferences-system-windows");
-                            } else {
-                                // Quarters: Pin into that quarter
-                                if (typeof currentDraggingWindow.setMaximize === "function") {
-                                    currentDraggingWindow.setMaximize(false, false);
-                                }
-                                currentDraggingWindow.frameGeometry = targetZone.rect;
-                                floatingWindows[wid] = true;
-                                notify("Snapped: " + targetZone.name, "preferences-system-windows");
-                            }
                         }
+                    } else {
+                        // Dropped in center / unmapped area: Keep floating
+                        floatingWindows[wid] = true;
                     }
                 }
 
@@ -839,6 +903,17 @@
         if (!w) return;
         var wid = getWindowId(w);
         delete floatingWindows[wid];
+
+        var screens = workspace.screens || [workspace.activeScreen];
+        for (var s = 0; s < screens.length; s++) {
+            var sName = getScreenName(screens[s]);
+            if (screenTiledWindows[sName]) {
+                screenTiledWindows[sName] = screenTiledWindows[sName].filter(function (win) {
+                    return win !== w;
+                });
+            }
+        }
+
         retileNow();
     });
 
@@ -872,7 +947,7 @@
     }
 
     function focusWindow(forward) {
-        var windows = getTileableWindows(workspace.activeScreen);
+        var windows = syncTileableWindows(workspace.activeScreen);
         if (windows.length <= 1) return;
         var currentIdx = windows.indexOf(workspace.activeWindow);
         if (currentIdx === -1) {
@@ -884,16 +959,18 @@
     }
 
     function swapWindow(forward) {
-        var windows = getTileableWindows(workspace.activeScreen);
+        var sName = getScreenName(workspace.activeScreen);
+        var windows = syncTileableWindows(workspace.activeScreen);
         if (windows.length <= 1) return;
         var currentIdx = windows.indexOf(workspace.activeWindow);
         if (currentIdx === -1) return;
 
         var targetIdx = forward ? ((currentIdx + 1) % windows.length) : ((currentIdx - 1 + windows.length) % windows.length);
-        var targetWin = windows[targetIdx];
-        var currentGeom = workspace.activeWindow.frameGeometry;
-        workspace.activeWindow.frameGeometry = targetWin.frameGeometry;
-        targetWin.frameGeometry = currentGeom;
+        var temp = windows[currentIdx];
+        windows[currentIdx] = windows[targetIdx];
+        windows[targetIdx] = temp;
+        screenTiledWindows[sName] = windows;
+
         retileNow();
     }
 
