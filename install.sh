@@ -36,15 +36,36 @@ fi
 echo "-> Installing Control Center desktop entry & icon..."
 cp "$SCRIPT_DIR/desktop/tessera.svg" "$ICONS_DIR/tessera.svg"
 cp "$SCRIPT_DIR/desktop/org.kde.tessera.desktop" "$APPS_DIR/"
+sed -i "s|Exec=.*|Exec=$BIN_DIR/tessera-settings|g" "$APPS_DIR/org.kde.tessera.desktop"
+kbuildsycoca6 2>/dev/null || true
 
 # 5. Install CLI command
 echo "-> Installing CLI launcher into $BIN_DIR/tessera-settings..."
 ln -sf "$SCRIPT_DIR/bin/tessera-settings" "$BIN_DIR/tessera-settings"
 
-# 6. Initialize default config
+# 6. Register Global Shortcuts in kglobalshortcutsrc
+echo "-> Registering global shortcuts..."
+if command -v kwriteconfig6 >/dev/null 2>&1; then
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Toggle Tiling" "Meta+Shift+T,Meta+Shift+T,Tessera: Toggle Tiling"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Next Layout" "Meta+Space,Meta+Space,Tessera: Next Layout"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Previous Layout" "Meta+Shift+Space,Meta+Shift+Space,Tessera: Previous Layout"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Toggle Window Floating" "Meta+Shift+F,Meta+Shift+F,Tessera: Toggle Window Floating"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Focus Next Window" "Meta+J,Meta+J,Tessera: Focus Next Window"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Focus Previous Window" "Meta+K,Meta+K,Tessera: Focus Previous Window"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Swap Window Forward" "Meta+Shift+J,Meta+Shift+J,Tessera: Swap Window Forward"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Swap Window Backward" "Meta+Shift+K,Meta+Shift+K,Tessera: Swap Window Backward"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Increase Master Ratio" "Meta+L,Meta+L,Tessera: Increase Master Ratio"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Decrease Master Ratio" "Meta+H,Meta+H,Tessera: Decrease Master Ratio"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Increase Master Count" "Meta+I,Meta+I,Tessera: Increase Master Count"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Decrease Master Count" "Meta+D,Meta+D,Tessera: Decrease Master Count"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Retile Current Workspace" "Meta+Shift+R,Meta+Shift+R,Tessera: Retile Current Workspace"
+    systemctl --user restart plasma-kglobalaccel.service 2>/dev/null || true
+fi
+
+# 7. Initialize default config
 python3 -c "import sys; sys.path.append('$SCRIPT_DIR/tessera-control'); from config_manager import ConfigManager; ConfigManager().save()" 2>/dev/null || true
 
-# 7. Reload KWin
+# 8. Reload KWin
 echo "-> Reloading KWin configuration..."
 if command -v qdbus6 >/dev/null 2>&1; then
     qdbus6 org.kde.KWin /KWin org.kde.KWin.reconfigure 2>/dev/null || true

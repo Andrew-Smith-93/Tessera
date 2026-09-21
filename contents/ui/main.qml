@@ -33,9 +33,15 @@ Item {
     property var floatingWindows: ({}) // window internalId -> boolean
     property var currentLayoutList: ["master-stack", "bsp", "columns", "rows", "monocle", "floating"]
     property bool isArranging: false
+    property var currentDraggingWindow: null
 
     function log(msg) {
         console.log("[Tessera] " + msg);
+    }
+
+    // Visual Drag & Drop Snap Zones Overlay
+    ZoneOverlay {
+        id: zoneOverlay
     }
 
     // Load configuration from KWin KConfig
@@ -62,8 +68,60 @@ Item {
             desktopLayouts = {};
         }
 
+        // Hook all existing windows for drag & drop zones
+        var allWins = Workspace.stackingOrder || [];
+        for (var i = 0; i < allWins.length; i++) {
+            hookWindow(allWins[i]);
+        }
+
         log("Config loaded. Tiling active: " + config.enableTiling + " defaultLayout: " + config.defaultLayout);
         retileNow();
+    }
+
+    // Hook window move/resize events for visual snap zones
+    function hookWindow(w) {
+        if (!w || !w.managed || !w.normalWindow) return;
+        if (w._tesseraHooked) return;
+        w._tesseraHooked = true;
+
+        if (w.interactiveMoveResizeStarted) {
+            w.interactiveMoveResizeStarted.connect(function() {
+                currentDraggingWindow = w;
+                var scr = w.output || Workspace.activeScreen;
+                zoneOverlay.updateZonesForScreen(scr, getActiveLayout(), config.gapInner, config.gapOuter);
+                zoneOverlay.visible = true;
+            });
+        }
+        if (w.interactiveMoveResizeStepped) {
+            w.interactiveMoveResizeStepped.connect(function() {
+                zoneOverlay.checkCursorHover(Workspace.cursorPos);
+            });
+        }
+        if (w.interactiveMoveResizeFinished) {
+            w.interactiveMoveResizeFinished.connect(function() {
+                var targetIdx = zoneOverlay.highlightedIndex;
+                zoneOverlay.visible = false;
+                if (targetIdx >= 0 && targetIdx < zoneOverlay.zones.length && currentDraggingWindow) {
+                    var z = zoneOverlay.zones[targetIdx];
+                    if (typeof currentDraggingWindow.setMaximize === "function") {
+                        currentDraggingWindow.setMaximize(false, false);
+                    }
+                    currentDraggingWindow.frameGeometry = Qt.rect(z.targetX, z.targetY, z.targetW, z.targetH);
+                    osdCall.notify("Snapped to " + z.name, "preferences-desktop-virtual");
+                }
+                currentDraggingWindow = null;
+            });
+        }
+        if (w.minimizedChanged) {
+            w.minimizedChanged.connect(function() {
+                retileNow();
+            });
+        }
+        if (w.fullScreenChanged) {
+            w.fullScreenChanged.connect(function() {
+                retileNow();
+            });
+        }
     }
 
     // Native Plasma OSD notification
@@ -311,16 +369,7 @@ Item {
             if (!window || !window.normalWindow || !window.managed) return;
             log("Window added: " + window.caption + " (" + window.resourceClass + ")");
 
-            if (window.minimizedChanged) {
-                window.minimizedChanged.connect(function() {
-                    retileNow();
-                });
-            }
-            if (window.fullScreenChanged) {
-                window.fullScreenChanged.connect(function() {
-                    retileNow();
-                });
-            }
+            hookWindow(window);
 
             if (config.tileNewWindows) {
                 retileNow();
