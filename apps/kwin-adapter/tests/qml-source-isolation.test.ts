@@ -193,5 +193,22 @@ describe("QML Source Isolation & Legacy Map Audit", () => {
     );
     expect(legacyGuard).not.toBeNull();
   });
+
+  it("9. Window event hooks provide safe lifecycle management and destruction cleanup", () => {
+    const content = readFileSync(QML_PATH, "utf8");
+
+    // unhookWindow function must exist and disconnect signal handlers
+    expect(content).toMatch(/function\s+unhookWindow\s*\(\s*w\s*\)/);
+    expect(content).toMatch(/w\.interactiveMoveResizeStarted\.disconnect/);
+    expect(content).toMatch(/w\.frameGeometryChanged\.disconnect/);
+
+    // Component.onDestruction must be defined and perform hook cleanup
+    expect(content).toMatch(/Component\.onDestruction\s*:\s*\{/);
+    expect(content).toMatch(/unhookWindow\(allWins\[i\]\)/);
+
+    // onWindowRemoved must invoke unhookWindow
+    const onWindowRemovedMatch = content.match(/function\s+onWindowRemoved\s*\(\s*w\s*\)\s*\{[^}]*unhookWindow\(w\);/);
+    expect(onWindowRemovedMatch).not.toBeNull();
+  });
 });
 

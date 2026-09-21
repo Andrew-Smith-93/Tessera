@@ -2,7 +2,7 @@ name: CI & Packaging Quality Assurance
 
 on:
   push:
-    branches: [ main, "chore/*", "feat/*", "fix/*" ]
+    branches: [ main, "chore/*", "feat/*", "fix/*", "test/*" ]
   pull_request:
     branches: [ main ]
 
