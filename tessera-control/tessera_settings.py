@@ -11,10 +11,10 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSlider, QSpinBox, QCheckBox, QTabWidget,
     QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QLineEdit,
-    QMessageBox, QFrame, QScrollArea, QGroupBox, QGridLayout
+    QMessageBox, QFrame, QScrollArea, QGroupBox, QGridLayout, QDialog
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QIcon, QColor
+from PyQt5.QtGui import QFont, QIcon, QColor, QGuiApplication
 
 from config_manager import ConfigManager
 from ui_preview import LiveDesktopPreview
@@ -195,6 +195,110 @@ class LayoutCard(QFrame):
                 }
             """)
             self.title_lbl.setStyleSheet("color: #eff0f1;")
+
+class MasterScreensTestDialog(QDialog):
+    def __init__(self, parent=None, cfg_mgr=None):
+        super().__init__(parent)
+        self.setWindowTitle("Tessera — Master Windows & Multi-Screen Testing")
+        self.setFixedSize(580, 480)
+        self.setStyleSheet(APP_STYLESHEET)
+        self.cfg_mgr = cfg_mgr
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(14)
+
+        header = QLabel("🖥️ Multi-Screen Master Window Configuration & Testing")
+        header.setFont(QFont("SansSerif", 11, QFont.Bold))
+        header.setStyleSheet("color: #3daee9;")
+        layout.addWidget(header)
+
+        # Screen Selection
+        scr_grp = QGroupBox("Target Display / Monitor")
+        scr_layout = QHBoxLayout(scr_grp)
+        self.scr_combo = QComboBox()
+
+        # Detect connected screens
+        self.screens = []
+        try:
+            q_screens = QGuiApplication.screens()
+            for s in q_screens:
+                geo = s.geometry()
+                self.screens.append({"name": s.name(), "w": geo.width(), "h": geo.height(), "x": geo.x(), "y": geo.y()})
+                self.scr_combo.addItem(f"{s.name()} ({geo.width()}x{geo.height()} at +{geo.x()}+{geo.y()})")
+        except Exception:
+            self.screens = [{"name": "HDMI-0", "w": 1920, "h": 1080, "x": 0, "y": 0}, {"name": "DP-4", "w": 1920, "h": 1080, "x": 1920, "y": 0}]
+            self.scr_combo.addItems(["HDMI-0 (1920x1080 at +0+0)", "DP-4 (1920x1080 at +1920+0)"])
+
+        scr_layout.addWidget(QLabel("Select Monitor:"))
+        scr_layout.addWidget(self.scr_combo, 1)
+        layout.addWidget(scr_grp)
+
+        # Master Windows Configuration for Selected Screen
+        cfg_grp = QGroupBox("Master Windows for Selected Monitor")
+        cfg_layout = QGridLayout(cfg_grp)
+
+        cfg_layout.addWidget(QLabel("Number of Master Windows:"), 0, 0)
+        self.spin_masters = QSpinBox()
+        self.spin_masters.setRange(1, 5)
+        self.spin_masters.setValue(self.cfg_mgr.config.get("masterCount", 1) if self.cfg_mgr else 1)
+        self.spin_masters.valueChanged.connect(self.update_preview)
+        cfg_layout.addWidget(self.spin_masters, 0, 1)
+
+        cfg_layout.addWidget(QLabel("Master Width Ratio (%):"), 1, 0)
+        self.slider_ratio = QSlider(Qt.Horizontal)
+        self.slider_ratio.setRange(20, 80)
+        self.slider_ratio.setValue(int(self.cfg_mgr.config.get("masterRatio", 0.55) * 100) if self.cfg_mgr else 55)
+        self.lbl_ratio = QLabel(f"{self.slider_ratio.value()}%")
+        self.lbl_ratio.setStyleSheet("color: #3daee9; font-weight: bold;")
+        self.slider_ratio.valueChanged.connect(lambda v: (self.lbl_ratio.setText(f"{v}%"), self.update_preview()))
+        ratio_box = QHBoxLayout()
+        ratio_box.addWidget(self.lbl_ratio)
+        ratio_box.addWidget(self.slider_ratio, 1)
+        cfg_layout.addLayout(ratio_box, 1, 1)
+
+        layout.addWidget(cfg_grp)
+
+        # Live Mini Diagram
+        self.preview_widget = LiveDesktopPreview()
+        self.preview_widget.setFixedHeight(150)
+        layout.addWidget(self.preview_widget)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+        self.btn_trigger_hud = QPushButton("▶ Trigger Live On-Screen HUD Popup")
+        self.btn_trigger_hud.setStyleSheet("background-color: #2b3b4c; color: #3daee9; font-weight: bold; padding: 8px; border-radius: 4px;")
+        self.btn_trigger_hud.clicked.connect(self.trigger_hud)
+
+        self.btn_apply = QPushButton("Apply to Monitor & Retile")
+        self.btn_apply.setStyleSheet("background-color: #3daee9; color: #000000; font-weight: bold; padding: 8px; border-radius: 4px;")
+        self.btn_apply.clicked.connect(self.apply_to_monitor)
+
+        btn_layout.addWidget(self.btn_trigger_hud)
+        btn_layout.addWidget(self.btn_apply)
+        layout.addLayout(btn_layout)
+
+        self.update_preview()
+
+    def update_preview(self):
+        m_count = self.spin_masters.value()
+        m_ratio = self.slider_ratio.value() / 100.0
+        gi = self.cfg_mgr.config.get("gapInner", 8) if self.cfg_mgr else 8
+        go = self.cfg_mgr.config.get("gapOuter", 10) if self.cfg_mgr else 10
+        self.preview_widget.update_params("master-stack", gi, go, m_ratio, m_count)
+
+    def trigger_hud(self):
+        subprocess.run(["qdbus6", "org.kde.kglobalaccel", "/component/kwin", "invokeShortcut", "Tessera: Show Master HUD"], capture_output=True)
+
+    def apply_to_monitor(self):
+        if not self.cfg_mgr:
+            return
+        m_count = self.spin_masters.value()
+        m_ratio = self.slider_ratio.value() / 100.0
+        self.cfg_mgr.config["masterCount"] = m_count
+        self.cfg_mgr.config["masterRatio"] = m_ratio
+        self.cfg_mgr.save()
+        self.trigger_hud()
+        self.accept()
 
 class TesseraControlWindow(QMainWindow):
     def __init__(self):
@@ -386,6 +490,11 @@ class TesseraControlWindow(QMainWindow):
         cg_layout.addWidget(QLabel("Active Masters:"))
         cg_layout.addWidget(self.master_count_spin)
         ctrl_vbox.addWidget(count_grp)
+
+        btn_test_dialog = QPushButton("🗔 Test Master Windows & Screens Dialog...")
+        btn_test_dialog.setStyleSheet("background-color: #2b3b4c; color: #3daee9; font-weight: bold; padding: 6px; border-radius: 4px;")
+        btn_test_dialog.clicked.connect(self.open_master_test_dialog)
+        ctrl_vbox.addWidget(btn_test_dialog)
 
         ctrl_vbox.addStretch()
         layout.addLayout(ctrl_vbox, 1)
@@ -738,6 +847,7 @@ class TesseraControlWindow(QMainWindow):
             ("Shrink Master Ratio", "Ctrl + Shift + H"),
             ("Increase Master Count", "Ctrl + Shift + I"),
             ("Decrease Master Count", "Ctrl + Shift + O"),
+            ("Show Master HUD Dialog", "Ctrl + Shift + M"),
             ("Move Window to Next Screen", "Ctrl + Shift + Z"),
             ("Cycle Layout on Other Screen", "Ctrl + Shift + X"),
             ("Swap Screen Layouts", "Ctrl + Alt + X"),
@@ -803,6 +913,11 @@ class TesseraControlWindow(QMainWindow):
 
         self.populate_rules_table()
         self.refresh_preview()
+
+    def open_master_test_dialog(self):
+        dlg = MasterScreensTestDialog(self, self.cfg_mgr)
+        dlg.exec_()
+        self.load_settings_into_ui()
 
     def save_and_apply(self):
         cfg = self.cfg_mgr.config

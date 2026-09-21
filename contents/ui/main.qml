@@ -139,22 +139,37 @@ Item {
 
     property var screenLayouts: ({})      // screenName:desktopKey -> layoutName
     property var screenMasterRatios: ({}) // screenName -> master ratio
+    property var screenMasterCounts: ({}) // screenName -> master count
+
+    function getCurrentTargetScreen() {
+        // 1. First priority: Screen containing the currently focused active window
+        if (Workspace.activeWindow && Workspace.activeWindow.normalWindow) {
+            return getScreenForPos(Workspace.activeWindow.frameGeometry);
+        }
+        // 2. Second priority: Screen containing the mouse cursor
+        var curPos = Workspace.cursorPos;
+        if (curPos) {
+            return getScreenForPos({x: curPos.x, y: curPos.y, width: 1, height: 1});
+        }
+        // 3. Fallback: Workspace.activeScreen
+        return Workspace.activeScreen || (Workspace.screens ? Workspace.screens[0] : null);
+    }
 
     function getLayoutKey(screen) {
-        var scr = screen || Workspace.activeScreen;
+        var scr = screen || getCurrentTargetScreen();
         var sName = getScreenName(scr);
         var deskKey = getCurrentDesktopKey();
         return sName + ":" + deskKey;
     }
 
     function getActiveLayout(screen) {
-        var scr = screen || Workspace.activeScreen;
+        var scr = screen || getCurrentTargetScreen();
         var key = getLayoutKey(scr);
         return screenLayouts[key] || desktopLayouts[getCurrentDesktopKey()] || config.defaultLayout || "master-stack";
     }
 
     function setActiveLayout(layoutName, screen) {
-        var scr = screen || Workspace.activeScreen;
+        var scr = screen || getCurrentTargetScreen();
         var key = getLayoutKey(scr);
         screenLayouts[key] = layoutName;
         desktopLayouts[getCurrentDesktopKey()] = layoutName;
@@ -164,7 +179,7 @@ Item {
     }
 
     function cycleLayout(forward) {
-        var scr = Workspace.activeScreen;
+        var scr = getCurrentTargetScreen();
         var current = getActiveLayout(scr);
         var idx = currentLayoutList.indexOf(current);
         if (idx === -1) idx = 0;
@@ -332,12 +347,13 @@ Item {
 
                 var sName = getScreenName(screen);
                 var effectiveRatio = screenMasterRatios[sName] !== undefined ? screenMasterRatios[sName] : config.masterRatio;
+                var effectiveCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
 
                 var options = {
                     gapInner: config.gapInner,
                     gapOuter: config.gapOuter,
                     masterRatio: effectiveRatio,
-                    masterCount: config.masterCount
+                    masterCount: effectiveCount
                 };
 
                 var rects = [];
@@ -850,6 +866,192 @@ Item {
     }
 
     // =========================================================================
+    // 6b. Live Master Windows & Screen Configuration HUD (Testing & On-The-Fly)
+    // =========================================================================
+    PlasmaCore.Dialog {
+        id: masterHudDialog
+
+        title: "Tessera Master Configuration"
+        location: PlasmaCore.Types.Desktop
+        type: PlasmaCore.Dialog.OnScreenDisplay
+        backgroundHints: PlasmaCore.Types.NoBackground
+        flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint | Qt.Popup
+        hideOnWindowDeactivate: false
+        visible: false
+        outputOnly: true
+        width: 440
+        height: 220
+
+        property string screenLabel: "Screen"
+        property int masterCountVal: 1
+        property string layoutVal: "MASTER-STACK"
+        property var targetArea: Qt.rect(0, 0, 1920, 1080)
+
+        function popup(scr, count) {
+            var targetScr = scr || getCurrentTargetScreen();
+            var sName = getScreenName(targetScr);
+            var area = Workspace.clientArea(KWin.MaximizeArea, targetScr, Workspace.currentDesktop);
+            targetArea = area;
+            screenLabel = sName;
+            masterCountVal = count;
+            layoutVal = getActiveLayout(targetScr).toUpperCase();
+
+            x = area.x + Math.floor((area.width - width) / 2);
+            y = area.y + Math.floor((area.height - height) / 2);
+            visible = true;
+
+            hudDismissTimer.restart();
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 12
+            color: Qt.rgba(0.09, 0.11, 0.14, 0.95)
+            border.color: "#3daee9"
+            border.width: 2
+
+            Timer {
+                id: hudDismissTimer
+                interval: 2400
+                repeat: false
+                onTriggered: masterHudDialog.visible = false
+            }
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 10
+
+                // Header with Screen Name and Layout
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: "🖥️ " + masterHudDialog.screenLabel
+                        color: "#3daee9"
+                        font.bold: true
+                        font.pixelSize: 16
+                    }
+                    Item { Layout.fillWidth: true }
+                    Rectangle {
+                        color: Qt.rgba(0.24, 0.68, 0.91, 0.25)
+                        radius: 4
+                        implicitWidth: layoutText.implicitWidth + 12
+                        implicitHeight: 22
+                        Text {
+                            id: layoutText
+                            anchors.centerIn: parent
+                            text: masterHudDialog.layoutVal
+                            color: "#ffffff"
+                            font.bold: true
+                            font.pixelSize: 11
+                        }
+                    }
+                }
+
+                // Master Count Value
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 10
+                    Text {
+                        text: "Master Windows:"
+                        color: "#cfd6df"
+                        font.pixelSize: 15
+                    }
+                    Rectangle {
+                        color: "#3daee9"
+                        radius: 6
+                        implicitWidth: 36
+                        implicitHeight: 28
+                        Text {
+                            anchors.centerIn: parent
+                            text: masterHudDialog.masterCountVal.toString()
+                            color: "#000000"
+                            font.bold: true
+                            font.pixelSize: 18
+                        }
+                    }
+                }
+
+                // Mini Layout Preview Diagram
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 8
+
+                    // Master column box
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: Qt.rgba(0.24, 0.68, 0.91, 0.20)
+                        border.color: "#3daee9"
+                        border.width: 1
+                        radius: 6
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            spacing: 4
+                            Repeater {
+                                model: Math.min(4, masterHudDialog.masterCountVal)
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    color: Qt.rgba(0.24, 0.68, 0.91, 0.40)
+                                    radius: 3
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Master " + (index + 1)
+                                        color: "#ffffff"
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Stack column box
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: Qt.rgba(1, 1, 1, 0.06)
+                        border.color: Qt.rgba(1, 1, 1, 0.15)
+                        border.width: 1
+                        radius: 6
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            spacing: 4
+                            Repeater {
+                                model: 2
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    color: Qt.rgba(1, 1, 1, 0.10)
+                                    radius: 3
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Stack " + (index + 1)
+                                        color: "#80ffffff"
+                                        font.pixelSize: 10
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "Ctrl+Shift+I (Increase) / Ctrl+Shift+O (Decrease)"
+                    color: "#8090a0"
+                    font.pixelSize: 10
+                }
+            }
+        }
+    }
+
+    // =========================================================================
     // 7. Window Event Hooks
     // =========================================================================
     function hookWindow(w) {
@@ -1184,15 +1386,37 @@ Item {
     }
 
     function adjustMasterRatio(delta) {
-        config.masterRatio = Math.max(0.2, Math.min(0.8, config.masterRatio + delta));
-        osdCall.notify("Master Ratio: " + Math.round(config.masterRatio * 100) + "%", "preferences-desktop-virtual");
+        var scr = getCurrentTargetScreen();
+        var sName = getScreenName(scr);
+
+        var currentRatio = screenMasterRatios[sName] !== undefined ? screenMasterRatios[sName] : config.masterRatio;
+        var newRatio = Math.max(0.2, Math.min(0.8, currentRatio + delta));
+        newRatio = Math.round(newRatio * 100) / 100;
+        screenMasterRatios[sName] = newRatio;
+
+        osdCall.notify(sName + " Master Ratio: " + Math.round(newRatio * 100) + "%", "preferences-desktop-virtual");
         retileNow();
     }
 
     function adjustMasterCount(delta) {
-        config.masterCount = Math.max(1, config.masterCount + delta);
-        osdCall.notify("Master Windows: " + config.masterCount, "preferences-desktop-virtual");
+        var scr = getCurrentTargetScreen();
+        var sName = getScreenName(scr);
+
+        var currentCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
+        var newCount = Math.max(1, currentCount + delta);
+        screenMasterCounts[sName] = newCount;
+
+        log("adjustMasterCount delta=" + delta + " target=" + sName + " newCount=" + newCount);
+        masterHudDialog.popup(scr, newCount);
         retileNow();
+    }
+
+    function showMasterDialog(targetScreen) {
+        var scr = targetScreen || getCurrentTargetScreen();
+        var sName = getScreenName(scr);
+        var curCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
+        log("showMasterDialog target=" + sName + " curCount=" + curCount);
+        masterHudDialog.popup(scr, curCount);
     }
 
     function toggleOverlay() {
@@ -1468,6 +1692,13 @@ Item {
         text: "Tessera: Swap Screen Layouts"
         sequence: "Ctrl+Alt+X"
         onActivated: root.swapScreenLayouts()
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Show Master HUD"
+        text: "Tessera: Show Master HUD"
+        sequence: "Ctrl+Shift+M"
+        onActivated: root.showMasterDialog()
     }
 
     Component.onCompleted: {

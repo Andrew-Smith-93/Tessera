@@ -69,6 +69,7 @@ if command -v kwriteconfig6 >/dev/null 2>&1; then
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Move Window to Next Screen" "Ctrl+Shift+Z,Ctrl+Shift+Z,Tessera: Move Window to Next Screen"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Cycle Layout on Other Screen" "Ctrl+Shift+X,Ctrl+Shift+X,Tessera: Cycle Layout on Other Screen"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Swap Screen Layouts" "Ctrl+Alt+X,Ctrl+Alt+X,Tessera: Swap Screen Layouts"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Show Master HUD" "Ctrl+Shift+M,Ctrl+Shift+M,Tessera: Show Master HUD"
     systemctl --user restart plasma-kglobalaccel.service 2>/dev/null || true
 fi
 
