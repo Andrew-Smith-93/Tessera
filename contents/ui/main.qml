@@ -87,27 +87,32 @@ Item {
         if (w.interactiveMoveResizeStarted) {
             w.interactiveMoveResizeStarted.connect(function() {
                 currentDraggingWindow = w;
-                var scr = w.output || Workspace.activeScreen;
-                zoneOverlay.updateZonesForScreen(scr, getActiveLayout(), config.gapInner, config.gapOuter);
-                zoneOverlay.visible = true;
+                zoneOverlay.showOverlay(config.gapInner, config.gapOuter);
             });
         }
         if (w.interactiveMoveResizeStepped) {
             w.interactiveMoveResizeStepped.connect(function() {
-                zoneOverlay.checkCursorHover(Workspace.cursorPos);
+                zoneOverlay.updateHover(Workspace.cursorPos);
             });
         }
         if (w.interactiveMoveResizeFinished) {
             w.interactiveMoveResizeFinished.connect(function() {
-                var targetIdx = zoneOverlay.highlightedIndex;
-                zoneOverlay.visible = false;
-                if (targetIdx >= 0 && targetIdx < zoneOverlay.zones.length && currentDraggingWindow) {
-                    var z = zoneOverlay.zones[targetIdx];
-                    if (typeof currentDraggingWindow.setMaximize === "function") {
-                        currentDraggingWindow.setMaximize(false, false);
+                var target = zoneOverlay.finishDrag();
+                if (target && currentDraggingWindow) {
+                    var wid = currentDraggingWindow.internalId ? currentDraggingWindow.internalId.toString() : (currentDraggingWindow.caption + currentDraggingWindow.resourceClass);
+                    floatingWindows[wid] = true;
+
+                    if (target.type === "maximize") {
+                        if (typeof currentDraggingWindow.setMaximize === "function") {
+                            currentDraggingWindow.setMaximize(true, true);
+                        }
+                    } else {
+                        if (typeof currentDraggingWindow.setMaximize === "function") {
+                            currentDraggingWindow.setMaximize(false, false);
+                        }
+                        currentDraggingWindow.frameGeometry = Qt.rect(target.targetX, target.targetY, target.targetW, target.targetH);
                     }
-                    currentDraggingWindow.frameGeometry = Qt.rect(z.targetX, z.targetY, z.targetW, z.targetH);
-                    osdCall.notify("Snapped to " + z.name, "preferences-desktop-virtual");
+                    osdCall.notify("Snapped: " + target.name, "preferences-desktop-virtual");
                 }
                 currentDraggingWindow = null;
             });
@@ -478,7 +483,7 @@ Item {
     ShortcutHandler {
         name: "Tessera: Decrease Master Count"
         text: "Tessera: Decrease Master Count"
-        sequence: "Meta+D"
+        sequence: "Meta+U"
         onActivated: root.adjustMasterCount(-1)
     }
 
