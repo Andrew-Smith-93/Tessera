@@ -269,7 +269,8 @@
     };
 
     var desktopLayouts = {};
-    var floatingWindows = {}; // internalId -> boolean
+    var floatingWindows = {}; // internalId -> boolean (explicit user float)
+    var preTiledWindows = {}; // internalId -> boolean (single-window pre-tile)
     var screenTiledWindows = {}; // screenName -> ordered array of tiled window objects
     var currentLayoutList = ["master-stack", "bsp", "columns", "rows", "monocle", "floating"];
     var isArranging = false;
@@ -427,6 +428,15 @@
 
             if (valid.indexOf(win) === -1) {
                 valid.push(win);
+            }
+        }
+
+        // 3. When multiple tileable windows exist, unmaximize and cooperate!
+        if (valid.length > 1) {
+            for (var k = 0; k < valid.length; k++) {
+                var vw = valid[k];
+                var vwid = getWindowId(vw);
+                delete preTiledWindows[vwid];
             }
         }
 
@@ -857,12 +867,14 @@
                                 currentDraggingWindow.setMaximize(false, false);
                             }
                             currentDraggingWindow.frameGeometry = targetZone.rect;
-                            floatingWindows[wid] = true;
+                            preTiledWindows[wid] = true;
+                            delete floatingWindows[wid];
                             notify("Snapped: " + targetZone.name, "preferences-system-windows");
                         }
                     } else {
                         // Dropped in center / unmapped area: Keep floating
                         floatingWindows[wid] = true;
+                        delete preTiledWindows[wid];
                     }
                 }
 
@@ -872,6 +884,25 @@
                 lastOsdMessage = "";
 
                 retileNow();
+            });
+        }
+
+        if (w.maximizedChanged) {
+            w.maximizedChanged.connect(function (mode) {
+                if (isArranging) return;
+                log("Window maximizedChanged: " + w.caption + " mode=" + mode);
+                var wid = getWindowId(w);
+                if (mode === 0) {
+                    floatingWindows[wid] = false;
+                    delete preTiledWindows[wid];
+                    retileNow();
+                } else {
+                    var s = getScreenForPos(w.frameGeometry);
+                    var tiled = syncTileableWindows(s);
+                    if (tiled.length === 1) {
+                        preTiledWindows[wid] = true;
+                    }
+                }
             });
         }
 
@@ -891,10 +922,50 @@
     // =========================================================================
     // 7. Workspace Global Events
     // =========================================================================
+    workspace.windowActivated.connect(function (activeWin) {
+        if (!activeWin || !activeWin.normalWindow || !config.enableTiling || isArranging) return;
+        if (!isWindowOnCurrentDesktop(activeWin)) return;
+
+        var s = activeWin.output || getScreenForPos(activeWin.frameGeometry);
+        var tiled = syncTileableWindows(s);
+
+        if (tiled.length > 1) {
+            var changed = false;
+            for (var i = 0; i < tiled.length; i++) {
+                var tw = tiled[i];
+                if (tw !== activeWin && tw.maximizeMode !== 0) {
+                    if (typeof tw.setMaximize === "function") {
+                        tw.setMaximize(false, false);
+                    }
+                    var wid = getWindowId(tw);
+                    floatingWindows[wid] = false;
+                    changed = true;
+                    log("Unmaximized window to cooperate with active window: " + tw.caption);
+                }
+            }
+            if (changed) {
+                retileNow();
+            }
+        }
+    });
+
     workspace.windowAdded.connect(function (w) {
         if (!w || !w.normalWindow || !w.managed) return;
         hookWindow(w);
         if (config.tileNewWindows) {
+            var s = w.output || getScreenForPos(w.frameGeometry);
+            var tiled = syncTileableWindows(s);
+            if (tiled.length > 1) {
+                for (var i = 0; i < tiled.length; i++) {
+                    if (tiled[i].maximizeMode !== 0) {
+                        if (typeof tiled[i].setMaximize === "function") {
+                            tiled[i].setMaximize(false, false);
+                        }
+                        var wid = getWindowId(tiled[i]);
+                        floatingWindows[wid] = false;
+                    }
+                }
+            }
             retileNow();
         }
     });
