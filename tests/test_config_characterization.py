@@ -6,7 +6,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 class TestConfigCharacterization(unittest.TestCase):
     """
-    Phase 5D characterization tests capturing baseline configuration drift,
+    Phase 5D characterization tests capturing configuration drift,
     unsupported keys, missing distribution binaries, and legacy command semantics.
     """
 
@@ -19,14 +19,12 @@ class TestConfigCharacterization(unittest.TestCase):
 
     def test_distribution_mismatch_control_center(self):
         """
-        Characterizes that config.ui advertises launching Tessera Control Center
-        via tessera://open or running 'tessera-settings', but the packaged KWin script
-        (.kwinscript) contains only metadata.json and contents/, completely omitting
-        the Python control center, launcher binary, and desktop file.
+        Characterizes that config.ui references 'tessera-settings', while the packaged KWin script
+        (.kwinscript) contains only metadata.json and contents/, omitting
+        the standalone Python control center and desktop integration files.
         """
         with open(self.config_ui_path, "r", encoding="utf-8") as f:
             ui_content = f.read()
-        self.assertIn("tessera://open", ui_content)
         self.assertIn("tessera-settings", ui_content)
 
         with open(self.package_sh_path, "r", encoding="utf-8") as f:
@@ -76,30 +74,29 @@ class TestConfigCharacterization(unittest.TestCase):
         self.assertNotIn("animationDurationMs", main_xml_keys)
         self.assertNotIn("overlayPollingMs", main_xml_keys)
 
-    def test_tessera_settings_hydration_triggers_autosave_timer(self):
+    def test_tessera_settings_hydration_does_not_trigger_autosave(self):
         """
-        Characterizes that legacy tessera_settings connects valueChanged signals to auto_sync_timer
-        before loading initial configuration values, scheduling unintended writes during hydration.
+        Verifies that rebuilt tessera_settings has eliminated the auto_sync_timer storm,
+        so that loading settings does not write to disk.
         """
         with open(self.settings_py_path, "r", encoding="utf-8") as f:
             code = f.read()
 
-        self.assertIn("self.auto_sync_timer = QTimer(self)", code)
-        self.assertIn("self.auto_sync_timer.timeout.connect(self.save_and_apply)", code)
-        self.assertIn("self.auto_sync_timer.start(120)", code)
+        self.assertNotIn("auto_sync_timer", code)
 
-    def test_retile_now_invokes_save_and_apply(self):
+    def test_retile_now_does_not_invoke_save_and_apply(self):
         """
-        Characterizes that 'Retile Now' in legacy tessera_settings calls self.save_and_apply(),
-        unintentionally persisting draft changes and reconfiguring KWin.
+        Verifies that 'Retile Now' invokes command runner directly without mutating
+        or persisting draft changes.
         """
         with open(self.settings_py_path, "r", encoding="utf-8") as f:
             code = f.read()
 
         retile_idx = code.find("def retile_kwin(self):")
         self.assertNotEqual(retile_idx, -1)
-        retile_body = code[retile_idx:retile_idx+200]
-        self.assertIn("self.save_and_apply()", retile_body)
+        retile_body = code[retile_idx:retile_idx+300]
+        self.assertNotIn("save_and_apply", retile_body)
+        self.assertIn("retile_now", retile_body)
 
 if __name__ == "__main__":
     unittest.main()

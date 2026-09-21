@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>460</width>
-    <height>280</height>
+    <width>540</width>
+    <height>620</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,97 +15,381 @@
   </property>
   <layout class="QVBoxLayout" name="mainLayout">
    <property name="spacing">
-    <number>16</number>
+    <number>12</number>
    </property>
    <property name="leftMargin">
-    <number>24</number>
+    <number>16</number>
    </property>
    <property name="topMargin">
-    <number>24</number>
+    <number>16</number>
    </property>
    <property name="rightMargin">
-    <number>24</number>
+    <number>16</number>
    </property>
    <property name="bottomMargin">
-    <number>24</number>
+    <number>16</number>
    </property>
    <item>
-    <spacer name="topSpacer">
-     <property name="orientation">
-      <enum>Qt::Orientation::Vertical</enum>
+    <widget class="QTabWidget" name="tabWidget">
+     <property name="currentIndex">
+      <number>0</number>
      </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>20</height>
-      </size>
-     </property>
-    </spacer>
-   </item>
-   <item>
-    <widget class="QLabel" name="titleLabel">
-     <property name="font">
-      <font>
-       <pointsize>14</pointsize>
-       <bold>true</bold>
-      </font>
-     </property>
-     <property name="text">
-      <string>Tessera Tiling Window Manager</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignmentFlag::AlignCenter</set>
-     </property>
+     <widget class="QWidget" name="tabGeneral">
+      <attribute name="title">
+       <string>General</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="generalLayout">
+       <property name="spacing">
+        <number>10</number>
+       </property>
+       <item>
+        <widget class="QGroupBox" name="grpTiling">
+         <property name="title">
+          <string>Tiling Behavior</string>
+         </property>
+         <layout class="QVBoxLayout" name="tilingLayout">
+          <item>
+           <widget class="QCheckBox" name="kcfg_enableTiling">
+            <property name="text">
+             <string>Enable Tessera Window Tiling</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="kcfg_tileNewWindows">
+            <property name="text">
+             <string>Automatically tile newly opened windows</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="kcfg_ignoreMinimized">
+            <property name="text">
+             <string>Ignore minimized windows when recalculating layout</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="kcfg_perDesktopLayout">
+            <property name="text">
+             <string>Remember layout independently per virtual desktop</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="kcfg_showOsd">
+            <property name="text">
+             <string>Show On-Screen Display (OSD) on layout change</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="grpPerformance">
+         <property name="title">
+          <string>Performance</string>
+         </property>
+         <layout class="QFormLayout" name="perfLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="lblDebounce">
+            <property name="text">
+             <string>Reconciliation Debounce:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QSpinBox" name="kcfg_reconcileDebounceMs">
+            <property name="suffix">
+             <string> ms</string>
+            </property>
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>1000</number>
+            </property>
+            <property name="singleStep">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="generalSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tabLayout">
+      <attribute name="title">
+       <string>Layout &amp; Slots</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="layoutTabLayout">
+       <property name="spacing">
+        <number>10</number>
+       </property>
+       <item>
+        <widget class="QGroupBox" name="grpDefaultLayout">
+         <property name="title">
+          <string>Default Layout Algorithm</string>
+         </property>
+         <layout class="QFormLayout" name="defaultLayoutForm">
+          <item row="0" column="0">
+           <widget class="QLabel" name="lblDefaultLayout">
+            <property name="text">
+             <string>Layout Algorithm:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="kcfg_defaultLayout">
+            <item>
+             <property name="text">
+              <string>balanced-grid</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>primary-stack</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>binary-split</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>columns</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>rows</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>monocle</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="grpPrimaryRegion">
+         <property name="title">
+          <string>Primary Region Parameters</string>
+         </property>
+         <layout class="QFormLayout" name="primaryRegionForm">
+          <item row="0" column="0">
+           <widget class="QLabel" name="lblPrimaryRatio">
+            <property name="text">
+             <string>Primary Region Ratio:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QDoubleSpinBox" name="kcfg_primaryRegionRatio">
+            <property name="minimum">
+             <number>0.10</number>
+            </property>
+            <property name="maximum">
+             <number>0.90</number>
+            </property>
+            <property name="singleStep">
+             <number>0.05</number>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="lblPrimaryCount">
+            <property name="text">
+             <string>Primary Region Count:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="kcfg_primaryRegionCount">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="grpGaps">
+         <property name="title">
+          <string>Window Gaps</string>
+         </property>
+         <layout class="QFormLayout" name="gapsForm">
+          <item row="0" column="0">
+           <widget class="QLabel" name="lblGapInner">
+            <property name="text">
+             <string>Inner Gap (between windows):</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QSpinBox" name="kcfg_gapInner">
+            <property name="suffix">
+             <string> px</string>
+            </property>
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>100</number>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="lblGapOuter">
+            <property name="text">
+             <string>Outer Gap (screen edge):</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="kcfg_gapOuter">
+            <property name="suffix">
+             <string> px</string>
+            </property>
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>100</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="layoutSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tabRules">
+      <attribute name="title">
+       <string>Rules &amp; Filtering</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="rulesTabLayout">
+       <property name="spacing">
+        <number>10</number>
+       </property>
+       <item>
+        <widget class="QGroupBox" name="grpGaming">
+         <property name="title">
+          <string>Gaming &amp; Fullscreen Policy</string>
+         </property>
+         <layout class="QFormLayout" name="gamingForm">
+          <item row="0" column="0">
+           <widget class="QLabel" name="lblGamePolicy">
+            <property name="text">
+             <string>Game Window Policy:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="kcfg_gameWindowPolicy">
+            <item>
+             <property name="text">
+              <string>floating</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>tile</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="grpFloatFilter">
+         <property name="title">
+          <string>Floating Window Classes</string>
+         </property>
+         <layout class="QVBoxLayout" name="floatFilterLayout">
+          <item>
+           <widget class="QLabel" name="lblFloatFilterDesc">
+            <property name="text">
+             <string>Comma-separated list of window classes that should always float:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="kcfg_floatFilter"/>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="rulesSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
     </widget>
    </item>
    <item>
-    <widget class="QLabel" name="descLabel">
-     <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot; style=&quot;color: #8a98a8; font-size: 13px; line-height: 1.4;&quot;&gt;All layouts, inner/outer gaps, per-desktop configurations, and 1-click window float rules are managed visually in the Tessera Control Center.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    <widget class="QFrame" name="footerFrame">
+     <property name="frameShape">
+      <enum>QFrame::Shape::StyledPanel</enum>
      </property>
-     <property name="wordWrap">
-      <bool>true</bool>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignmentFlag::AlignCenter</set>
-     </property>
+     <layout class="QHBoxLayout" name="footerLayout">
+      <item>
+       <widget class="QLabel" name="lblControlCenter">
+        <property name="text">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;For live layout preview, presets, and quick window picker, run &lt;b&gt;tessera-settings&lt;/b&gt;.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
-   </item>
-   <item>
-    <widget class="QLabel" name="launchBtnLabel">
-     <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;a href=&quot;tessera://open&quot; style=&quot;font-size: 14px; font-weight: bold; color: #ffffff; background-color: #3daee9; padding: 10px 24px; text-decoration: none; border-radius: 6px;&quot;&gt;&amp;nbsp;&amp;nbsp;🚀&amp;nbsp;&amp;nbsp;Launch Tessera Control Center&amp;nbsp;&amp;nbsp;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignmentFlag::AlignCenter</set>
-     </property>
-     <property name="openExternalLinks">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <widget class="QLabel" name="cmdHint">
-     <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot; style=&quot;color: #6c7885; font-size: 11px;&quot;&gt;Or run &lt;code style=&quot;color: #3daee9;&quot;&gt;tessera-settings&lt;/code&gt; in your terminal or application launcher.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignmentFlag::AlignCenter</set>
-     </property>
-    </widget>
-   </item>
-   <item>
-    <spacer name="bottomSpacer">
-     <property name="orientation">
-      <enum>Qt::Orientation::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>20</height>
-      </size>
-     </property>
-    </spacer>
    </item>
   </layout>
  </widget>
