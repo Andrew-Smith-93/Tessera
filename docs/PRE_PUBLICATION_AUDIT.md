@@ -13,7 +13,7 @@ This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/tiling-window
 - **Acceptance Matrix Accounting**: **EXACT 91 CASES** across 11 sections (A through K) preserved with zero modifications
 
 ### Summary of Actions Taken
-1. **Current-Tree Privacy Sanitization**: Removed all local filesystem path leakages (`/home/drew/...`) from `desktop/org.kde.tessera.desktop` and `docs/LIVE_KWIN_X11_ACCEPTANCE.md`. Zero local path references remain across all tracked files.
+1. **Current-Tree Privacy Sanitization**: Removed all local filesystem path leakages (`/home/<user>/...`) from `desktop/org.kde.tessera.desktop` and `docs/LIVE_KWIN_X11_ACCEPTANCE.md`. Zero local path references remain across all tracked files.
 2. **Deterministic Reproducible Packaging**: Diagnosed packaging non-determinism caused by filesystem timestamp fluctuations and directory iteration order. Re-engineered `package.sh` with deterministic entry sorting, fixed timestamp (`2026-01-01 00:00:00`), and normalized POSIX file modes. Repeated builds now generate an invariant SHA-256 (`aa1b7f799b96acdb195214cf2db0cd604ac715c4a26e7b5f5f6d9c28e7ae01ab`). Added regression tests in `tests/test_package_manifest.py`.
 3. **Full Security & History Audit**: Verified zero credentials, API keys, private keys, or personal phone/physical address disclosures exist across working tree or Git history.
 4. **Licensing & Identity Inventory**: Compiled a decision inventory for Omega regarding author identity and license harmonization between GPL-3.0+ (KWin script) and MIT (daemon).
@@ -39,8 +39,8 @@ This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/tiling-window
 | ID | Surface | Severity | Finding Description | Status | Remediation / Action |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **SEC-01** | Packaging | **MEDIUM** | Non-deterministic packaging: timestamps and directory entry ordering varied between builds. | **RESOLVED** | Implemented deterministic ordering and fixed timestamp in `package.sh`. SHA-256 is now invariant. |
-| **SEC-02** | Desktop File | **LOW** | Hardcoded local user path `/home/drew/.local/bin/tessera-settings` in `Exec` field of `desktop/org.kde.tessera.desktop`. | **RESOLVED** | Replaced with standard PATH binary lookup: `Exec=tessera-settings %u`. |
-| **SEC-03** | Documentation | **INFORMATIONAL** | Local paths `/home/drew/.local/...` recorded in manual recovery instructions in `docs/LIVE_KWIN_X11_ACCEPTANCE.md`. | **RESOLVED** | Normalized to user-relative `~/.local/...` paths. |
+| **SEC-02** | Desktop File | **LOW** | Hardcoded local user path `/home/<user>/.local/bin/tessera-settings` in `Exec` field of `desktop/org.kde.tessera.desktop`. | **RESOLVED** | Replaced with standard PATH binary lookup: `Exec=tessera-settings %u`. |
+| **SEC-03** | Documentation | **INFORMATIONAL** | Local paths `/home/<user>/.local/...` recorded in manual recovery instructions in `docs/LIVE_KWIN_X11_ACCEPTANCE.md`. | **RESOLVED** | Normalized to user-relative `~/.local/...` paths. |
 | **SEC-04** | Dependencies | **LOW** | 2 moderate vulnerabilities in dev-dependency `@vitest/mocker` (Vitest: Path Traversal in mocker redirect mock). | **DEFERRED** | Dev tooling only; does not affect packaged KWin runtime. Deferred wholesale upgrade to prevent destabilization. |
 | **SEC-05** | Identity / Contact | **INFORMATIONAL** | Mixed author email and maintainer fields across `metadata.json`, `PKGBUILD`, and `Cargo.toml`. | **DECISION FOR OMEGA** | Documented for Omega's explicit selection of public-facing identity. |
 | **SEC-06** | Licensing | **INFORMATIONAL** | License divergence: `metadata.json` and AUR `PKGBUILD` specify `GPL-3.0+`, while `daemon/Cargo.toml` specifies `MIT`. | **DECISION FOR OMEGA** | Documented for Omega's approval on whether daemon should adopt GPL-3.0+ or remain MIT. |
@@ -52,9 +52,9 @@ This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/tiling-window
 
 - **Credentials & Secrets**: 0 active API keys, tokens, SSH private keys, certificates, or passwords found in the repository.
 - **Local Path Leakage**:
-  - `desktop/org.kde.tessera.desktop`: Sanitized hardcoded `/home/drew/` path.
+  - `desktop/org.kde.tessera.desktop`: Sanitized hardcoded `/home/<user>/` path.
   - `docs/LIVE_KWIN_X11_ACCEPTANCE.md`: Sanitized local path strings to `~/.local/...`.
-  - Verification: `git grep -rnI "/home/drew"` returns **0 matches** across the entire working tree.
+  - Verification: `git grep -rnI "/home/<user>"` returns **0 matches** across the entire working tree.
 - **Runtime Telemetry**: Audited `contents/ui/main.qml`. Window identity logging is strictly confined to redacted internal tracking; window titles, captions, and process arguments are not emitted to default logs.
 - **Media & Binary Assets**: All tracked SVG/PNG icons and UI assets were verified free of extraneous EXIF metadata, personal data, or private filesystem references.
 

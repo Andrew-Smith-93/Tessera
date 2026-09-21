@@ -49,7 +49,7 @@ class TestPrivacyTelemetry(unittest.TestCase):
     def test_runtime_code_artifacts_have_no_console_logs(self):
         self.assertTrue(os.path.exists(self.code_dir))
         for fname in os.listdir(self.code_dir):
-            if fname.endsWith(".js") if hasattr(fname, "endsWith") else fname.endswith(".js"):
+            if fname.endswith(".js"):
                 fpath = os.path.join(self.code_dir, fname)
                 with open(fpath, "r", encoding="utf-8") as f:
                     data = f.read()
