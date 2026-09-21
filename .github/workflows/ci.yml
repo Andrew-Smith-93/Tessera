@@ -2,7 +2,7 @@ name: CI & Packaging Quality Assurance
 
 on:
   push:
-    branches: [ main, "chore/*", "feat/*", "fix/*", "test/*", "audit/*" ]
+    branches: [ main, "chore/*", "feat/*", "fix/*", "test/*", "audit/*", "refactor/*" ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -28,6 +28,7 @@ jobs:
       - name: Set up Rust Toolchain
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
+          toolchain: stable
           components: rustfmt, clippy
 
       - name: Install Node Dependencies
