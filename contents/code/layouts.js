@@ -40,7 +40,33 @@ var Layouts = (function () {
         var actualMasters = Math.min(count, masterCount);
         var stackCount = count - actualMasters;
 
-        var masterWidth = (stackCount > 0) ? Math.floor(area.width * masterRatio) : area.width;
+        // When all windows are master windows (e.g. 2 windows with masterCount >= 2),
+        // arrange them as side-by-side columns rather than vertical horizontal slivers!
+        if (stackCount === 0) {
+            var colWidth = Math.floor(area.width / actualMasters);
+            for (var c = 0; c < actualMasters; c++) {
+                var cx = area.x + (c * colWidth);
+                var cw = (c === actualMasters - 1) ? (area.width - (c * colWidth)) : colWidth;
+                var colRect = {
+                    x: cx,
+                    y: area.y,
+                    width: cw,
+                    height: area.height
+                };
+                results.push(applyGaps(
+                    colRect,
+                    gapInner,
+                    gapOuter,
+                    c === 0,
+                    c === actualMasters - 1,
+                    true,
+                    true
+                ));
+            }
+            return results;
+        }
+
+        var masterWidth = Math.floor(area.width * masterRatio);
         var stackWidth = area.width - masterWidth;
 
         // Calculate Master Column
@@ -59,7 +85,7 @@ var Layouts = (function () {
                 gapInner,
                 gapOuter,
                 true,
-                stackCount === 0,
+                false,
                 m === 0,
                 m === actualMasters - 1
             ));

@@ -241,8 +241,8 @@ Item {
             if (!w || !checkFilter(w)) continue;
             if (!isWindowOnCurrentDesktop(w)) continue;
 
-            // Check screen affinity
-            var wScreen = w.output || getScreenForPos(w.frameGeometry);
+            // Check screen affinity by actual physical center coordinates (never stale w.output)
+            var wScreen = getScreenForPos(w.frameGeometry);
             if (sName && getScreenName(wScreen) !== sName) continue;
 
             var wid = getWindowId(w);
@@ -257,24 +257,47 @@ Item {
         var persistentOrder = persistentScreenOrder[sName] || [];
         var newOrder = [];
 
-        // 1. First keep existing persistent order for active tileable windows
+        var activeIds = [];
+        for (var a = 0; a < tileables.length; a++) {
+            activeIds.push(getWindowId(tileables[a]));
+        }
+
+        // 1. Keep existing persistent order for windows that are currently on this screen
+        var prunedPersistent = [];
         for (var p = 0; p < persistentOrder.length; p++) {
             var pWid = persistentOrder[p];
+            var found = false;
             for (var t = 0; t < tileables.length; t++) {
                 if (getWindowId(tileables[t]) === pWid) {
                     newOrder.push(tileables[t]);
+                    found = true;
                     break;
                 }
             }
+            if (found || (savedMinimGeometries[pWid] && getScreenName(getScreenForPos(savedMinimGeometries[pWid])) === sName)) {
+                prunedPersistent.push(pWid);
+            }
         }
+        persistentOrder = prunedPersistent;
 
-        // 2. Add any brand-new windows that weren't in persistentOrder yet
+        // 2. Add any brand-new windows that arrived on this screen
         for (var t2 = 0; t2 < tileables.length; t2++) {
             if (newOrder.indexOf(tileables[t2]) === -1) {
                 newOrder.push(tileables[t2]);
                 var tWid = getWindowId(tileables[t2]);
                 if (persistentOrder.indexOf(tWid) === -1) {
                     persistentOrder.push(tWid);
+                }
+                // Purge this window from any other screen's persistent list
+                for (var oScr in persistentScreenOrder) {
+                    if (oScr !== sName) {
+                        var oList = persistentScreenOrder[oScr] || [];
+                        var oIdx = oList.indexOf(tWid);
+                        if (oIdx !== -1) {
+                            oList.splice(oIdx, 1);
+                            persistentScreenOrder[oScr] = oList;
+                        }
+                    }
                 }
             }
         }
@@ -439,11 +462,11 @@ Item {
                 slotIndex: -1,
                 rect: { x: barX, y: area.y + 10, width: barW, height: 56 },
                 targetRect: { x: area.x + go, y: area.y + go, width: uw, height: uh },
-                // Trigger bounds near top of screen
-                triggerX: area.x + 40,
+                // Scoped trigger bounds: only triggers over the actual Maximize card at top-center
+                triggerX: barX - 10,
                 triggerY: area.y,
-                triggerW: area.width - 80,
-                triggerH: 80
+                triggerW: barW + 20,
+                triggerH: 66
             });
 
             // 2. Left Half (Master Slot)
@@ -952,12 +975,36 @@ Item {
                             }
                             persistentScreenOrder[sName] = newPOrder;
 
+                            // Purge wid from any other screens' persistent order
+                            for (var oScr in persistentScreenOrder) {
+                                if (oScr !== sName) {
+                                    var oList = persistentScreenOrder[oScr] || [];
+                                    var oIdx = oList.indexOf(wid);
+                                    if (oIdx !== -1) {
+                                        oList.splice(oIdx, 1);
+                                        persistentScreenOrder[oScr] = oList;
+                                    }
+                                }
+                            }
+
                             savedTiledGeometries[wid] = Qt.rect(target.targetRect.x, target.targetRect.y, target.targetRect.width, target.targetRect.height);
 
                             osdCall.notify("Snapped: " + target.title, "preferences-system-windows");
                         }
                     } else {
                         // Dropped outside any snap zone
+                        var dropScr = getScreenForPos(w.frameGeometry);
+                        var dropSName = getScreenName(dropScr);
+                        for (var oScr2 in persistentScreenOrder) {
+                            if (oScr2 !== dropSName) {
+                                var oList2 = persistentScreenOrder[oScr2] || [];
+                                var oIdx2 = oList2.indexOf(wid);
+                                if (oIdx2 !== -1) {
+                                    oList2.splice(oIdx2, 1);
+                                    persistentScreenOrder[oScr2] = oList2;
+                                }
+                            }
+                        }
                         if (wasDraggingMaximized[wid]) {
                             floatingWindows[wid] = false;
                             delete preTiledWindows[wid];
@@ -1156,6 +1203,103 @@ Item {
         }
     }
 
+    function moveWindowToNextScreen(forward) {
+        var w = Workspace.activeWindow;
+        if (!w || !w.normalWindow) return;
+
+        var screens = Workspace.screens || [];
+        if (screens.length <= 1) {
+            osdCall.notify("Single Display Setup", "preferences-desktop-display");
+            return;
+        }
+
+        var currentScreen = getScreenForPos(w.frameGeometry);
+        var currentIdx = screens.indexOf(currentScreen);
+        if (currentIdx === -1) currentIdx = 0;
+
+        var nextIdx = forward !== false ? ((currentIdx + 1) % screens.length) : ((currentIdx - 1 + screens.length) % screens.length);
+        var targetScreen = screens[nextIdx];
+
+        var fromName = getScreenName(currentScreen);
+        var toName = getScreenName(targetScreen);
+        var wid = getWindowId(w);
+
+        // Remove from old screen's persistent order
+        var oldList = persistentScreenOrder[fromName] || [];
+        var cleanList = [];
+        for (var i = 0; i < oldList.length; i++) {
+            if (oldList[i] !== wid) cleanList.push(oldList[i]);
+        }
+        persistentScreenOrder[fromName] = cleanList;
+
+        // Add to new screen's persistent order
+        var newList = persistentScreenOrder[toName] || [];
+        if (newList.indexOf(wid) === -1) {
+            newList.push(wid);
+        }
+        persistentScreenOrder[toName] = newList;
+
+        var toArea = Workspace.clientArea(KWin.MaximizeArea, targetScreen, Workspace.currentDesktop);
+        var curW = Math.min(w.frameGeometry.width, toArea.width - (config.gapOuter * 2));
+        var curH = Math.min(w.frameGeometry.height, toArea.height - (config.gapOuter * 2));
+        var newX = toArea.x + Math.floor((toArea.width - curW) / 2);
+        var newY = toArea.y + Math.floor((toArea.height - curH) / 2);
+        w.frameGeometry = Qt.rect(newX, newY, curW, curH);
+
+        osdCall.notify("Window Moved to " + toName, "preferences-desktop-display");
+        retileNow();
+    }
+
+    function cycleOtherScreenLayout() {
+        var screens = Workspace.screens || [];
+        if (screens.length <= 1) return;
+
+        var currentScreen = Workspace.activeScreen || screens[0];
+        var currentIdx = screens.indexOf(currentScreen);
+        if (currentIdx === -1) currentIdx = 0;
+
+        var targetScreen = screens[(currentIdx + 1) % screens.length];
+        var sName = getScreenName(targetScreen);
+
+        var current = getActiveLayout(targetScreen);
+        var idx = currentLayoutList.indexOf(current);
+        if (idx === -1) idx = 0;
+        idx = (idx + 1) % currentLayoutList.length;
+        var nextLayout = currentLayoutList[idx];
+
+        var key = getLayoutKey(targetScreen);
+        screenLayouts[key] = nextLayout;
+
+        osdCall.notify(sName + " Layout: " + nextLayout.toUpperCase(), "preferences-desktop-virtual");
+        retileNow();
+    }
+
+    function swapScreenLayouts() {
+        var screens = Workspace.screens || [];
+        if (screens.length < 2) return;
+
+        var s0Name = getScreenName(screens[0]);
+        var s1Name = getScreenName(screens[1]);
+        var deskKey = getCurrentDesktopKey();
+
+        var key0 = s0Name + ":" + deskKey;
+        var key1 = s1Name + ":" + deskKey;
+
+        var l0 = screenLayouts[key0] || desktopLayouts[deskKey] || config.defaultLayout;
+        var l1 = screenLayouts[key1] || desktopLayouts[deskKey] || config.defaultLayout;
+
+        screenLayouts[key0] = l1;
+        screenLayouts[key1] = l0;
+
+        var r0 = screenMasterRatios[s0Name] || config.masterRatio;
+        var r1 = screenMasterRatios[s1Name] || config.masterRatio;
+        screenMasterRatios[s0Name] = r1;
+        screenMasterRatios[s1Name] = r0;
+
+        osdCall.notify("Swapped Layouts: " + s0Name + " ↔ " + s1Name, "preferences-desktop-display");
+        retileNow();
+    }
+
     // =========================================================================
     // 10. Global Keyboard Shortcuts (100% Ctrl-Based, Left-Hand Optimized)
     // =========================================================================
@@ -1302,6 +1446,28 @@ Item {
             root.loadConfig();
             root.retileNow();
         }
+    }
+
+    // Screen Switching & Cross-Monitor Actions (Left-Hand Accessible)
+    ShortcutHandler {
+        name: "Tessera: Move Window to Next Screen"
+        text: "Tessera: Move Window to Next Screen"
+        sequence: "Ctrl+Shift+Z"
+        onActivated: root.moveWindowToNextScreen(true)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Cycle Layout on Other Screen"
+        text: "Tessera: Cycle Layout on Other Screen"
+        sequence: "Ctrl+Shift+X"
+        onActivated: root.cycleOtherScreenLayout()
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Swap Screen Layouts"
+        text: "Tessera: Swap Screen Layouts"
+        sequence: "Ctrl+Alt+X"
+        onActivated: root.swapScreenLayouts()
     }
 
     Component.onCompleted: {

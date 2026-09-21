@@ -66,6 +66,9 @@ if command -v kwriteconfig6 >/dev/null 2>&1; then
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Increase Master Count" "Ctrl+Shift+I,Ctrl+Shift+I,Tessera: Increase Master Count"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Decrease Master Count" "Ctrl+Shift+O,Ctrl+Shift+O,Tessera: Decrease Master Count"
     kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Retile Current Workspace" "Ctrl+Shift+R,Ctrl+Shift+R,Tessera: Retile Current Workspace"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Move Window to Next Screen" "Ctrl+Shift+Z,Ctrl+Shift+Z,Tessera: Move Window to Next Screen"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Cycle Layout on Other Screen" "Ctrl+Shift+X,Ctrl+Shift+X,Tessera: Cycle Layout on Other Screen"
+    kwriteconfig6 --file kglobalshortcutsrc --group kwin --key "Tessera: Swap Screen Layouts" "Ctrl+Alt+X,Ctrl+Alt+X,Tessera: Swap Screen Layouts"
     systemctl --user restart plasma-kglobalaccel.service 2>/dev/null || true
 fi
 

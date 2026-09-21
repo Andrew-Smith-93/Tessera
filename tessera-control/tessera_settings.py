@@ -738,6 +738,9 @@ class TesseraControlWindow(QMainWindow):
             ("Shrink Master Ratio", "Ctrl + Shift + H"),
             ("Increase Master Count", "Ctrl + Shift + I"),
             ("Decrease Master Count", "Ctrl + Shift + O"),
+            ("Move Window to Next Screen", "Ctrl + Shift + Z"),
+            ("Cycle Layout on Other Screen", "Ctrl + Shift + X"),
+            ("Swap Screen Layouts", "Ctrl + Alt + X"),
             ("Force Retile Workspace", "Ctrl + Shift + R")
         ]
 
