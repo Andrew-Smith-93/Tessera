@@ -15,7 +15,7 @@ DEFAULT_CONFIG = {
     "defaultLayout": "master-stack",
     "gapInner": 8,
     "gapOuter": 10,
-    "masterRatio": 0.55,
+    "masterRatio": 0.50,
     "masterCount": 1,
     "perDesktopLayout": True,
     "tileNewWindows": True,
@@ -81,7 +81,7 @@ class ConfigManager:
             write_val("defaultLayout", self.config.get("defaultLayout", "master-stack"))
             write_val("gapInner", self.config.get("gapInner", 8), "int")
             write_val("gapOuter", self.config.get("gapOuter", 10), "int")
-            write_val("masterRatio", self.config.get("masterRatio", 0.55))
+            write_val("masterRatio", self.config.get("masterRatio", 0.50))
             write_val("masterCount", self.config.get("masterCount", 1), "int")
             write_val("nvidiaDebounceMs", self.config.get("nvidiaDebounceMs", 60), "int")
             write_val("overlayPollingMs", self.config.get("overlayPollingMs", 16), "int")

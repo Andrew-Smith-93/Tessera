@@ -15,7 +15,7 @@ class LiveDesktopPreview(QWidget):
         self.layout_type = "master-stack"
         self.gap_inner = 8
         self.gap_outer = 10
-        self.master_ratio = 0.55
+        self.master_ratio = 0.50
         self.master_count = 1
         self.window_count = 3
 
@@ -127,18 +127,82 @@ class LiveDesktopPreview(QWidget):
         rects = []
         count = self.window_count
 
-        if self.layout_type == "master-stack":
+        if self.layout_type == "grid" or (self.layout_type == "master-stack" and self.master_count == 0):
             if count == 1:
                 rects.append(QRect(client_x, client_y, client_w, client_h))
+            elif count == 2:
+                half_w = (client_w - scaled_inner) // 2
+                rects.append(QRect(client_x, client_y, half_w, client_h))
+                rects.append(QRect(client_x + half_w + scaled_inner, client_y, client_w - half_w - scaled_inner, client_h))
+            elif count == 3:
+                col_w = (client_w - (scaled_inner * 2)) // 3
+                for i in range(3):
+                    cw = client_w - (col_w + scaled_inner) * 2 if i == 2 else col_w
+                    rects.append(QRect(client_x + i * (col_w + scaled_inner), client_y, cw, client_h))
+            elif count == 4:
+                half_w = (client_w - scaled_inner) // 2
+                half_h = (client_h - scaled_inner) // 2
+                w1 = client_w - half_w - scaled_inner
+                h1 = client_h - half_h - scaled_inner
+                rects.append(QRect(client_x, client_y, half_w, half_h))
+                rects.append(QRect(client_x, client_y + half_h + scaled_inner, half_w, h1))
+                rects.append(QRect(client_x + half_w + scaled_inner, client_y, w1, half_h))
+                rects.append(QRect(client_x + half_w + scaled_inner, client_y + half_h + scaled_inner, w1, h1))
+            elif count == 5:
+                # 2 horizontal splits on left, 1 stack/column in middle, 2 horizontal splits on right
+                col_w = (client_w - (scaled_inner * 2)) // 3
+                half_h = (client_h - scaled_inner) // 2
+                h1 = client_h - half_h - scaled_inner
+                rects.append(QRect(client_x, client_y, col_w, half_h))
+                rects.append(QRect(client_x, client_y + half_h + scaled_inner, col_w, h1))
+                rects.append(QRect(client_x + col_w + scaled_inner, client_y, col_w, client_h))
+                rx = client_x + (col_w + scaled_inner) * 2
+                rw = client_w - rx + client_x
+                rects.append(QRect(rx, client_y, rw, half_h))
+                rects.append(QRect(rx, client_y + half_h + scaled_inner, rw, h1))
+            else:
+                col_w = (client_w - (scaled_inner * 2)) // 3
+                row_h = (client_h - scaled_inner) // 2
+                for c in range(3):
+                    cx = client_x + c * (col_w + scaled_inner)
+                    cw = client_w - (col_w + scaled_inner) * 2 if c == 2 else col_w
+                    for r in range(2):
+                        if len(rects) >= count:
+                            break
+                        ry = client_y + r * (row_h + scaled_inner)
+                        rh = client_h - row_h - scaled_inner if r == 1 else row_h
+                        rects.append(QRect(cx, ry, cw, rh))
+
+        elif self.layout_type == "master-stack":
+            if count == 1:
+                rects.append(QRect(client_x, client_y, client_w, client_h))
+            elif count == 2:
+                half_w = (client_w - scaled_inner) // 2
+                rects.append(QRect(client_x, client_y, half_w, client_h))
+                rects.append(QRect(client_x + half_w + scaled_inner, client_y, client_w - half_w - scaled_inner, client_h))
+            elif self.master_count >= count:
+                col_w = (client_w - (scaled_inner * (count - 1))) // count
+                for i in range(count):
+                    cw = client_w - (col_w + scaled_inner) * (count - 1) if i == count - 1 else col_w
+                    rects.append(QRect(client_x + i * (col_w + scaled_inner), client_y, cw, client_h))
             else:
                 m_w = int(client_w * self.master_ratio) - (scaled_inner // 2)
                 s_w = client_w - m_w - scaled_inner
-                rects.append(QRect(client_x, client_y, m_w, client_h))
-                stack_count = count - 1
-                stack_h = (client_h - (scaled_inner * (stack_count - 1))) // stack_count
-                for s in range(stack_count):
-                    sy = client_y + s * (stack_h + scaled_inner)
-                    rects.append(QRect(client_x + m_w + scaled_inner, sy, s_w, stack_h))
+                act_masters = max(1, min(count, self.master_count))
+                stack_count = count - act_masters
+
+                m_h = (client_h - (scaled_inner * (act_masters - 1))) // act_masters
+                for m in range(act_masters):
+                    my = client_y + m * (m_h + scaled_inner)
+                    mh = client_h - (m_h + scaled_inner) * (act_masters - 1) if m == act_masters - 1 else m_h
+                    rects.append(QRect(client_x, my, m_w, mh))
+
+                if stack_count > 0:
+                    stack_h = (client_h - (scaled_inner * (stack_count - 1))) // stack_count
+                    for s in range(stack_count):
+                        sy = client_y + s * (stack_h + scaled_inner)
+                        sh = client_h - (stack_h + scaled_inner) * (stack_count - 1) if s == stack_count - 1 else stack_h
+                        rects.append(QRect(client_x + m_w + scaled_inner, sy, s_w, sh))
 
         elif self.layout_type == "bsp":
             if count == 1:

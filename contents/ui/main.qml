@@ -17,7 +17,7 @@ Item {
         defaultLayout: "master-stack",
         gapInner: 8,
         gapOuter: 10,
-        masterRatio: 0.55,
+        masterRatio: 0.50,
         masterCount: 1,
         perDesktopLayout: true,
         tileNewWindows: true,
@@ -41,7 +41,7 @@ Item {
     property var savedMinimGeometries: ({}) // windowId -> Qt.rect
     property var wasDraggingMaximized: ({}) // windowId -> boolean
     property var persistentScreenOrder: ({}) // screenName -> array of windowIds
-    property var currentLayoutList: ["master-stack", "bsp", "columns", "rows", "monocle", "floating"]
+    property var currentLayoutList: ["master-stack", "bsp", "columns", "rows", "grid", "monocle", "floating"]
     property bool isArranging: false
     property var currentDraggingWindow: null
 
@@ -80,7 +80,7 @@ Item {
         config.defaultLayout = KWin.readConfig("defaultLayout", "master-stack");
         config.gapInner = KWin.readConfig("gapInner", 8);
         config.gapOuter = KWin.readConfig("gapOuter", 10);
-        config.masterRatio = KWin.readConfig("masterRatio", 0.55);
+        config.masterRatio = KWin.readConfig("masterRatio", 0.50);
         config.masterCount = KWin.readConfig("masterCount", 1);
         config.perDesktopLayout = KWin.readConfig("perDesktopLayout", true);
         config.tileNewWindows = KWin.readConfig("tileNewWindows", true);
@@ -369,6 +369,9 @@ Item {
                         break;
                     case "rows":
                         rects = LayoutsModule.Layouts.rows(area, windows.length, options);
+                        break;
+                    case "grid":
+                        rects = LayoutsModule.Layouts.balancedGrid(area, windows.length, options);
                         break;
                     case "monocle":
                         rects = LayoutsModule.Layouts.monocle(area, windows.length, options);
@@ -903,8 +906,10 @@ Item {
             hudDismissTimer.restart();
         }
 
-        Rectangle {
-            anchors.fill: parent
+        mainItem: Rectangle {
+            id: hudRootRect
+            implicitWidth: 440
+            implicitHeight: 220
             radius: 12
             color: Qt.rgba(0.09, 0.11, 0.14, 0.95)
             border.color: "#3daee9"
@@ -960,23 +965,24 @@ Item {
                     Rectangle {
                         color: "#3daee9"
                         radius: 6
-                        implicitWidth: 36
+                        implicitWidth: masterHudDialog.masterCountVal === 0 ? 120 : 36
                         implicitHeight: 28
                         Text {
                             anchors.centerIn: parent
-                            text: masterHudDialog.masterCountVal.toString()
+                            text: masterHudDialog.masterCountVal === 0 ? "0 (Balanced Grid)" : masterHudDialog.masterCountVal.toString()
                             color: "#000000"
                             font.bold: true
-                            font.pixelSize: 18
+                            font.pixelSize: masterHudDialog.masterCountVal === 0 ? 11 : 18
                         }
                     }
                 }
 
-                // Mini Layout Preview Diagram
+                // Mini Layout Preview Diagram (Master-Stack when masterCount > 0)
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     spacing: 8
+                    visible: masterHudDialog.masterCountVal > 0
 
                     // Master column box
                     Rectangle {
@@ -1036,6 +1042,83 @@ Item {
                                         font.pixelSize: 10
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // Balanced Grid Preview Diagram (Shown when 0 masters)
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 8
+                    visible: masterHudDialog.masterCountVal === 0
+
+                    // Left End: 2 horizontal splits
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: Qt.rgba(0.24, 0.68, 0.91, 0.15)
+                        border.color: "#3daee9"
+                        border.width: 1
+                        radius: 6
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            spacing: 4
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
+                                radius: 3
+                                Text { anchors.centerIn: parent; text: "1 (Left Top)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
+                                radius: 3
+                                Text { anchors.centerIn: parent; text: "2 (Left Btm)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
+                            }
+                        }
+                    }
+
+                    // Center Stack / Column
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: Qt.rgba(0.24, 0.68, 0.91, 0.25)
+                        border.color: "#3daee9"
+                        border.width: 1
+                        radius: 6
+                        Text { anchors.centerIn: parent; text: "3 (Center Stack)"; color: "#3daee9"; font.pixelSize: 10; font.bold: true }
+                    }
+
+                    // Right End: 2 horizontal splits
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: Qt.rgba(0.24, 0.68, 0.91, 0.15)
+                        border.color: "#3daee9"
+                        border.width: 1
+                        radius: 6
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            spacing: 4
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
+                                radius: 3
+                                Text { anchors.centerIn: parent; text: "4 (Right Top)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
+                                radius: 3
+                                Text { anchors.centerIn: parent; text: "5 (Right Btm)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
                             }
                         }
                     }
@@ -1403,7 +1486,7 @@ Item {
         var sName = getScreenName(scr);
 
         var currentCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
-        var newCount = Math.max(1, currentCount + delta);
+        var newCount = Math.max(0, currentCount + delta);
         screenMasterCounts[sName] = newCount;
 
         log("adjustMasterCount delta=" + delta + " target=" + sName + " newCount=" + newCount);

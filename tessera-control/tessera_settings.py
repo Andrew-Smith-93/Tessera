@@ -237,9 +237,9 @@ class MasterScreensTestDialog(QDialog):
         cfg_grp = QGroupBox("Master Windows for Selected Monitor")
         cfg_layout = QGridLayout(cfg_grp)
 
-        cfg_layout.addWidget(QLabel("Number of Master Windows:"), 0, 0)
+        cfg_layout.addWidget(QLabel("Number of Master Windows (0 = Balanced Grid):"), 0, 0)
         self.spin_masters = QSpinBox()
-        self.spin_masters.setRange(1, 5)
+        self.spin_masters.setRange(0, 5)
         self.spin_masters.setValue(self.cfg_mgr.config.get("masterCount", 1) if self.cfg_mgr else 1)
         self.spin_masters.valueChanged.connect(self.update_preview)
         cfg_layout.addWidget(self.spin_masters, 0, 1)
@@ -247,7 +247,7 @@ class MasterScreensTestDialog(QDialog):
         cfg_layout.addWidget(QLabel("Master Width Ratio (%):"), 1, 0)
         self.slider_ratio = QSlider(Qt.Horizontal)
         self.slider_ratio.setRange(20, 80)
-        self.slider_ratio.setValue(int(self.cfg_mgr.config.get("masterRatio", 0.55) * 100) if self.cfg_mgr else 55)
+        self.slider_ratio.setValue(int(self.cfg_mgr.config.get("masterRatio", 0.50) * 100) if self.cfg_mgr else 50)
         self.lbl_ratio = QLabel(f"{self.slider_ratio.value()}%")
         self.lbl_ratio.setStyleSheet("color: #3daee9; font-weight: bold;")
         self.slider_ratio.valueChanged.connect(lambda v: (self.lbl_ratio.setText(f"{v}%"), self.update_preview()))
@@ -394,6 +394,7 @@ class TesseraControlWindow(QMainWindow):
             ("bsp", "Binary Split (BSP)", "Alternates horizontal and vertical partitions recursively (Hyprland / Dwindle style)."),
             ("columns", "Columns", "Arranges all open windows into equal or weighted vertical columns."),
             ("rows", "Rows", "Arranges windows in horizontal bands across the screen."),
+            ("grid", "Balanced Grid", "Optimal square tiles with no dominant master (4 quarters, 5-pane center stack)."),
             ("monocle", "Monocle (Deck)", "Full-screen working area for focused window with rapid cycle switching."),
             ("floating", "Floating Only", "Disables automatic placement; preserves manual floating window positions.")
         ]
@@ -481,10 +482,10 @@ class TesseraControlWindow(QMainWindow):
         ctrl_vbox.addWidget(ratio_grp)
 
         # Master Count
-        count_grp = QGroupBox("Master Windows Count")
+        count_grp = QGroupBox("Master Windows Count (0 = Balanced Grid)")
         cg_layout = QHBoxLayout(count_grp)
         self.master_count_spin = QSpinBox()
-        self.master_count_spin.setRange(1, 5)
+        self.master_count_spin.setRange(0, 5)
         self.master_count_spin.setValue(1)
         self.master_count_spin.valueChanged.connect(self.on_master_count_changed)
         cg_layout.addWidget(QLabel("Active Masters:"))
@@ -544,7 +545,7 @@ class TesseraControlWindow(QMainWindow):
         dl = self.cfg_mgr.config.get("defaultLayout", "master-stack")
         gi = self.cfg_mgr.config.get("gapInner", 8)
         go = self.cfg_mgr.config.get("gapOuter", 10)
-        mr = self.cfg_mgr.config.get("masterRatio", 0.55)
+        mr = self.cfg_mgr.config.get("masterRatio", 0.50)
         mc = self.cfg_mgr.config.get("masterCount", 1)
         self.preview_widget.update_params(dl, gi, go, mr, mc)
         if hasattr(self, 'anim_preview_widget'):
@@ -883,7 +884,7 @@ class TesseraControlWindow(QMainWindow):
         self.enable_switch.setChecked(cfg.get("enableTiling", True))
         self.inner_gap_slider.setValue(cfg.get("gapInner", 8))
         self.outer_gap_slider.setValue(cfg.get("gapOuter", 10))
-        self.master_ratio_slider.setValue(int(cfg.get("masterRatio", 0.55) * 100))
+        self.master_ratio_slider.setValue(int(cfg.get("masterRatio", 0.50) * 100))
         self.master_count_spin.setValue(cfg.get("masterCount", 1))
 
         self.polling_slider.setValue(cfg.get("overlayPollingMs", 16))

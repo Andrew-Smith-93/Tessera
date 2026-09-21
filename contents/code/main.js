@@ -255,7 +255,7 @@
         defaultLayout: "master-stack",
         gapInner: 8,
         gapOuter: 10,
-        masterRatio: 0.55,
+        masterRatio: 0.50,
         masterCount: 1,
         perDesktopLayout: true,
         tileNewWindows: true,
@@ -308,7 +308,7 @@
         config.defaultLayout = readConfig("defaultLayout", "master-stack");
         config.gapInner = readConfig("gapInner", 8);
         config.gapOuter = readConfig("gapOuter", 10);
-        config.masterRatio = readConfig("masterRatio", 0.55);
+        config.masterRatio = readConfig("masterRatio", 0.50);
         config.masterCount = readConfig("masterCount", 1);
         config.perDesktopLayout = readConfig("perDesktopLayout", true);
         config.tileNewWindows = readConfig("tileNewWindows", true);
