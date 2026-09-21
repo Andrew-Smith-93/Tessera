@@ -48,6 +48,10 @@ export interface RetainedWindowState {
   lastObservedGeometry: Rect;
   lastRequestedGeometry: Rect | null;
   lastAppliedTransactionEpoch: number;
+  currentDesiredTiledGeometry?: Rect | null;
+  preMinimizeGeometry?: Rect | null;
+  isPreTiled?: boolean;
+  outputAffinity?: string;
 }
 
 export interface RetainedScreenState {
@@ -143,6 +147,8 @@ export interface NormalizedWindowInput {
   specialWindow?: boolean;
   isManualFloating?: boolean;
   isDragging?: boolean;
+  isPreTiled?: boolean;
+  outputAffinity?: string;
 }
 
 export interface NormalizedScreenInput {

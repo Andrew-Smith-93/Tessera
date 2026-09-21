@@ -22,8 +22,15 @@ var ReconcilerModule = (() => {
   var qml_reconciler_compat_exports = {};
   __export(qml_reconciler_compat_exports, {
     ReconcilerBridge: () => ReconcilerBridge,
+    computeSnapZones: () => computeSnapZones,
     createCoordinator: () => createCoordinator,
     getOrCreateCoordinator: () => getOrCreateCoordinator,
+    matchSnapZoneHover: () => matchSnapZoneHover,
+    pointToRectDistance: () => pointToRectDistance,
+    rectContainsPoint: () => rectContainsPoint,
+    rectIntersectionArea: () => rectIntersectionArea,
+    resolveCursorTargetScreen: () => resolveCursorTargetScreen,
+    resolveScreenAffinity: () => resolveScreenAffinity,
     toNormalizedScreen: () => toNormalizedScreen,
     toNormalizedWindow: () => toNormalizedWindow
   });
@@ -725,6 +732,159 @@ var ReconcilerModule = (() => {
   };
   globalThis.RuleEngine = RuleEngine;
 
+  // apps/kwin-adapter/src/screen-affinity.ts
+  function pointToRectDistance(px, py, r) {
+    const dx = Math.max(r.x - px, 0, px - (r.x + r.width));
+    const dy = Math.max(r.y - py, 0, py - (r.y + r.height));
+    return Math.hypot(dx, dy);
+  }
+  function rectIntersectionArea(a, b) {
+    const xOverlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+    const yOverlap = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+    return xOverlap * yOverlap;
+  }
+  function rectContainsPoint(r, px, py) {
+    return px >= r.x && px < r.x + r.width && py >= r.y && py < r.y + r.height;
+  }
+  function resolveScreenAffinity(inputs) {
+    const screens = inputs.screens;
+    if (!screens || screens.length === 0) {
+      return inputs.explicitOutputId || inputs.previousOutputId || "default";
+    }
+    const screenMap = /* @__PURE__ */ new Map();
+    for (const s of screens) {
+      screenMap.set(s.outputId, s);
+    }
+    if (inputs.explicitOutputId && screenMap.has(inputs.explicitOutputId)) {
+      return inputs.explicitOutputId;
+    }
+    const geom = inputs.frameGeometry;
+    const hasGeom = Boolean(geom && geom.width > 0 && geom.height > 0);
+    if (hasGeom && geom) {
+      const cx = geom.x + geom.width / 2;
+      const cy = geom.y + geom.height / 2;
+      const centerMatches = [];
+      for (const s of screens) {
+        const targetArea = s.usableArea || s.geometry;
+        if (rectContainsPoint(targetArea, cx, cy) || rectContainsPoint(s.geometry, cx, cy)) {
+          centerMatches.push(s);
+        }
+      }
+      if (centerMatches.length === 1) {
+        return centerMatches[0].outputId;
+      }
+      if (centerMatches.length > 1) {
+        centerMatches.sort((a, b) => a.outputId.localeCompare(b.outputId));
+        return centerMatches[0].outputId;
+      }
+    }
+    if (hasGeom && geom) {
+      let maxArea = 0;
+      let maxCandidates = [];
+      for (const s of screens) {
+        const area = Math.max(
+          rectIntersectionArea(geom, s.geometry),
+          s.usableArea ? rectIntersectionArea(geom, s.usableArea) : 0
+        );
+        if (area > maxArea) {
+          maxArea = area;
+          maxCandidates = [s];
+        } else if (area > 0 && area === maxArea) {
+          maxCandidates.push(s);
+        }
+      }
+      if (maxCandidates.length === 1) {
+        return maxCandidates[0].outputId;
+      }
+      if (maxCandidates.length > 1) {
+        maxCandidates.sort((a, b) => a.outputId.localeCompare(b.outputId));
+        return maxCandidates[0].outputId;
+      }
+    }
+    if (inputs.previousOutputId && screenMap.has(inputs.previousOutputId)) {
+      return inputs.previousOutputId;
+    }
+    if (inputs.cursorPoint) {
+      const px = inputs.cursorPoint.x;
+      const py = inputs.cursorPoint.y;
+      const cursorMatches = [];
+      for (const s of screens) {
+        const targetArea = s.usableArea || s.geometry;
+        if (rectContainsPoint(targetArea, px, py) || rectContainsPoint(s.geometry, px, py)) {
+          cursorMatches.push(s);
+        }
+      }
+      if (cursorMatches.length === 1) {
+        return cursorMatches[0].outputId;
+      }
+      if (cursorMatches.length > 1) {
+        cursorMatches.sort((a, b) => a.outputId.localeCompare(b.outputId));
+        return cursorMatches[0].outputId;
+      }
+    }
+    let refX = 0;
+    let refY = 0;
+    if (hasGeom && geom) {
+      refX = geom.x + geom.width / 2;
+      refY = geom.y + geom.height / 2;
+    } else if (inputs.cursorPoint) {
+      refX = inputs.cursorPoint.x;
+      refY = inputs.cursorPoint.y;
+    }
+    let minDistance = Infinity;
+    let nearestCandidates = [];
+    for (const s of screens) {
+      const dist = pointToRectDistance(refX, refY, s.geometry);
+      if (dist < minDistance - 1e-6) {
+        minDistance = dist;
+        nearestCandidates = [s];
+      } else if (Math.abs(dist - minDistance) <= 1e-6) {
+        nearestCandidates.push(s);
+      }
+    }
+    if (nearestCandidates.length > 0) {
+      nearestCandidates.sort((a, b) => a.outputId.localeCompare(b.outputId));
+      return nearestCandidates[0].outputId;
+    }
+    return screens[0].outputId;
+  }
+  function resolveCursorTargetScreen(screens, cursorPoint, fallbackOutputId) {
+    if (!screens || screens.length === 0) {
+      return {
+        outputId: fallbackOutputId || "default",
+        geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+        usableArea: { x: 0, y: 0, width: 1920, height: 1080 }
+      };
+    }
+    const containing = [];
+    for (const s of screens) {
+      const area = s.usableArea || s.geometry;
+      if (rectContainsPoint(area, cursorPoint.x, cursorPoint.y) || rectContainsPoint(s.geometry, cursorPoint.x, cursorPoint.y)) {
+        containing.push(s);
+      }
+    }
+    if (containing.length === 1) {
+      return containing[0];
+    }
+    if (containing.length > 1) {
+      containing.sort((a, b) => a.outputId.localeCompare(b.outputId));
+      return containing[0];
+    }
+    let minDistance = Infinity;
+    let candidates = [];
+    for (const s of screens) {
+      const dist = pointToRectDistance(cursorPoint.x, cursorPoint.y, s.geometry);
+      if (dist < minDistance - 1e-6) {
+        minDistance = dist;
+        candidates = [s];
+      } else if (Math.abs(dist - minDistance) <= 1e-6) {
+        candidates.push(s);
+      }
+    }
+    candidates.sort((a, b) => a.outputId.localeCompare(b.outputId));
+    return candidates[0] || screens[0];
+  }
+
   // apps/kwin-adapter/src/runtime-coordinator.ts
   var RuntimeCoordinator = class {
     windows = /* @__PURE__ */ new Map();
@@ -870,7 +1030,21 @@ var ReconcilerModule = (() => {
       switch (event.type) {
         case "WindowDiscovered": {
           const winInput = event.window;
-          const outputId = winInput.outputId || "default";
+          let outputId = winInput.outputId || "default";
+          if (!this.screens.has(outputId) && this.screens.size > 0) {
+            const screensList = Array.from(this.screens.values()).map((s) => ({
+              outputId: s.outputId,
+              name: s.name,
+              geometry: s.geometry,
+              usableArea: s.usableArea
+            }));
+            outputId = resolveScreenAffinity({
+              explicitOutputId: winInput.outputId,
+              frameGeometry: winInput.frameGeometry,
+              previousOutputId: winInput.outputAffinity,
+              screens: screensList
+            });
+          }
           const screen = this.screens.get(outputId);
           const classification = this.classifyWindow(winInput, screen);
           const tileable = classification.classification === "tiled";
@@ -898,7 +1072,11 @@ var ReconcilerModule = (() => {
             isDragging: Boolean(winInput.isDragging),
             lastObservedGeometry: { ...geom },
             lastRequestedGeometry: null,
-            lastAppliedTransactionEpoch: 0
+            lastAppliedTransactionEpoch: 0,
+            currentDesiredTiledGeometry: null,
+            preMinimizeGeometry: null,
+            isPreTiled: Boolean(winInput.isPreTiled),
+            outputAffinity: winInput.outputAffinity || outputId
           };
           this.windows.set(winInput.id, retained);
           if (screen) {
@@ -977,16 +1155,23 @@ var ReconcilerModule = (() => {
           const prevClass = win.classification;
           if (event.updates.resourceClass !== void 0) win.resourceClass = event.updates.resourceClass;
           if (event.updates.title !== void 0) win.title = event.updates.title;
-          if (event.updates.minimized !== void 0) win.minimized = event.updates.minimized;
-          if (event.updates.fullScreen !== void 0) win.fullScreen = event.updates.fullScreen;
-          if (event.updates.noBorder !== void 0) win.noBorder = event.updates.noBorder;
-          if (event.updates.maximizeMode !== void 0) win.maximizeMode = event.updates.maximizeMode;
           if (event.updates.frameGeometry !== void 0) {
             win.frameGeometry = { ...event.updates.frameGeometry };
             win.lastObservedGeometry = { ...event.updates.frameGeometry };
           }
+          if (event.updates.minimized !== void 0) {
+            if (event.updates.minimized && !win.minimized) {
+              win.preMinimizeGeometry = { ...win.frameGeometry };
+            }
+            win.minimized = event.updates.minimized;
+          }
+          if (event.updates.fullScreen !== void 0) win.fullScreen = event.updates.fullScreen;
+          if (event.updates.noBorder !== void 0) win.noBorder = event.updates.noBorder;
+          if (event.updates.maximizeMode !== void 0) win.maximizeMode = event.updates.maximizeMode;
           if (event.updates.isManualFloating !== void 0) win.isManualFloating = event.updates.isManualFloating;
           if (event.updates.isDragging !== void 0) win.isDragging = event.updates.isDragging;
+          if (event.updates.isPreTiled !== void 0) win.isPreTiled = event.updates.isPreTiled;
+          if (event.updates.outputAffinity !== void 0) win.outputAffinity = event.updates.outputAffinity;
           const screen = this.screens.get(win.outputId);
           const newClassResult = this.classifyWindow({
             id: win.id,
@@ -1014,6 +1199,7 @@ var ReconcilerModule = (() => {
           const win = this.windows.get(event.windowId);
           if (win) {
             win.outputId = event.toOutputId;
+            win.outputAffinity = event.toOutputId;
           }
           const oldScreen = this.screens.get(event.fromOutputId);
           if (oldScreen) {
@@ -1052,6 +1238,30 @@ var ReconcilerModule = (() => {
             if (!seenIds.has(existingId)) {
               this.screens.delete(existingId);
               this.dirtyScreenIds.delete(existingId);
+            }
+          }
+          const remainingScreens = Array.from(this.screens.values()).map((s) => ({
+            outputId: s.outputId,
+            name: s.name,
+            geometry: s.geometry,
+            usableArea: s.usableArea
+          }));
+          if (remainingScreens.length > 0) {
+            for (const win of this.windows.values()) {
+              if (!this.screens.has(win.outputId)) {
+                const newOutputId = resolveScreenAffinity({
+                  explicitOutputId: void 0,
+                  frameGeometry: win.frameGeometry,
+                  previousOutputId: win.outputAffinity,
+                  screens: remainingScreens
+                });
+                win.outputId = newOutputId;
+                win.outputAffinity = newOutputId;
+                const targetScreen = this.screens.get(newOutputId);
+                if (targetScreen && !targetScreen.persistentOrder.includes(win.id)) {
+                  targetScreen.persistentOrder.push(win.id);
+                }
+              }
             }
           }
           this.invalidateAllScreens("ScreenTopologyChanged");
@@ -1235,6 +1445,7 @@ var ReconcilerModule = (() => {
           if (win.isDragging) continue;
           const desiredRect = solution.get(win.id);
           if (!desiredRect) continue;
+          win.currentDesiredTiledGeometry = { ...desiredRect };
           const observedRect = win.lastObservedGeometry;
           if (rectEqualsWithTolerance(desiredRect, observedRect, tolerance)) {
             skippedWrites++;
@@ -1269,6 +1480,66 @@ var ReconcilerModule = (() => {
         durationMs
       };
     }
+    getSavedTiledGeometry(windowId) {
+      const win = this.windows.get(windowId);
+      return win?.currentDesiredTiledGeometry ? { ...win.currentDesiredTiledGeometry } : null;
+    }
+    setSavedTiledGeometry(windowId, rect) {
+      const win = this.windows.get(windowId);
+      if (win) {
+        win.currentDesiredTiledGeometry = rect ? { ...rect } : null;
+      }
+    }
+    getPreMinimizeGeometry(windowId) {
+      const win = this.windows.get(windowId);
+      return win?.preMinimizeGeometry ? { ...win.preMinimizeGeometry } : null;
+    }
+    setPreMinimizeGeometry(windowId, rect) {
+      const win = this.windows.get(windowId);
+      if (win) {
+        win.preMinimizeGeometry = rect ? { ...rect } : null;
+      }
+    }
+    isPreTiled(windowId) {
+      return Boolean(this.windows.get(windowId)?.isPreTiled);
+    }
+    setPreTiled(windowId, val) {
+      const win = this.windows.get(windowId);
+      if (win) {
+        win.isPreTiled = val;
+      }
+    }
+    getOutputAffinity(windowId) {
+      const win = this.windows.get(windowId);
+      return win?.outputAffinity || win?.outputId;
+    }
+    setOutputAffinity(windowId, outputId) {
+      const win = this.windows.get(windowId);
+      if (win) {
+        win.outputAffinity = outputId;
+      }
+    }
+    handleMinimize(windowId, isMinimized, currentGeom) {
+      const win = this.windows.get(windowId);
+      if (win && isMinimized) {
+        win.preMinimizeGeometry = currentGeom ? { ...currentGeom } : { ...win.frameGeometry };
+      }
+      return this.ingestEvent({
+        type: "WindowStateChanged",
+        windowId,
+        updates: {
+          minimized: isMinimized,
+          ...currentGeom ? { frameGeometry: currentGeom } : {}
+        }
+      });
+    }
+    handleTopologyChange(screens) {
+      this.ingestEvent({
+        type: "ScreenTopologyChanged",
+        screens
+      });
+      return this.reconcile();
+    }
     getDiagnostics() {
       return {
         totalNormalizedEvents: this.totalNormalizedEvents,
@@ -1284,6 +1555,146 @@ var ReconcilerModule = (() => {
       };
     }
   };
+
+  // apps/kwin-adapter/src/snap-zones.ts
+  function computeSnapZones(area, gapOuter, gapInner) {
+    const go = gapOuter;
+    const gi = gapInner;
+    const uw = area.width - go * 2;
+    const uh = area.height - go * 2;
+    const hw = Math.floor((uw - gi) / 2);
+    const hh = Math.floor((uh - gi) / 2);
+    const zones = [];
+    const barW = Math.min(800, Math.floor(uw * 0.6));
+    const barX = area.x + Math.floor((area.width - barW) / 2);
+    zones.push({
+      type: "maximize",
+      id: "maximize",
+      title: "Full Screen / Maximize",
+      badge: "\u{1F5D6} Maximize",
+      desc: "Full Working Area",
+      slotIndex: -1,
+      rect: { x: barX, y: area.y + 10, width: barW, height: 56 },
+      targetRect: { x: area.x + go, y: area.y + go, width: uw, height: uh },
+      triggerX: barX - 10,
+      triggerY: area.y,
+      triggerW: barW + 20,
+      triggerH: 66
+    });
+    zones.push({
+      type: "half",
+      id: "left-half",
+      title: "Left Half (Master)",
+      badge: "\u229E Left Split",
+      desc: "50% Primary Pane",
+      slotIndex: 0,
+      rect: { x: area.x + go, y: area.y + go + 70, width: hw, height: uh - 70 },
+      targetRect: { x: area.x + go, y: area.y + go, width: hw, height: uh },
+      triggerX: area.x,
+      triggerY: area.y + 80,
+      triggerW: Math.floor(area.width / 2),
+      triggerH: area.height - 80
+    });
+    zones.push({
+      type: "half",
+      id: "right-half",
+      title: "Right Half (Stack)",
+      badge: "\u25A5 Right Split",
+      desc: "50% Secondary Pane",
+      slotIndex: 1,
+      rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: uh - 70 },
+      targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: uh },
+      triggerX: area.x + Math.floor(area.width / 2),
+      triggerY: area.y + 80,
+      triggerW: Math.floor(area.width / 2),
+      triggerH: area.height - 80
+    });
+    zones.push({
+      type: "quarter",
+      id: "top-left",
+      title: "Top-Left Quarter",
+      badge: "\u25E4 Top-Left",
+      desc: "25% Quadrant",
+      slotIndex: 0,
+      rect: { x: area.x + go, y: area.y + go + 70, width: hw, height: Math.max(60, hh - 70) },
+      targetRect: { x: area.x + go, y: area.y + go, width: hw, height: hh },
+      triggerX: area.x,
+      triggerY: area.y,
+      triggerW: Math.floor(area.width * 0.22),
+      triggerH: Math.floor(area.height * 0.32)
+    });
+    zones.push({
+      type: "quarter",
+      id: "bottom-left",
+      title: "Bottom-Left Quarter",
+      badge: "\u25E3 Bottom-Left",
+      desc: "25% Quadrant",
+      slotIndex: 0,
+      rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
+      targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
+      triggerX: area.x,
+      triggerY: area.y + Math.floor(area.height * 0.68),
+      triggerW: Math.floor(area.width * 0.22),
+      triggerH: Math.floor(area.height * 0.32)
+    });
+    zones.push({
+      type: "quarter",
+      id: "top-right",
+      title: "Top-Right Quarter",
+      badge: "\u25E5 Top-Right",
+      desc: "25% Quadrant",
+      slotIndex: 1,
+      rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: Math.max(60, hh - 70) },
+      targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: hh },
+      triggerX: area.x + Math.floor(area.width * 0.78),
+      triggerY: area.y,
+      triggerW: Math.floor(area.width * 0.22),
+      triggerH: Math.floor(area.height * 0.32)
+    });
+    zones.push({
+      type: "quarter",
+      id: "bottom-right",
+      title: "Bottom-Right Quarter",
+      badge: "\u25E2 Bottom-Right",
+      desc: "25% Quadrant",
+      slotIndex: 1,
+      rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
+      targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
+      triggerX: area.x + Math.floor(area.width * 0.78),
+      triggerY: area.y + Math.floor(area.height * 0.68),
+      triggerW: Math.floor(area.width * 0.22),
+      triggerH: Math.floor(area.height * 0.32)
+    });
+    return zones;
+  }
+  function matchSnapZoneHover(zones, cursorPos) {
+    if (!cursorPos || zones.length === 0) return -1;
+    for (let i = 3; i < zones.length; i++) {
+      const qz = zones[i];
+      if (cursorPos.x >= qz.triggerX && cursorPos.x < qz.triggerX + qz.triggerW && cursorPos.y >= qz.triggerY && cursorPos.y < qz.triggerY + qz.triggerH) {
+        return i;
+      }
+    }
+    if (zones.length > 0) {
+      const mz = zones[0];
+      if (cursorPos.x >= mz.triggerX && cursorPos.x < mz.triggerX + mz.triggerW && cursorPos.y >= mz.triggerY && cursorPos.y < mz.triggerY + mz.triggerH) {
+        return 0;
+      }
+    }
+    if (zones.length > 1) {
+      const lz = zones[1];
+      if (cursorPos.x >= lz.triggerX && cursorPos.x < lz.triggerX + lz.triggerW && cursorPos.y >= lz.triggerY && cursorPos.y < lz.triggerY + lz.triggerH) {
+        return 1;
+      }
+    }
+    if (zones.length > 2) {
+      const rz = zones[2];
+      if (cursorPos.x >= rz.triggerX && cursorPos.x < rz.triggerX + rz.triggerW && cursorPos.y >= rz.triggerY && cursorPos.y < rz.triggerY + rz.triggerH) {
+        return 2;
+      }
+    }
+    return -1;
+  }
 
   // apps/kwin-adapter/src/qml-reconciler-compat.ts
   function toNormalizedWindow(w, screen, usableArea) {
@@ -1335,7 +1746,9 @@ var ReconcilerModule = (() => {
       tooltip: Boolean(w.tooltip),
       specialWindow: Boolean(w.specialWindow),
       isManualFloating: Boolean(w.isManualFloating),
-      isDragging: Boolean(w.isDragging)
+      isDragging: Boolean(w.isDragging),
+      isPreTiled: Boolean(w.isPreTiled),
+      outputAffinity: w.outputAffinity ? String(w.outputAffinity) : void 0
     };
   }
   function toNormalizedScreen(scr, usableArea) {
@@ -1376,6 +1789,13 @@ var ReconcilerModule = (() => {
     getOrCreateCoordinator,
     toNormalizedWindow,
     toNormalizedScreen,
+    resolveScreenAffinity,
+    resolveCursorTargetScreen,
+    computeSnapZones,
+    matchSnapZoneHover,
+    pointToRectDistance,
+    rectIntersectionArea,
+    rectContainsPoint,
     RuntimeCoordinator
   };
   globalThis.ReconcilerModule = ReconcilerBridge;

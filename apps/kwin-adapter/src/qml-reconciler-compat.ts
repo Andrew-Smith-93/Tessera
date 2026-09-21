@@ -9,6 +9,21 @@ import type {
   RetainedWindowState,
   RetainedScreenState
 } from "./coordinator-types.js";
+import {
+  resolveScreenAffinity,
+  resolveCursorTargetScreen,
+  pointToRectDistance,
+  rectIntersectionArea,
+  rectContainsPoint,
+  type ScreenAffinityInputs
+} from "./screen-affinity.js";
+import {
+  computeSnapZones,
+  matchSnapZoneHover,
+  type SnapZoneTarget,
+  type SnapZoneType,
+  type SnapZoneId
+} from "./snap-zones.js";
 
 export type {
   CoordinatorConfig,
@@ -18,7 +33,20 @@ export type {
   ReconciliationTransaction,
   CoordinatorDiagnostics,
   RetainedWindowState,
-  RetainedScreenState
+  RetainedScreenState,
+  ScreenAffinityInputs,
+  SnapZoneTarget,
+  SnapZoneType,
+  SnapZoneId
+};
+export {
+  resolveScreenAffinity,
+  resolveCursorTargetScreen,
+  pointToRectDistance,
+  rectIntersectionArea,
+  rectContainsPoint,
+  computeSnapZones,
+  matchSnapZoneHover
 };
 import type { Rect, RuntimeWindowId } from "@tessera/protocol";
 
@@ -75,7 +103,9 @@ export function toNormalizedWindow(w: any, screen?: any, usableArea?: Rect): Nor
     tooltip: Boolean(w.tooltip),
     specialWindow: Boolean(w.specialWindow),
     isManualFloating: Boolean(w.isManualFloating),
-    isDragging: Boolean(w.isDragging)
+    isDragging: Boolean(w.isDragging),
+    isPreTiled: Boolean(w.isPreTiled),
+    outputAffinity: w.outputAffinity ? String(w.outputAffinity) : undefined
   };
 }
 
@@ -123,6 +153,13 @@ export const ReconcilerBridge = {
   getOrCreateCoordinator,
   toNormalizedWindow,
   toNormalizedScreen,
+  resolveScreenAffinity,
+  resolveCursorTargetScreen,
+  computeSnapZones,
+  matchSnapZoneHover,
+  pointToRectDistance,
+  rectIntersectionArea,
+  rectContainsPoint,
   RuntimeCoordinator
 };
 

@@ -170,4 +170,162 @@ describe("Phase 2A Synthetic Performance & Structural Work Benchmarks", () => {
     console.log("\n--- Benchmark 4 Result (Fullscreen Transition Burst) ---");
     console.log(`Total Events: ${diag.totalNormalizedEvents}, Total Transactions: ${diag.totalReconciliationTransactions}, Layout Computations: ${diag.totalLayoutComputations}`);
   });
+
+  it("Benchmark 5: Minimize/Restore 1 window among 10", () => {
+    const coordinator = new RuntimeCoordinator();
+    coordinator.getOrCreateScreen(SCREEN_1);
+
+    for (let i = 0; i < 10; i++) {
+      coordinator.ingestEvent({
+        type: "WindowDiscovered",
+        window: {
+          id: `min-win-${i}`,
+          outputId: "Screen-1",
+          frameGeometry: { x: 100, y: 100, width: 400, height: 300 }
+        }
+      });
+    }
+    const initTx = coordinator.reconcile();
+    expect(initTx).not.toBeNull();
+
+    const initialSavedGeom = coordinator.getSavedTiledGeometry("min-win-0");
+    expect(initialSavedGeom).not.toBeNull();
+
+    // Minimize window 0
+    coordinator.handleMinimize("min-win-0", true, { x: 50, y: 50, width: 400, height: 300 });
+    const minTx = coordinator.reconcile();
+    expect(minTx).not.toBeNull();
+
+    // Verify preMinimizeGeometry is recorded
+    const preMinGeom = coordinator.getPreMinimizeGeometry("min-win-0");
+    expect(preMinGeom).toEqual({ x: 50, y: 50, width: 400, height: 300 });
+
+    // Restore window 0
+    coordinator.handleMinimize("min-win-0", false);
+    const restoreTx = coordinator.reconcile();
+    expect(restoreTx).not.toBeNull();
+
+    // Verify window 0 retained its persistent slot in screen
+    const screen = coordinator.getRetainedScreen("Screen-1")!;
+    expect(screen.persistentOrder[0]).toBe("min-win-0");
+
+    console.log("\n--- Benchmark 5 Result (Minimize/Restore 1 of 10) ---");
+    console.log(`Initial Tiled: ${JSON.stringify(initialSavedGeom)}, Restored Slot preserved.`);
+  });
+
+  it("Benchmark 6: Move 1 window between 2 outputs with 30 windows", () => {
+    const coordinator = new RuntimeCoordinator();
+    coordinator.getOrCreateScreen(SCREEN_1);
+    coordinator.getOrCreateScreen(SCREEN_2);
+
+    for (let i = 0; i < 30; i++) {
+      const outputId = i < 15 ? "Screen-1" : "Screen-2";
+      coordinator.ingestEvent({
+        type: "WindowDiscovered",
+        window: {
+          id: `move-win-${i}`,
+          outputId,
+          frameGeometry: { x: 0, y: 0, width: 600, height: 400 }
+        }
+      });
+    }
+    coordinator.reconcile();
+
+    // Move move-win-0 from Screen-1 to Screen-2
+    const moveRes = coordinator.ingestEvent({
+      type: "WindowMovedOutput",
+      windowId: "move-win-0",
+      fromOutputId: "Screen-1",
+      toOutputId: "Screen-2"
+    });
+    expect(moveRes.affectedScreens).toEqual(["Screen-1", "Screen-2"]);
+
+    const moveTx = coordinator.reconcile();
+    expect(moveTx).not.toBeNull();
+    expect(moveTx!.affectedScreens).toContain("Screen-1");
+    expect(moveTx!.affectedScreens).toContain("Screen-2");
+
+    const s1 = coordinator.getRetainedScreen("Screen-1")!;
+    const s2 = coordinator.getRetainedScreen("Screen-2")!;
+    expect(s1.persistentOrder.length).toBe(14);
+    expect(s2.persistentOrder.length).toBe(16);
+    expect(s2.persistentOrder).toContain("move-win-0");
+
+    console.log("\n--- Benchmark 6 Result (Move Window Across Screens) ---");
+    console.log(`Screen 1 windows: ${s1.persistentOrder.length}, Screen 2 windows: ${s2.persistentOrder.length}`);
+  });
+
+  it("Benchmark 7: Remove 1 output during a 30-window topology", () => {
+    const coordinator = new RuntimeCoordinator();
+    coordinator.getOrCreateScreen(SCREEN_1);
+    coordinator.getOrCreateScreen(SCREEN_2);
+
+    for (let i = 0; i < 30; i++) {
+      const outputId = i < 15 ? "Screen-1" : "Screen-2";
+      coordinator.ingestEvent({
+        type: "WindowDiscovered",
+        window: {
+          id: `topo-win-${i}`,
+          outputId,
+          frameGeometry: { x: i < 15 ? 100 : 2600, y: 100, width: 600, height: 400 }
+        }
+      });
+    }
+    coordinator.reconcile();
+
+    // Unplug Screen-2
+    const topoTx = coordinator.handleTopologyChange([SCREEN_1]);
+    expect(topoTx).not.toBeNull();
+
+    const s1 = coordinator.getRetainedScreen("Screen-1")!;
+    expect(s1.persistentOrder.length).toBe(30);
+
+    const s2 = coordinator.getRetainedScreen("Screen-2");
+    expect(s2).toBeUndefined();
+
+    console.log("\n--- Benchmark 7 Result (Topology Screen Removal) ---");
+    console.log(`Relocated all 30 windows onto single remaining screen.`);
+  });
+
+  it("Benchmark 8: 100 cursor-position updates", async () => {
+    const { resolveCursorTargetScreen } = await import("../src/screen-affinity.js");
+    const screens = [SCREEN_1, SCREEN_2];
+
+    const start = performance.now();
+    for (let i = 0; i < 100; i++) {
+      const px = (i * 45) % 4000;
+      const py = (i * 25) % 1200;
+      const target = resolveCursorTargetScreen(screens, { x: px, y: py });
+      expect(target).toBeDefined();
+    }
+    const elapsed = performance.now() - start;
+
+    console.log("\n--- Benchmark 8 Result (100 Cursor Updates) ---");
+    console.log(`Duration: ${elapsed.toFixed(3)}ms (average ${(elapsed / 100).toFixed(3)}ms/op)`);
+    expect(elapsed).toBeLessThan(50); // fast pure function
+  });
+
+  it("Benchmark 9: 100 snap-preview updates + 1 committed snap", async () => {
+    const { computeSnapZones, matchSnapZoneHover } = await import("../src/snap-zones.js");
+    const area = SCREEN_1.usableArea;
+    const zones = computeSnapZones(area, 10, 8);
+
+    const start = performance.now();
+    let lastMatch = -1;
+    for (let i = 0; i < 100; i++) {
+      const px = (i * 25) % area.width;
+      const py = (i * 15) % area.height;
+      lastMatch = matchSnapZoneHover(zones, { x: px, y: py });
+    }
+    const elapsed = performance.now() - start;
+
+    // Committed snap
+    const chosenZone = zones[1]; // Left half
+    expect(chosenZone.id).toBe("left-half");
+
+    console.log("\n--- Benchmark 9 Result (100 Snap Updates + Commit) ---");
+    console.log(`Duration: ${elapsed.toFixed(3)}ms, Committed Zone: ${chosenZone.title}`);
+    expect(elapsed).toBeLessThan(50);
+  });
 });
+

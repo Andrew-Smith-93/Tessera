@@ -28,6 +28,7 @@ import {
   rectEqualsWithTolerance
 } from "./coordinator-types.js";
 import { getOrCreateRuleEngine } from "./qml-rules-compat.js";
+import { resolveScreenAffinity } from "./screen-affinity.js";
 
 interface InFlightEcho {
   readonly target: Rect;
@@ -196,7 +197,24 @@ export class RuntimeCoordinator {
     switch (event.type) {
       case "WindowDiscovered": {
         const winInput = event.window;
-        const outputId = winInput.outputId || "default";
+        let outputId = winInput.outputId || "default";
+
+        // If screen not known or no outputId given, resolve screen affinity
+        if (!this.screens.has(outputId) && this.screens.size > 0) {
+          const screensList = Array.from(this.screens.values()).map(s => ({
+            outputId: s.outputId,
+            name: s.name,
+            geometry: s.geometry,
+            usableArea: s.usableArea
+          }));
+          outputId = resolveScreenAffinity({
+            explicitOutputId: winInput.outputId,
+            frameGeometry: winInput.frameGeometry,
+            previousOutputId: winInput.outputAffinity,
+            screens: screensList
+          });
+        }
+
         const screen = this.screens.get(outputId);
         const classification = this.classifyWindow(winInput, screen);
         const tileable = classification.classification === "tiled";
@@ -225,7 +243,11 @@ export class RuntimeCoordinator {
           isDragging: Boolean(winInput.isDragging),
           lastObservedGeometry: { ...geom },
           lastRequestedGeometry: null,
-          lastAppliedTransactionEpoch: 0
+          lastAppliedTransactionEpoch: 0,
+          currentDesiredTiledGeometry: null,
+          preMinimizeGeometry: null,
+          isPreTiled: Boolean(winInput.isPreTiled),
+          outputAffinity: winInput.outputAffinity || outputId
         };
 
         this.windows.set(winInput.id, retained);
@@ -325,16 +347,23 @@ export class RuntimeCoordinator {
 
         if (event.updates.resourceClass !== undefined) win.resourceClass = event.updates.resourceClass;
         if (event.updates.title !== undefined) win.title = event.updates.title;
-        if (event.updates.minimized !== undefined) win.minimized = event.updates.minimized;
-        if (event.updates.fullScreen !== undefined) win.fullScreen = event.updates.fullScreen;
-        if (event.updates.noBorder !== undefined) win.noBorder = event.updates.noBorder;
-        if (event.updates.maximizeMode !== undefined) win.maximizeMode = event.updates.maximizeMode;
         if (event.updates.frameGeometry !== undefined) {
           win.frameGeometry = { ...event.updates.frameGeometry };
           win.lastObservedGeometry = { ...event.updates.frameGeometry };
         }
+        if (event.updates.minimized !== undefined) {
+          if (event.updates.minimized && !win.minimized) {
+            win.preMinimizeGeometry = { ...win.frameGeometry };
+          }
+          win.minimized = event.updates.minimized;
+        }
+        if (event.updates.fullScreen !== undefined) win.fullScreen = event.updates.fullScreen;
+        if (event.updates.noBorder !== undefined) win.noBorder = event.updates.noBorder;
+        if (event.updates.maximizeMode !== undefined) win.maximizeMode = event.updates.maximizeMode;
         if (event.updates.isManualFloating !== undefined) win.isManualFloating = event.updates.isManualFloating;
         if (event.updates.isDragging !== undefined) win.isDragging = event.updates.isDragging;
+        if (event.updates.isPreTiled !== undefined) win.isPreTiled = event.updates.isPreTiled;
+        if (event.updates.outputAffinity !== undefined) win.outputAffinity = event.updates.outputAffinity;
 
         const screen = this.screens.get(win.outputId);
         const newClassResult = this.classifyWindow({
@@ -367,6 +396,7 @@ export class RuntimeCoordinator {
         const win = this.windows.get(event.windowId);
         if (win) {
           win.outputId = event.toOutputId;
+          win.outputAffinity = event.toOutputId;
         }
 
         // Clean up from old screen persistent order and add to new screen
@@ -414,6 +444,34 @@ export class RuntimeCoordinator {
             this.dirtyScreenIds.delete(existingId);
           }
         }
+
+        // Relocate any windows assigned to removed screens
+        const remainingScreens = Array.from(this.screens.values()).map(s => ({
+          outputId: s.outputId,
+          name: s.name,
+          geometry: s.geometry,
+          usableArea: s.usableArea
+        }));
+
+        if (remainingScreens.length > 0) {
+          for (const win of this.windows.values()) {
+            if (!this.screens.has(win.outputId)) {
+              const newOutputId = resolveScreenAffinity({
+                explicitOutputId: undefined,
+                frameGeometry: win.frameGeometry,
+                previousOutputId: win.outputAffinity,
+                screens: remainingScreens
+              });
+              win.outputId = newOutputId;
+              win.outputAffinity = newOutputId;
+              const targetScreen = this.screens.get(newOutputId);
+              if (targetScreen && !targetScreen.persistentOrder.includes(win.id)) {
+                targetScreen.persistentOrder.push(win.id);
+              }
+            }
+          }
+        }
+
         this.invalidateAllScreens("ScreenTopologyChanged");
         return { dirty: true, affectedScreens: Array.from(this.screens.keys()), isEcho: false };
       }
@@ -633,6 +691,8 @@ export class RuntimeCoordinator {
         const desiredRect = solution.get(win.id);
         if (!desiredRect) continue;
 
+        win.currentDesiredTiledGeometry = { ...desiredRect };
+
         const observedRect = win.lastObservedGeometry;
         if (rectEqualsWithTolerance(desiredRect, observedRect, tolerance)) {
           skippedWrites++;
@@ -670,6 +730,80 @@ export class RuntimeCoordinator {
       skippedWrites,
       durationMs
     };
+  }
+
+  public getSavedTiledGeometry(windowId: RuntimeWindowId): Rect | null {
+    const win = this.windows.get(windowId);
+    return win?.currentDesiredTiledGeometry ? { ...win.currentDesiredTiledGeometry } : null;
+  }
+
+  public setSavedTiledGeometry(windowId: RuntimeWindowId, rect: Rect | null): void {
+    const win = this.windows.get(windowId);
+    if (win) {
+      win.currentDesiredTiledGeometry = rect ? { ...rect } : null;
+    }
+  }
+
+  public getPreMinimizeGeometry(windowId: RuntimeWindowId): Rect | null {
+    const win = this.windows.get(windowId);
+    return win?.preMinimizeGeometry ? { ...win.preMinimizeGeometry } : null;
+  }
+
+  public setPreMinimizeGeometry(windowId: RuntimeWindowId, rect: Rect | null): void {
+    const win = this.windows.get(windowId);
+    if (win) {
+      win.preMinimizeGeometry = rect ? { ...rect } : null;
+    }
+  }
+
+  public isPreTiled(windowId: RuntimeWindowId): boolean {
+    return Boolean(this.windows.get(windowId)?.isPreTiled);
+  }
+
+  public setPreTiled(windowId: RuntimeWindowId, val: boolean): void {
+    const win = this.windows.get(windowId);
+    if (win) {
+      win.isPreTiled = val;
+    }
+  }
+
+  public getOutputAffinity(windowId: RuntimeWindowId): string | undefined {
+    const win = this.windows.get(windowId);
+    return win?.outputAffinity || win?.outputId;
+  }
+
+  public setOutputAffinity(windowId: RuntimeWindowId, outputId: string): void {
+    const win = this.windows.get(windowId);
+    if (win) {
+      win.outputAffinity = outputId;
+    }
+  }
+
+  public handleMinimize(
+    windowId: RuntimeWindowId,
+    isMinimized: boolean,
+    currentGeom?: Rect
+  ): { dirty: boolean; affectedScreens: string[]; isEcho: boolean } {
+    const win = this.windows.get(windowId);
+    if (win && isMinimized) {
+      win.preMinimizeGeometry = currentGeom ? { ...currentGeom } : { ...win.frameGeometry };
+    }
+    return this.ingestEvent({
+      type: "WindowStateChanged",
+      windowId,
+      updates: {
+        minimized: isMinimized,
+        ...(currentGeom ? { frameGeometry: currentGeom } : {})
+      }
+    });
+  }
+
+  public handleTopologyChange(screens: NormalizedScreenInput[]): ReconciliationTransaction | null {
+    this.ingestEvent({
+      type: "ScreenTopologyChanged",
+      screens
+    });
+    return this.reconcile();
   }
 
   public getDiagnostics(): CoordinatorDiagnostics {

@@ -135,8 +135,46 @@ Apply geometry writes to KWin windows (guarded by isArranging flag)
 - Mismatched external geometry changes (e.g. user manually moving a window) are not suppressed and properly invalidate the screen.
 
 ### Remaining Legacy / Runtime Duplication
-- `contents/ui/main.qml` retains a synchronous fallback `retileLegacyFallback()` used only if the reconciler module fails to instantiate.
-- Visual overlays (`PlasmaCore.Dialog`) remain implemented directly in QML pending Phase 3 UI component convergence.
+- `contents/ui/main.qml` retains a synchronous fallback `retileLegacyFallback()`. In accordance with Phase 2B **Strict Runtime Path Exclusivity**, `runtimeMode` is initialized once (`"reconciler"` or `"legacy-fallback"`). Reconciler mode NEVER calls `retileLegacyFallback()`, and `retileLegacyFallback()` immediately returns if `runtimeMode !== "legacy-fallback"`.
+- Visual overlays (`PlasmaCore.Dialog`) remain rendered in QML, but zone geometry calculation and cursor hover matching are delegated to pure TypeScript modules (`computeSnapZones`, `matchSnapZoneHover`).
+
+---
+
+## 6. Geometry Cache & Multi-Screen Affinity (Phase 2B)
+
+Phase 2B completes the convergence of runtime geometry memory, multi-screen affinity resolution, and snap zone calculations into authoritative pure TypeScript:
+
+### Authoritative Runtime Geometry Memory
+- **`RuntimeCoordinator` Ownership**:
+  - `currentDesiredTiledGeometry`: Persists desired layout geometry across all layout computations, unmaximize operations, and drag restore events.
+  - `preMinimizeGeometry`: Captured synchronously on minimize events to preserve exact floating/tiled dimensions prior to being minimized.
+  - `isPreTiled`: Tracks whether a window was tiled prior to minimize, maximize, or manual float operations.
+  - `outputAffinity`: Retains the screen output association for every window across desktop and screen transitions.
+- **QML Compatibility Layer**:
+  - Helper functions `getSavedTiledGeometry(wid)`, `setSavedTiledGeometry(wid, rect)`, `getPreMinimizeGeometry(wid)`, and `setPreMinimizeGeometry(wid, rect)` synchronize transparently with `RuntimeCoordinator` in reconciler mode while providing seamless fallback.
+
+### 7-Step Multi-Screen Affinity Precedence Hierarchy
+Implemented in [`apps/kwin-adapter/src/screen-affinity.ts`](../apps/kwin-adapter/src/screen-affinity.ts):
+1. **Explicit Valid Output Identity**: If the window manager or event provides a valid, connected output ID, select it.
+2. **Window Center Point Containment**: If the window center `(cx, cy)` is contained within a screen's usable area or geometry, select that screen.
+3. **Maximum Window Intersection Area**: If the window spans multiple monitors, select the screen with the largest intersection area.
+4. **Previous Retained Affinity**: If no geometry matches, honor the window's previous valid retained output affinity.
+5. **Cursor Position Containment**: If cursor position is provided, select the screen containing `(cursor.x, cursor.y)`.
+6. **Deterministic Nearest-Output Fallback**: Calculate Euclidean distance from the window center (or cursor) to screen rectangles and select the nearest screen. Handles negative coordinates, stacked setups, and gaps between displays.
+7. **Stable Lexical Tie-Breaker**: If multiple screens are equidistant, break ties deterministically by sorting `outputId` lexically.
+
+### Pure Snap Zone Calculation Engine
+Implemented in [`apps/kwin-adapter/src/snap-zones.ts`](../apps/kwin-adapter/src/snap-zones.ts):
+- Pure computation of all 7 KZones-style snap targets and trigger boundaries:
+  - Top Maximize Bar Card (Index 0)
+  - Left Half / Master Slot (Index 1)
+  - Right Half / Stack Slot (Index 2)
+  - Top-Left Quarter (Index 3)
+  - Bottom-Left Quarter (Index 4)
+  - Top-Right Quarter (Index 5)
+  - Bottom-Right Quarter (Index 6)
+- Pure hover matching (`matchSnapZoneHover`) prioritizing corner quadrants over halves and maximize cards.
+
 
 ---
 

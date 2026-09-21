@@ -49,6 +49,56 @@ Item {
     property bool isArranging: false
     property var currentDraggingWindow: null
 
+    // Runtime Mode: "reconciler" | "legacy-fallback" (strictly exclusive)
+    property string runtimeMode: "reconciler"
+
+    function initRuntimeMode() {
+        try {
+            var coord = getCoordinator();
+            if (coord) {
+                runtimeMode = "reconciler";
+                log("Runtime mode initialized: reconciler");
+                return;
+            }
+        } catch (e) {
+            log("Reconciler initialization failed, falling back to legacy: " + e);
+        }
+        runtimeMode = "legacy-fallback";
+        log("Runtime mode initialized: legacy-fallback");
+    }
+
+    function getSavedTiledGeometry(wid) {
+        if (coordinator) {
+            var g = coordinator.getSavedTiledGeometry(wid);
+            if (g) return Qt.rect(g.x, g.y, g.width, g.height);
+        }
+        return savedTiledGeometries[wid] || null;
+    }
+
+    function setSavedTiledGeometry(wid, rect) {
+        if (!rect) return;
+        savedTiledGeometries[wid] = Qt.rect(rect.x, rect.y, rect.width, rect.height);
+        if (coordinator) {
+            coordinator.setSavedTiledGeometry(wid, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+        }
+    }
+
+    function getPreMinimizeGeometry(wid) {
+        if (coordinator) {
+            var g = coordinator.getPreMinimizeGeometry(wid);
+            if (g) return Qt.rect(g.x, g.y, g.width, g.height);
+        }
+        return savedMinimGeometries[wid] || null;
+    }
+
+    function setPreMinimizeGeometry(wid, rect) {
+        if (!rect) return;
+        savedMinimGeometries[wid] = Qt.rect(rect.x, rect.y, rect.width, rect.height);
+        if (coordinator) {
+            coordinator.setPreMinimizeGeometry(wid, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+        }
+    }
+
     function log(msg) {
         console.log("[Tessera] " + msg);
     }
@@ -67,6 +117,25 @@ Item {
         if (!screens || screens.length === 0) return Workspace.activeScreen;
         var cx = rect.x + Math.floor((rect.width || 10) / 2);
         var cy = rect.y + Math.floor((rect.height || 10) / 2);
+
+        if (typeof ReconcilerModule !== "undefined" && ReconcilerModule.resolveCursorTargetScreen) {
+            var normScreens = [];
+            for (var s = 0; s < screens.length; s++) {
+                var scr = screens[s];
+                if (!scr) continue;
+                var a = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
+                normScreens.push(ReconcilerModule.toNormalizedScreen(scr, a));
+            }
+            if (normScreens.length > 0) {
+                var target = ReconcilerModule.resolveCursorTargetScreen(normScreens, { x: cx, y: cy }, getScreenName(Workspace.activeScreen));
+                for (var i = 0; i < screens.length; i++) {
+                    if (getScreenName(screens[i]) === target.outputId) {
+                        return screens[i];
+                    }
+                }
+            }
+        }
+
         for (var i = 0; i < screens.length; i++) {
             var a = Workspace.clientArea(KWin.MaximizeArea, screens[i], Workspace.currentDesktop);
             if (cx >= a.x && cx < a.x + a.width && cy >= a.y && cy < a.y + a.height) {
@@ -388,11 +457,17 @@ Item {
     }
 
     function performReconciliation() {
+        if (runtimeMode !== "reconciler") {
+            if (runtimeMode === "legacy-fallback") {
+                retileLegacyFallback();
+            }
+            return;
+        }
         if (!config.enableTiling || isArranging) return;
 
         var coord = getCoordinator();
         if (!coord) {
-            retileLegacyFallback();
+            log("Warning: coordinator unavailable in reconciler mode");
             return;
         }
 
@@ -470,7 +545,7 @@ Item {
                 if (targetWin === currentDraggingWindow) continue;
 
                 var opWid = op.windowId;
-                savedTiledGeometries[opWid] = Qt.rect(op.targetRect.x, op.targetRect.y, op.targetRect.width, op.targetRect.height);
+                setSavedTiledGeometry(opWid, op.targetRect);
 
                 if (targetWin.maximizeMode !== 0) {
                     continue;
@@ -493,10 +568,15 @@ Item {
         if (reconcileTimer.running) {
             reconcileTimer.stop();
         }
-        performReconciliation();
+        if (runtimeMode === "reconciler") {
+            performReconciliation();
+        } else {
+            retileLegacyFallback();
+        }
     }
 
     function retileLegacyFallback() {
+        if (runtimeMode !== "legacy-fallback") return;
         if (!config.enableTiling || isArranging) return;
         isArranging = true;
         try {
@@ -582,6 +662,11 @@ Item {
             var scr = screen || Workspace.activeScreen;
             var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
             activeScreenGeom = area;
+
+            if (typeof ReconcilerModule !== "undefined" && ReconcilerModule.computeSnapZones) {
+                snapZones = ReconcilerModule.computeSnapZones(area, config.gapOuter, config.gapInner);
+                return;
+            }
 
             var go = config.gapOuter;
             var gi = config.gapInner;
@@ -720,40 +805,43 @@ Item {
             }
 
             var matchedIndex = -1;
-
-            // 1. Check corner quarters first (higher priority in corners)
-            for (var i = 3; i < snapZones.length; i++) {
-                var qz = snapZones[i];
-                if (cursorPos.x >= qz.triggerX && cursorPos.x < qz.triggerX + qz.triggerW &&
-                    cursorPos.y >= qz.triggerY && cursorPos.y < qz.triggerY + qz.triggerH) {
-                    matchedIndex = i;
-                    break;
-                }
-            }
-
-            // 2. Check top maximize bar
-            if (matchedIndex === -1 && snapZones.length > 0) {
-                var mz = snapZones[0];
-                if (cursorPos.x >= mz.triggerX && cursorPos.x < mz.triggerX + mz.triggerW &&
-                    cursorPos.y >= mz.triggerY && cursorPos.y < mz.triggerY + mz.triggerH) {
-                    matchedIndex = 0;
-                }
-            }
-
-            // 3. Check Left/Right halves
-            if (matchedIndex === -1) {
-                if (snapZones.length > 1) {
-                    var lz = snapZones[1];
-                    if (cursorPos.x >= lz.triggerX && cursorPos.x < lz.triggerX + lz.triggerW &&
-                        cursorPos.y >= lz.triggerY && cursorPos.y < lz.triggerY + lz.triggerH) {
-                        matchedIndex = 1;
+            if (typeof ReconcilerModule !== "undefined" && ReconcilerModule.matchSnapZoneHover) {
+                matchedIndex = ReconcilerModule.matchSnapZoneHover(snapZones, cursorPos);
+            } else {
+                // 1. Check corner quarters first (higher priority in corners)
+                for (var i = 3; i < snapZones.length; i++) {
+                    var qz = snapZones[i];
+                    if (cursorPos.x >= qz.triggerX && cursorPos.x < qz.triggerX + qz.triggerW &&
+                        cursorPos.y >= qz.triggerY && cursorPos.y < qz.triggerY + qz.triggerH) {
+                        matchedIndex = i;
+                        break;
                     }
                 }
-                if (snapZones.length > 2 && matchedIndex === -1) {
-                    var rz = snapZones[2];
-                    if (cursorPos.x >= rz.triggerX && cursorPos.x < rz.triggerX + rz.triggerW &&
-                        cursorPos.y >= rz.triggerY && cursorPos.y < rz.triggerY + rz.triggerH) {
-                        matchedIndex = 2;
+
+                // 2. Check top maximize bar
+                if (matchedIndex === -1 && snapZones.length > 0) {
+                    var mz = snapZones[0];
+                    if (cursorPos.x >= mz.triggerX && cursorPos.x < mz.triggerX + mz.triggerW &&
+                        cursorPos.y >= mz.triggerY && cursorPos.y < mz.triggerY + mz.triggerH) {
+                        matchedIndex = 0;
+                    }
+                }
+
+                // 3. Check Left/Right halves
+                if (matchedIndex === -1) {
+                    if (snapZones.length > 1) {
+                        var lz = snapZones[1];
+                        if (cursorPos.x >= lz.triggerX && cursorPos.x < lz.triggerX + lz.triggerW &&
+                            cursorPos.y >= lz.triggerY && cursorPos.y < lz.triggerY + lz.triggerH) {
+                            matchedIndex = 1;
+                        }
+                    }
+                    if (snapZones.length > 2 && matchedIndex === -1) {
+                        var rz = snapZones[2];
+                        if (cursorPos.x >= rz.triggerX && cursorPos.x < rz.triggerX + rz.triggerW &&
+                            cursorPos.y >= rz.triggerY && cursorPos.y < rz.triggerY + rz.triggerH) {
+                            matchedIndex = 2;
+                        }
                     }
                 }
             }
@@ -1278,9 +1366,10 @@ Item {
                         var curPos = Workspace.cursorPos;
                         var targetW = 800;
                         var targetH = 600;
-                        if (savedTiledGeometries[wid] && savedTiledGeometries[wid].width > 100) {
-                            targetW = savedTiledGeometries[wid].width;
-                            targetH = savedTiledGeometries[wid].height;
+                        var saved = getSavedTiledGeometry(wid);
+                        if (saved && saved.width > 100) {
+                            targetW = saved.width;
+                            targetH = saved.height;
                         }
                         var newX = Math.round(curPos.x - (targetW / 2));
                         var newY = Math.max(0, curPos.y - 15);
@@ -1395,7 +1484,7 @@ Item {
                                 }
                             }
 
-                            savedTiledGeometries[wid] = Qt.rect(target.targetRect.x, target.targetRect.y, target.targetRect.width, target.targetRect.height);
+                            setSavedTiledGeometry(wid, target.targetRect);
 
                             osdCall.notify("Snapped: " + target.title, "preferences-system-windows");
                         }
@@ -1430,14 +1519,23 @@ Item {
             w.minimizedChanged.connect(function() {
                 var wid = getWindowId(w);
                 if (w.minimized) {
-                    savedMinimGeometries[wid] = Qt.rect(w.frameGeometry.x, w.frameGeometry.y, w.frameGeometry.width, w.frameGeometry.height);
+                    setPreMinimizeGeometry(wid, w.frameGeometry);
                 } else {
                     // Window was restored from minimize!
                     // Restore its saved tiled slot geometry immediately
-                    if (savedTiledGeometries[wid]) {
-                        var g = savedTiledGeometries[wid];
+                    var g = getSavedTiledGeometry(wid);
+                    if (g) {
                         w.frameGeometry = Qt.rect(g.x, g.y, g.width, g.height);
                     }
+                }
+                var coord = getCoordinator();
+                if (coord) {
+                    coord.handleMinimize(wid, w.minimized, {
+                        x: w.frameGeometry.x,
+                        y: w.frameGeometry.y,
+                        width: w.frameGeometry.width,
+                        height: w.frameGeometry.height
+                    });
                 }
                 retileNow();
             });
@@ -1491,8 +1589,8 @@ Item {
                 if (w.maximizeMode === 0) {
                     floatingWindows[wid] = false;
                     delete preTiledWindows[wid];
-                    if (savedTiledGeometries[wid]) {
-                        var target = savedTiledGeometries[wid];
+                    var target = getSavedTiledGeometry(wid);
+                    if (target) {
                         w.frameGeometry = Qt.rect(target.x, target.y, target.width, target.height);
                     }
                 }
@@ -1566,6 +1664,8 @@ Item {
 
             var coord = getCoordinator();
             if (coord) {
+                coord.setSavedTiledGeometry(wid, null);
+                coord.setPreMinimizeGeometry(wid, null);
                 coord.ingestEvent({ type: "WindowRemoved", windowId: wid });
             }
 
@@ -1974,6 +2074,7 @@ Item {
     Component.onCompleted: {
         log("Tessera Declarative Extension loaded with KZones-Style Visual Snap Overlay");
         loadConfig();
+        initRuntimeMode();
         retileNow();
     }
 }
