@@ -2,9 +2,10 @@ name: CI & Packaging Quality Assurance
 
 on:
   push:
-    branches: [ main, "chore/*", "feat/*", "fix/*", "test/*" ]
+    branches: [ main, "chore/*", "feat/*", "fix/*", "test/*", "audit/*" ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   validate-and-test:

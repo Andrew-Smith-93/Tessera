@@ -44,7 +44,7 @@ This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/tiling-window
 | **SEC-04** | Dependencies | **LOW** | 2 moderate vulnerabilities in dev-dependency `@vitest/mocker` (Vitest: Path Traversal in mocker redirect mock). | **DEFERRED** | Dev tooling only; does not affect packaged KWin runtime. Deferred wholesale upgrade to prevent destabilization. |
 | **SEC-05** | Identity / Contact | **INFORMATIONAL** | Mixed author email and maintainer fields across `metadata.json`, `PKGBUILD`, and `Cargo.toml`. | **DECISION FOR OMEGA** | Documented for Omega's explicit selection of public-facing identity. |
 | **SEC-06** | Licensing | **INFORMATIONAL** | License divergence: `metadata.json` and AUR `PKGBUILD` specify `GPL-3.0+`, while `daemon/Cargo.toml` specifies `MIT`. | **DECISION FOR OMEGA** | Documented for Omega's approval on whether daemon should adopt GPL-3.0+ or remain MIT. |
-| **SEC-07** | Workflows | **LOW** | GitHub Actions workflows reference version tags (e.g., `@v4`) rather than immutable full commit SHAs. | **DEFERRED (P1)** | Safe to pin to commit SHAs prior to public release. |
+| **SEC-07** | Workflows | **LOW** | CI workflow lacked `audit/*` branch trigger and `workflow_dispatch`. Third-party actions reference tags rather than commit SHAs. | **RESOLVED / DEFERRED** | Added `audit/*` branch trigger and `workflow_dispatch` to `.github/workflows/ci.yml`. Pinning actions to full commit SHAs is deferred to P1. |
 
 ---
 
