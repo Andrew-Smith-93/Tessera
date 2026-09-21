@@ -37,12 +37,42 @@ if command -v kpackagetool6 >/dev/null 2>&1; then
     kpackagetool6 --type KWin/Script --appstream-metainfo "$BUILD_TMP" >/dev/null 2>&1 || echo "Validation passed with warnings."
 fi
 
-# Create standard zip-based .kwinscript bundle
-echo "-> Creating $PACKAGE_NAME..."
-(
-    cd "$BUILD_TMP"
-    zip -q -r "$DIST_DIR/$PACKAGE_NAME" metadata.json contents/
-)
+# Create standard zip-based .kwinscript bundle with deterministic ordering, mode, and timestamps
+echo "-> Creating $PACKAGE_NAME (deterministic reproducible build)..."
+python3 - <<PYEOF
+import os, zipfile
+
+src_dir = "$BUILD_TMP"
+out_zip = "$DIST_DIR/$PACKAGE_NAME"
+fixed_time = (2026, 1, 1, 0, 0, 0)
+
+entries = []
+for root, dirs, files in os.walk(src_dir):
+    dirs.sort()
+    for d in dirs:
+        rel = os.path.relpath(os.path.join(root, d), src_dir).replace(os.sep, "/") + "/"
+        entries.append((rel, True, None))
+    files.sort()
+    for f in files:
+        full = os.path.join(root, f)
+        rel = os.path.relpath(full, src_dir).replace(os.sep, "/")
+        entries.append((rel, False, full))
+
+# Put metadata.json first, then contents/... in alphabetical order
+entries.sort(key=lambda x: (x[0] != "metadata.json", x[0]))
+
+with zipfile.ZipFile(out_zip, "w", compression=zipfile.ZIP_DEFLATED) as z:
+    for rel, is_dir, full in entries:
+        zinfo = zipfile.ZipInfo(filename=rel, date_time=fixed_time)
+        if is_dir:
+            zinfo.external_attr = 0o40755 << 16
+            z.writestr(zinfo, b"")
+        else:
+            zinfo.external_attr = 0o100644 << 16
+            with open(full, "rb") as fp:
+                data = fp.read()
+            z.writestr(zinfo, data)
+PYEOF
 
 echo "================================================="
 echo " ✓ Build Succeeded!"

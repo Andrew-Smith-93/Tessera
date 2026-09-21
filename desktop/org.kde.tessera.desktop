@@ -2,7 +2,7 @@
 Name=Tessera Control Center
 GenericName=Tiling Window Manager Settings
 Comment=Configure layouts, gaps, window rules, and NVIDIA optimizations for Tessera KWin 6 Tiling Manager
-Exec=/home/drew/.local/bin/tessera-settings %u
+Exec=tessera-settings %u
 Icon=tessera
 Terminal=false
 Type=Application

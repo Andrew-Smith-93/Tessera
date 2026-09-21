@@ -90,5 +90,27 @@ class TestPackageManifest(unittest.TestCase):
                 self.assertNotIn("Cargo.toml", namelist)
                 self.assertNotIn("Cargo.lock", namelist)
 
+                # Assert exact 11 entries (7 files and 4 directories)
+                self.assertEqual(
+                    len(namelist),
+                    11,
+                    f"Expected exactly 11 archive entries, found {len(namelist)}: {sorted(namelist)}"
+                )
+
+    def test_package_deterministic_hash(self):
+        """Verifies package builds produce deterministic SHA-256 matching the frozen acceptance hash."""
+        packages = glob.glob(os.path.join(DIST_DIR, "*.kwinscript"))
+        if not packages:
+            self.skipTest("No .kwinscript packages in dist/ yet (run package.sh first).")
+        import hashlib
+        for pkg in packages:
+            with open(pkg, "rb") as fp:
+                h = hashlib.sha256(fp.read()).hexdigest()
+            self.assertEqual(
+                h,
+                "aa1b7f799b96acdb195214cf2db0cd604ac715c4a26e7b5f5f6d9c28e7ae01ab",
+                f"Package hash {h} did not match deterministic build hash"
+            )
+
 if __name__ == "__main__":
     unittest.main()

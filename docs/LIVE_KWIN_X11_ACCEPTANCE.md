@@ -19,7 +19,7 @@
 
 ## 2. Package Artifact & Packaging Isolation
 - **Artifact**: `dist/tessera-v1.0.1.kwinscript`
-- **SHA-256**: `3166fe8a481a527fbc1ece50734f38110dae8edd7e841ee07d1bdf5efbeec480`
+- **SHA-256**: `aa1b7f799b96acdb195214cf2db0cd604ac715c4a26e7b5f5f6d9c28e7ae01ab` (deterministic reproducible build)
 - **Package Archive Inspection** (`unzip -Z1 dist/tessera-v1.0.1.kwinscript`):
   - contains exactly 11 archive entries: seven files and four directory entries:
     - `contents/`
@@ -39,8 +39,8 @@
 
 ## 3. Installation & Safety Rollback
 - **Active Plugin Configuration**: `kwinrc [Plugins] tesseraEnabled=true` (all competing tilers disabled).
-- **Installed Package Path**: `/home/drew/.local/share/kwin/scripts/tessera/`
-- **Timestamped Backup**: `/home/drew/.local/share/kwin/scripts/tessera.bak.20260921_0605/`
+- **Installed Package Path**: `~/.local/share/kwin/scripts/tessera/`
+- **Timestamped Backup**: `~/.local/share/kwin/scripts/tessera.bak.20260921_0605/`
 - **Installation Commands**:
   ```bash
   kpackagetool6 --type KWin/Script --upgrade dist/tessera-v1.0.1.kwinscript
