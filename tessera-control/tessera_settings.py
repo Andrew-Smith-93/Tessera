@@ -11,21 +11,34 @@ import json
 import subprocess
 from typing import Any, Dict, Optional
 
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QSlider, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
-    QLineEdit, QMessageBox, QFrame, QScrollArea, QGroupBox, QGridLayout,
-    QDialog
-)
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QColor
+try:
+    from PyQt5.QtWidgets import (
+        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+        QLabel, QPushButton, QSlider, QSpinBox, QDoubleSpinBox, QCheckBox,
+        QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
+        QLineEdit, QMessageBox, QFrame, QScrollArea, QGroupBox, QGridLayout,
+        QDialog
+    )
+    from PyQt5.QtCore import Qt, QTimer
+    from PyQt5.QtGui import QFont, QColor
+    from ui_preview import LiveDesktopPreview
+    from window_picker import get_active_window_info
+except ImportError:
+    QApplication = None
+    QMainWindow = object
+    QWidget = object
+    QFrame = object
+    QDialog = object
+    Qt = None
+    QTimer = None
+    QFont = None
+    QColor = None
+    LiveDesktopPreview = None
+    get_active_window_info = None
 
 from config_manager import ConfigManager
 from config_contract import canonical_workspace_scope_key
 from presets import PRESETS
-from ui_preview import LiveDesktopPreview
-from window_picker import get_active_window_info
 
 
 def load_shortcut_catalog():
