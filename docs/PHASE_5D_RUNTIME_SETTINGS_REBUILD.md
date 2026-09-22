@@ -118,5 +118,6 @@ Exact independent-correction results are recorded in `PHASE_5D_SECOND_PASS_AUDIT
 ## 6. Remaining Live Gates for Omega
 
 1. **Live Session Installation & Verification (NOT RUN)**: The rebuilt QML script, bundles, and KConfig UI have passed full simulated and automated suites. Live KWin script reloading, live KCM settings bindings, Wayland session compatibility, game window policy handling, and multi-monitor hotplug verification remain unexecuted in this automated phase and are explicit **NOT RUN** gates reserved for Omega.
-2. **Daemon Decoupling**: The Rust daemon remains strictly disconnected from KWin and is ready for Phase 6.
-3. **Repository Visibility**: Remains private until final pre-publication approval by Omega.
+2. **Repository Visibility**: Remains private until final pre-publication approval by Omega.
+
+*(Note: The disconnected Rust daemon has been fully retired; Tessera ships as a self-contained KWin script with no background daemon dependency.)*

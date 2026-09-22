@@ -1,5 +1,0 @@
-[workspace]
-members = [
-    "apps/tessera-daemon",
-]
-resolver = "2"

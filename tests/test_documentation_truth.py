@@ -9,13 +9,6 @@ TARGET_TOKEN = "ma" + "ster"
 TARGET_RE = re.compile(rf"\b{TARGET_TOKEN}\b", re.IGNORECASE)
 
 STATIC_PER_OCCURRENCE_REGISTRY = {
-    ".github/workflows/ci.yml": {
-        "category": "CI_WORKFLOW_TOOLCHAIN",
-        "total_occurrences": 1,
-        "lines": {
-            "6e005a8bc2ac23f0026deb54a2286e986b1ce0fa12e6f2497d9329b69261c6da": {"occ": 1, "repeat": 1, "positions": [29]},
-        }
-    },
     "apps/kwin-adapter/src/index.ts": {
         "category": "LEGACY_COMPATIBILITY",
         "total_occurrences": 1,
@@ -485,13 +478,6 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "lines": {
             "0dc4d895e4a51eb85d7cf8d0aa75f09a26e642b05621f772f8f53ac69dd6ccb5": {"occ": 1, "repeat": 1, "positions": [467]},
             "5168602173f84f5e3d376fe63a02b3e8518dbe8b56834e4322d42228bdc98af3": {"occ": 1, "repeat": 3, "positions": [418, 457, 497]},
-        }
-    },
-    "apps/tessera-daemon/src/backend.rs": {
-        "category": "LEGACY_COMPATIBILITY",
-        "total_occurrences": 1,
-        "lines": {
-            "4a15b1180c1ef4c11499e9e3bb9aa1a13d5ff415f3b4dbebef357d47ff22630b": {"occ": 1, "repeat": 1, "positions": [182]},
         }
     },
     "config/canonical-config.json": {
@@ -1084,14 +1070,14 @@ class TestDocumentationTruth(unittest.TestCase):
                 total_hits += file_hits
                 scanned_files_with_hits.add(relpath)
 
-        # 1. Assert exact current totals: exactly 191 occurrences across 95 files
+        # 1. Assert exact current totals: exactly 189 occurrences across 93 files
         self.assertEqual(
-            total_hits, 191,
-            f"Expected exactly 191 target occurrences across candidate files, found {total_hits}"
+            total_hits, 189,
+            f"Expected exactly 189 target occurrences across candidate files, found {total_hits}"
         )
         self.assertEqual(
-            len(scanned_files_with_hits), 95,
-            f"Expected exactly 95 files with target occurrences, found {len(scanned_files_with_hits)}"
+            len(scanned_files_with_hits), 93,
+            f"Expected exactly 93 files with target occurrences, found {len(scanned_files_with_hits)}"
         )
 
         # 2. Reconcile missing or extra files in registry

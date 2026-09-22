@@ -503,5 +503,26 @@ class TestPackageManifest(unittest.TestCase):
         self.assertIn("XDG_DATA_HOME", content)
         self.assertIn("kglobalshortcutsrc", content)
 
+    def test_release_source_excludes_rust_daemon_and_cargo_artifacts(self):
+        """Regression test asserting release source tree contains no apps/tessera-daemon,
+        root Cargo manifests, Rust setup action, or cargo commands in CI."""
+        # 1. apps/tessera-daemon tree must not exist
+        daemon_dir = os.path.join(PROJECT_ROOT, "apps", "tessera-daemon")
+        self.assertFalse(os.path.exists(daemon_dir), f"{daemon_dir} must not exist in release source")
+
+        # 2. Root Cargo.toml and Cargo.lock must not exist
+        cargo_toml = os.path.join(PROJECT_ROOT, "Cargo.toml")
+        cargo_lock = os.path.join(PROJECT_ROOT, "Cargo.lock")
+        self.assertFalse(os.path.exists(cargo_toml), "Root Cargo.toml must not exist in release source")
+        self.assertFalse(os.path.exists(cargo_lock), "Root Cargo.lock must not exist in release source")
+
+        # 3. CI workflow must not contain Rust setup action or cargo commands
+        ci_path = os.path.join(PROJECT_ROOT, ".github", "workflows", "ci.yml")
+        with open(ci_path, "r", encoding="utf-8") as f:
+            ci_content = f.read()
+
+        self.assertNotIn("rust-toolchain", ci_content, "CI must not include Rust toolchain setup action")
+        self.assertNotIn("cargo ", ci_content, "CI must not include cargo commands")
+
 if __name__ == "__main__":
     unittest.main()

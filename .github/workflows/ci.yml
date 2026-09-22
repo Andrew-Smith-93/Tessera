@@ -25,12 +25,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Set up Rust Toolchain
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
-        with:
-          toolchain: stable
-          components: rustfmt, clippy
-
       - name: Install Node Dependencies
         run: npm ci
 
@@ -55,20 +49,6 @@ jobs:
           npm run sim:run -- --seed 42 --quiet
           npm run sim:run -- --seed 12345 --quiet
           npm run sim:run -- --seed 99999 --quiet
-
-      - name: Rust Code Formatting Check
-        run: cargo fmt --check
-
-      - name: Rust Clippy Lints
-        run: cargo clippy --locked --all-targets -- -D warnings
-
-      - name: Run Rust Daemon Unit & Conformance Tests
-        run: cargo test --locked
-
-      - name: Verify Rust Daemon CLI Self-Check & Spec
-        run: |
-          cargo run --locked -- --check
-          cargo run --locked -- --print-protocol
 
       - name: Validate Python Syntax & Bytecode Compilation
         run: |
