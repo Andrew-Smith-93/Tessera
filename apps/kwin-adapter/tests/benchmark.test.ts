@@ -114,6 +114,7 @@ describe("Phase 2A Synthetic Performance & Structural Work Benchmarks", () => {
     });
     const initTx = coordinator.reconcile();
     const applied = initTx!.operations[0].targetRect;
+    coordinator.recordCommand("target-win", applied, initTx!.epoch);
 
     // Simulate window manager echo stream (100 rapid frame geometry updates matching target)
     for (let i = 0; i < 100; i++) {
@@ -367,6 +368,8 @@ describe("Phase 2A Synthetic Performance & Structural Work Benchmarks", () => {
 
     const writesAfterCommit = coordinator.getDiagnostics().totalGeometryWrites;
     expect(writesAfterCommit).toBe(initialWrites + 1);
+
+    coordinator.recordCommand("snap-win-1", chosenZone.targetRect, commitTx!.epoch);
 
     // Compositor echoes the matching committed geometry -> suppressed
     const echoRes = coordinator.checkAndHandleEcho(

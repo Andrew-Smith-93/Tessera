@@ -1,0 +1,126 @@
+import json
+import os
+import re
+import sys
+import unittest
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+CONTROL_DIR = os.path.join(REPO_ROOT, "tessera-control")
+if CONTROL_DIR not in sys.path:
+    sys.path.insert(0, CONTROL_DIR)
+
+from tessera_settings import load_shortcut_catalog  # noqa: E402
+
+
+class TestShortcutContract(unittest.TestCase):
+    def setUp(self):
+        catalog_path = os.path.join(REPO_ROOT, "config", "shortcuts.json")
+        with open(catalog_path, "r", encoding="utf-8") as handle:
+            self.document = json.load(handle)
+
+    def test_shortcut_catalog_schema_exact(self):
+        """11. Validate shortcut catalog schema exactly:
+        - exact top-level keys ('version', 'shortcuts', 'legacyNames')
+        - version 1
+        - each active entry has exactly name/sequence/label with nonempty strings and no control characters
+        - names and default sequences are unique
+        - legacy names are unique and disjoint from active names
+        - no active name/label contains legacy Master terminology."""
+        self.assertEqual(set(self.document.keys()), {"version", "shortcuts", "legacyNames"})
+        self.assertEqual(self.document.get("version"), 1)
+        self.assertIn("shortcuts", self.document)
+        self.assertIsInstance(self.document["shortcuts"], list)
+
+        active_names = []
+        active_sequences = []
+
+        for idx, item in enumerate(self.document["shortcuts"]):
+            self.assertEqual(
+                set(item.keys()),
+                {"name", "label", "sequence"},
+                f"Entry {idx} must have exactly keys ('name', 'label', 'sequence')"
+            )
+            for field in ("name", "label", "sequence"):
+                val = item[field]
+                self.assertIsInstance(val, str, f"Entry {idx} {field} must be string")
+                self.assertTrue(bool(val.strip()), f"Entry {idx} {field} must be nonempty")
+                self.assertFalse(
+                    any(ord(c) < 32 or c in "\t\r\n" for c in val),
+                    f"Entry {idx} {field} must not contain control characters"
+                )
+
+            name = item["name"]
+            label = item["label"]
+            seq = item["sequence"]
+
+            self.assertNotIn(name, active_names, f"Duplicate active shortcut name: {name}")
+            self.assertNotIn(seq, active_sequences, f"Duplicate active default sequence: {seq}")
+
+            active_names.append(name)
+            active_sequences.append(seq)
+
+            self.assertNotIn("master", name.lower(), f"Active shortcut name '{name}' must not contain Master terminology")
+            self.assertNotIn("master", label.lower(), f"Active shortcut label '{label}' must not contain Master terminology")
+
+        self.assertIn("legacyNames", self.document)
+        self.assertIsInstance(self.document["legacyNames"], list)
+        legacy_names = self.document["legacyNames"]
+        self.assertEqual(len(legacy_names), len(set(legacy_names)), "Legacy names must be unique")
+
+        for lname in legacy_names:
+            self.assertIsInstance(lname, str)
+            self.assertTrue(bool(lname.strip()))
+            self.assertFalse(any(ord(c) < 32 or c in "\t\r\n" for c in lname))
+
+        self.assertTrue(
+            set(legacy_names).isdisjoint(set(active_names)),
+            "Legacy shortcut names must be disjoint from active names"
+        )
+
+    def test_exact_ordered_parity_qml_shortcut_handler(self):
+        """12. Assert exact ordered (name, label, sequence) parity with QML ShortcutHandler name/text/sequence."""
+        with open(os.path.join(REPO_ROOT, "contents", "ui", "main.qml"), "r", encoding="utf-8") as handle:
+            qml = handle.read()
+
+        expected = [(item["name"], item["label"], item["sequence"]) for item in self.document["shortcuts"]]
+        actual = re.findall(
+            r'ShortcutHandler\s*\{\s*name:\s*"([^"]+)"\s*text:\s*"([^"]+)"\s*sequence:\s*"([^"]+)"',
+            qml,
+            re.MULTILINE,
+        )
+
+        self.assertEqual(len(actual), len(expected))
+        self.assertEqual(actual, expected)
+
+    def test_exact_ordered_parity_control_center_display(self):
+        """12. Assert exact Control Center label/sequence display behaviorally (not just regex/presence)."""
+        expected = [(item["label"], item["sequence"]) for item in self.document["shortcuts"]]
+        actual = load_shortcut_catalog()
+        self.assertEqual(actual, expected)
+
+    def test_exact_ordered_parity_uninstall_fallback_catalog(self):
+        """12. Assert exact ordered parity with uninstall.sh fallback shortcut list."""
+        with open(os.path.join(REPO_ROOT, "uninstall.sh"), "r", encoding="utf-8") as handle:
+            uninstall_sh = handle.read()
+
+        match = re.search(r'declare -a SHORTCUT_NAMES=\(\s*([^)]+)\s*\)', uninstall_sh, re.MULTILINE)
+        self.assertIsNotNone(match, "uninstall.sh must define fallback SHORTCUT_NAMES array")
+        lines = [line.strip().strip('"') for line in match.group(1).splitlines() if line.strip() and not line.strip().startswith("#")]
+
+        expected = [item["name"] for item in self.document["shortcuts"]] + self.document["legacyNames"]
+        self.assertEqual(lines, expected)
+
+    def test_exact_ordered_parity_readme_table(self):
+        """12. Assert exact ordered parity with README action/default table."""
+        with open(os.path.join(REPO_ROOT, "README.md"), "r", encoding="utf-8") as handle:
+            readme = handle.read()
+
+        table_rows = re.findall(r"^\| (Tessera: [^|]+?) \| ([^|]+?) \|$", readme, re.MULTILINE)
+        expected = [(item["name"], item["sequence"]) for item in self.document["shortcuts"]]
+        self.assertEqual(table_rows, expected)
+        self.assertIn("config/shortcuts.json` is the canonical catalog", readme)
+
+
+if __name__ == "__main__":
+    unittest.main()
+

@@ -15,6 +15,7 @@ import {
 } from "../src/index.js";
 import { validateInvariants } from "../src/invariants.js";
 import { runCli } from "../src/cli.js";
+import { SimulatedKWinSession } from "../src/session.js";
 import { RuntimeCoordinator, TraceRecorder, LogicalClock } from "@tessera/kwin-adapter";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -62,6 +63,7 @@ describe("Phase 3 Runtime Simulator & Trace Replay", () => {
     const tx = coord.reconcile();
     expect(tx).not.toBeNull();
     const targetRect = tx!.operations[0].targetRect;
+    coord.recordCommand("win-1", targetRect, tx!.epoch);
 
     // Echo at tick 50 (within 100ms)
     clock.set(50);
@@ -73,21 +75,26 @@ describe("Phase 3 Runtime Simulator & Trace Replay", () => {
     });
     expect(echoRes1.isEcho).toBe(true);
 
-    // Reconcile again to arm a new write if any
-    coord.markScreenDirty("HDMI-A-1", "ForcedDirty");
-    const tx2 = coord.reconcile();
-    if (tx2 && tx2.operations.length > 0) {
-      const target2 = tx2.operations[0].targetRect;
-      // Echo at tick 300 (past 100ms)
-      clock.set(300);
-      const echoRes2 = coord.ingestEvent({
-        type: "WindowGeometryChanged",
-        windowId: "win-1",
-        geometry: target2,
-        timestamp: clock.now()
-      });
-      expect(echoRes2.isEcho).toBe(false);
-    }
+    // Re-arm command for the same target using the real transaction epoch at current clock time
+    coord.recordCommand("win-1", targetRect, tx!.epoch);
+
+    // Echo at tick 300 (past 100ms expiry from tick 50)
+    clock.set(300);
+    const echoRes2 = coord.ingestEvent({
+      type: "WindowGeometryChanged",
+      windowId: "win-1",
+      geometry: targetRect,
+      timestamp: clock.now()
+    });
+    expect(echoRes2.isEcho).toBe(false);
+
+    // Verify SimulatedKWinSession.applyOperations requires epoch: number and unconditionally records commands
+    const suppressedBefore = coord.getDiagnostics().suppressedGeometryEchoes;
+    clock.set(350);
+    const session = new SimulatedKWinSession("immediate");
+    session.applyOperations([{ windowId: "win-1", targetRect, previousRect: targetRect }], clock.now(), coord, 999);
+    expect(session.getTotalWrites()).toBe(1);
+    expect(coord.getDiagnostics().suppressedGeometryEchoes).toBe(suppressedBefore + 1);
   });
 
   it("4. Wall-clock time cannot affect digest output", async () => {

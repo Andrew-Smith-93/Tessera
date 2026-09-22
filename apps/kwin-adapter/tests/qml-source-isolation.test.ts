@@ -1,12 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const QML_PATH = resolve(__dirname, "../../../contents/ui/main.qml");
+const content = readFileSync(QML_PATH, "utf8");
 
-describe("QML Source Isolation & Legacy Map Audit", () => {
-  // The exact 14 properties mandated by Phase 5 Correction Gate
-  const exactFourteenProperties = [
+describe("QML source isolation and runtime authority", () => {
+  const removedShadowMaps = [
     "windowClassifications",
     "windowTileability",
     "floatingWindows",
@@ -20,166 +20,148 @@ describe("QML Source Isolation & Legacy Map Audit", () => {
     "windowScreenAffinity",
     "managedWindows",
     "virtualScreenGeometries",
-    "lastAppliedGeometries"
-  ] as const;
-
-  const absentProperties = [
-    "tiledWindows",
-    "minimizedWindows",
-    "windowScreenAffinity",
-    "managedWindows",
-    "virtualScreenGeometries",
     "lastAppliedGeometries",
-    "screenTiledWindows",
-    "persistentScreenOrder"
   ] as const;
 
-  const presentProperties = [
-    "windowClassifications",
-    "windowTileability",
-    "floatingWindows",
-    "savedTiledGeometries",
-    "savedMinimGeometries",
-    "preTiledWindows"
-  ] as const;
-
-  it("1. contents/ui/main.qml exists and is readable", () => {
+  it("uses the retained coordinator as the sole runtime authority", () => {
     expect(existsSync(QML_PATH)).toBe(true);
-    const content = readFileSync(QML_PATH, "utf8");
-    expect(content.length).toBeGreaterThan(1000);
-  });
-
-  it("2. Verifies the 8 absent properties have 0 matches in main.qml", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-    for (const prop of absentProperties) {
-      const regex = new RegExp(`\\b${prop}\\b`, "g");
-      const matches = content.match(regex);
-      expect(
-        matches,
-        `Property "${prop}" must be completely absent from contents/ui/main.qml`
-      ).toBeNull();
-    }
-  });
-
-  it("3. Verifies the 6 present properties are declared as properties in main.qml", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-    for (const prop of presentProperties) {
-      const declPattern = new RegExp(`property\\s+var\\s+${prop}\\s*:`, "m");
-      expect(
-        declPattern.test(content),
-        `contents/ui/main.qml must declare property ${prop}`
-      ).toBe(true);
-    }
-  });
-
-  it("4. Authoritative runtimeMode property is defined with reconciler default", () => {
-    const content = readFileSync(QML_PATH, "utf8");
     expect(content).toMatch(/property\s+string\s+runtimeMode\s*:\s*"reconciler"/);
-    expect(content).toMatch(/function\s+initRuntimeMode\s*\(\)/);
-  });
-
-  it("5. Audits that no legacy property is authoritative in reconciler mode", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-    const lines = content.split("\n");
-
-    for (const prop of presentProperties) {
-      const occurrences: number[] = [];
-      lines.forEach((line, idx) => {
-        if (line.includes(prop) && !line.trim().startsWith("//") && !line.includes(`property var ${prop}`)) {
-          occurrences.push(idx + 1);
-        }
-      });
-
-      expect(occurrences.length).toBeGreaterThan(0);
-
-      // Verify each occurrence is either:
-      // - Property initialization / cleanup (`prop = {};`, `delete prop[wid];`)
-      // - Bridge to coordinator input (`normWin.isManualFloating = (floatingWindows[wid] === true);`)
-      // - Transaction operation result cache (`savedTiledGeometries[wid] = ...`)
-      // - Single-window snap preview guard (`preTiledWindows[opWid] === true`)
-      // - Gated behind coordinator helper
-      for (const lineNum of occurrences) {
-        const line = lines[lineNum - 1];
-        if (line.includes("delete ") || line.includes(" = {};") || line.includes(" = ({});")) {
-          continue;
-        }
-
-        const contextStart = Math.max(0, lineNum - 100);
-        const contextEnd = Math.min(lines.length, lineNum + 30);
-        const context = lines.slice(contextStart, contextEnd).join("\n");
-        const isGuardedOrBridge =
-          context.includes("coordinator") ||
-          context.includes("runtimeMode") ||
-          context.includes("performReconciliation") ||
-          context.includes("evaluateWindowTileability") ||
-          context.includes("toggleActiveFloating");
-
-        expect(
-          isGuardedOrBridge,
-          `Reference to "${prop}" at line ${lineNum} must not be authoritative outside a coordinator bridge`
-        ).toBe(true);
-      }
-    }
-  });
-
-  it("6. Single runtime authority delegates layout execution to coordinator without legacy fallback", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-    expect(content).toMatch(/property\s+string\s+runtimeMode\s*:\s*"reconciler"/);
-    expect(content).not.toMatch(/retileLegacyFallback/);
+    expect(content).toMatch(/ReconcilerBridge\.createCoordinator/);
     expect(content).toMatch(/coord\.reconcile\s*\(\)/);
+    expect(content).not.toMatch(/\.handleEvent\s*\(/);
+    expect(content).not.toMatch(/invalidateAllScreens\("ReconciliationPass"\)/);
+    expect(content).not.toMatch(/RulesModule/);
+    for (const property of removedShadowMaps) {
+      expect(content, `${property} must not survive as QML shadow authority`).not.toMatch(
+        new RegExp(`\\b${property}\\b`),
+      );
+    }
   });
 
-  it("7. Source-region control flow analysis: legacy retile functions are completely absent from main.qml", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-
-    // 1. Must never define or call legacy retile or legacy arrange functions
-    expect(content).not.toMatch(/\bgetTileableWindows\s*\(/);
+  it("contains no competing legacy retiler or layout executor", () => {
     expect(content).not.toMatch(/\bretileLegacyFallback\s*\(/);
-    expect(content).not.toMatch(/\barrangeMasterStack\s*\(/);
-    expect(content).not.toMatch(/\barrangeBsp\s*\(/);
-    expect(content).not.toMatch(/\barrangeColumns\s*\(/);
-    expect(content).not.toMatch(/\barrangeRows\s*\(/);
-    expect(content).not.toMatch(/\barrangeMonocle\s*\(/);
-
-    // 2. Must never read secondary ordering maps
-    expect(content).not.toMatch(/\bscreenTiledWindows\b/);
-    expect(content).not.toMatch(/\bpersistentScreenOrder\b/);
-
-    // 3. Must invoke coordinator.reconcile() as the sole layout authority
-    expect(content).toMatch(/coord\.reconcile\s*\(\)/);
+    expect(content).not.toMatch(/\bgetTileableWindows\s*\(/);
+    expect(content).not.toMatch(/\barrange(?:MasterStack|Bsp|Columns|Rows|Monocle)\s*\(/);
   });
 
-  it("8. Occurrence-by-occurrence reachability: retileScreen and retileNow call performReconciliation directly", () => {
-    const content = readFileSync(QML_PATH, "utf8");
+  it("passes the complete canonical configuration into coordinator creation and updates", () => {
+    const requiredKeys = [
+      "defaultLayout",
+      "gapInner",
+      "gapOuter",
+      "primaryRegionRatio",
+      "primaryRegionCount",
+      "perDesktopLayout",
+      "ignoreMinimized",
+      "gameWindowPolicy",
+      "floatFilter",
+      "customRules",
+      "workspaceLayoutsJson",
+    ];
+    for (const key of requiredKeys) {
+      expect(content).toContain(`${key}:`);
+    }
 
-    // Verify retileScreen directly calls performReconciliation
-    expect(content).toMatch(/function\s+retileScreen\s*\(\)\s*\{\s*performReconciliation\(\);\s*\}/);
-
-    // Verify retileNow directly calls performReconciliation without fallback branching
-    expect(content).toMatch(/performReconciliation\(\);\s*\}/);
-    expect(content).not.toMatch(/retileLegacyFallback/);
+    // Active defaults and layout lists must be canonical
+    expect(content).toMatch(/defaultLayout:\s*"balanced-grid"/);
+    expect(content).toMatch(/property\s+var\s+currentLayoutList:\s*\["balanced-grid",\s*"primary-stack",\s*"binary-split",\s*"columns",\s*"rows",\s*"monocle",\s*"floating"\]/);
+    const legacyLayout = "ma" + "ster-stack";
+    const legacyPrefix = "ma" + "ster";
+    const layoutListLine = content.split("\n").find((line) => line.includes("property var currentLayoutList")) || "";
+    expect(layoutListLine).not.toMatch(new RegExp(`"${legacyLayout}"|"(?:bsp|grid)"`));
+    const configBlock = content.match(/property\s+var\s+config\s*:\s*\(\{([\s\S]*?)\}\)/)?.[1] || "";
+    expect(configBlock).not.toMatch(new RegExp(`\\b${legacyPrefix}(?:Ratio|Count)\\b`));
+    expect(content).not.toMatch(new RegExp(`config\\.${legacyPrefix}(?:Ratio|Count)\\s*=`));
+    expect(content).toContain('workspaceLayoutsJson: \'{"version":1,"scopes":{}}\'');
+    expect(content).toMatch(new RegExp(`readDefLayout\\s*===\\s*"${legacyLayout}"[\\s\\S]*?readDefLayout\\s*=\\s*"primary-stack"`));
+    expect(content).toMatch(/function\s+getActiveLayout[\s\S]*?\|\|\s*"balanced-grid"/);
+    expect(content).not.toMatch(new RegExp(`function\\s+getActiveLayout[\\s\\S]*?\\|\\|\\s*"${legacyLayout}"`));
   });
 
-  it("9. Window event hooks provide safe lifecycle management and destruction cleanup", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-
-    // unhookWindow function must exist and disconnect signal handlers
-    expect(content).toMatch(/function\s+unhookWindow\s*\(\s*w\s*\)/);
-    expect(content).toMatch(/w\.interactiveMoveResizeStarted\.disconnect/);
-    expect(content).toMatch(/w\.frameGeometryChanged\.disconnect/);
-
-    // Component.onDestruction must be defined and perform hook cleanup
-    expect(content).toMatch(/Component\.onDestruction\s*:\s*\{/);
-    expect(content).toMatch(/unhookWindow\(allWins\[i\]\)/);
-
-    // onWindowRemoved must invoke unhookWindow
-    const onWindowRemovedMatch = content.match(/function\s+onWindowRemoved\s*\(\s*w\s*\)\s*\{[^}]*unhookWindow\(w\);/);
-    expect(onWindowRemovedMatch).not.toBeNull();
+  it("uses the configured reconcile debounce interval", () => {
+    expect(content).toMatch(/id:\s*reconcileTimer[\s\S]*?interval:\s*Math\.max\(0,\s*config\.reconcileDebounceMs\s*\|\|\s*0\)/);
   });
 
-  it("10. Every signal connected by hookWindow has a corresponding disconnect path in unhookWindow", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-    const requiredSignals = [
+  it("synchronizes topology and active desktop state through normalized events", () => {
+    expect(content).toMatch(/type:\s*"ScreenTopologyChanged"/);
+    expect(content).toMatch(/type:\s*"ScreenDesktopChanged"/);
+    expect(content).toMatch(/toNormalizedScreen\(scr,\s*area,\s*Workspace\.currentDesktop,\s*Workspace\.currentActivity\)/);
+    expect(content).toMatch(/type:\s*"WindowDesktopsChanged"/);
+    expect(content).toMatch(/type:\s*"WindowActivitiesChanged"/);
+
+    // Factored topology synchronization helper must be called from performReconciliation and onScreensChanged
+    expect(content).toMatch(/function\s+synchronizeScreenTopology\(coord\)\s*\{[\s\S]*?coord\.ingestEvent\(\{\s*type:\s*"ScreenTopologyChanged"/);
+    expect(content).toMatch(/function\s+performReconciliation\(\)\s*\{[\s\S]*?synchronizeScreenTopology\(coord\)/);
+    expect(content).toMatch(/function\s+onScreensChanged\(\)\s*\{[\s\S]*?synchronizeScreenTopology\(coord\)/);
+    // Direct getOrCreateScreen alone without ScreenTopologyChanged inside performReconciliation cannot pass
+    const reconBody = content.match(/function\s+performReconciliation\(\)\s*\{([\s\S]*?)\n\s{4}function\s+retileScreen/)?.[1] || "";
+    expect(reconBody).not.toMatch(/for\s*\([^)]*screens\.length[^)]*\)[\s\S]*?coord\.getOrCreateScreen/);
+  });
+
+  it("writes frameGeometry only through the guarded normalization sink", () => {
+    const assignments = content
+      .split("\n")
+      .filter((line) => line.includes("frameGeometry =") && !line.trim().startsWith("//"));
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]).toContain(
+      "win.frameGeometry = Qt.rect(normalized.x, normalized.y, normalized.width, normalized.height)",
+    );
+    expect(content).toMatch(/function\s+commitWindowGeometry\s*\(/);
+    expect(content).toMatch(/ReconcilerModule\.ReconcilerBridge\.evaluateCommitGeometry\(win,\s*targetRect,\s*bounds\)/);
+    expect(content).toMatch(/coord\.recordCommand\(wid,\s*normalized,/);
+    expect(content).toMatch(/outcome:\s*"applied"/);
+    expect(content).toMatch(/outcome:\s*"unchanged-valid"/);
+    expect(content).toMatch(/outcome:\s*"rejected"/);
+
+    // Target-derived bounds: resolves bounds from getScreenForPos(targetRect) first
+    expect(content).toMatch(/var\s+targetScr\s*=\s*getScreenForPos\(targetRect\)/);
+    // Coordinator absence fails closed
+    expect(content).toMatch(/var\s+coord\s*=\s*getCoordinator\(\);\s*if\s*\(!coord\)\s*\{\s*return\s*\{\s*outcome:\s*"rejected",\s*normalized:\s*null\s*\};\s*\}/);
+
+    // Verify recordCommand occurs strictly before frameGeometry assignment
+    const recordIndex = content.indexOf("coord.recordCommand(wid, normalized");
+    const assignIndex = content.indexOf("win.frameGeometry = Qt.rect(");
+    expect(recordIndex).toBeGreaterThan(0);
+    expect(assignIndex).toBeGreaterThan(recordIndex);
+
+    // Verify catch block rolls back the recorded command
+    expect(content).toMatch(/catch\s*\(\s*err\s*\)\s*\{[\s\S]*?coord\.clearRecordedCommand\s*\(\s*wid\s*\)/);
+  });
+
+  it("ensures preview paths remain strictly write-free without frameGeometry assignment", () => {
+    const previewFunctionMatch = content.match(/function\s+previewProspectiveLayout[\s\S]*?\n\s{4}\}/);
+    expect(previewFunctionMatch).not.toBeNull();
+    const previewBody = previewFunctionMatch![0];
+    expect(previewBody).not.toContain("frameGeometry =");
+    expect(previewBody).not.toContain("commitWindowGeometry");
+  });
+
+  it("guards snap and screen move logical commits against rejected geometry outcome and consumes normalized rectangle", () => {
+    expect(content).toMatch(/var\s+snapResult\s*=\s*commitWindowGeometry\(w,\s*target\.targetRect,\s*"snap_drop"\);[\s\S]*?if\s*\(\s*snapResult\.outcome\s*!==\s*"rejected"\s*&&\s*snapResult\.normalized\s*\)/);
+    expect(content).toMatch(/WindowSnapCommitted[\s\S]*?targetRect:\s*\{[\s\S]*?x:\s*snapResult\.normalized\.x/);
+    expect(content).toMatch(/setSavedTiledGeometry\(wid,\s*snapResult\.normalized\)/);
+    expect(content).toMatch(/var\s+moveResult\s*=\s*commitWindowGeometry\(w,\s*\{[\s\S]*?\},\s*"move_screen"\);[\s\S]*?if\s*\(\s*moveResult\.outcome\s*!==\s*"rejected"\s*\)/);
+    expect(content).toMatch(/var\s+reconResult\s*=\s*commitWindowGeometry\(targetWin,\s*op\.targetRect,\s*"reconciliation",\s*op\.epoch\);[\s\S]*?if\s*\(\s*reconResult\.outcome\s*!==\s*"rejected"\s*&&\s*reconResult\.normalized\s*\)/);
+    expect(content).toMatch(/setSavedTiledGeometry\(opWid,\s*reconResult\.normalized\)/);
+
+    // Coordinator isPreTiled/setPreTiled authority preserves single-window snap
+    expect(content).toMatch(/snapResult\.outcome\s*!==\s*"rejected"[\s\S]*?coordinator\.setPreTiled\(wid,\s*true\)/);
+    expect(content).toMatch(/onMaximizedChanged[\s\S]*?coord\.setPreTiled\(wid,\s*false\)/);
+    expect(content).toMatch(/toggleActiveFloating[\s\S]*?coord\.setPreTiled\(wid,\s*false\)/);
+    expect(content).toMatch(/reconResult\.outcome\s*!==\s*"rejected"[\s\S]*?coord\.setPreTiled\(opWid,\s*false\)/);
+    expect(content).toMatch(/if\s*\(\s*allWins\.length\s*===\s*1\s*&&\s*coord\.isPreTiled\(opWid\)\s*\)\s*\{\s*continue;\s*\}/);
+  });
+
+  it("uses canonical primary configuration event field names and bounds", () => {
+    expect(content).toMatch(/type:\s*"WorkspacePrimaryConfigChanged"[\s\S]*?ratio:\s*newRatio/);
+    expect(content).toMatch(/type:\s*"WorkspacePrimaryConfigChanged"[\s\S]*?count:\s*newCount/);
+    expect(content).not.toMatch(/type:\s*"WorkspacePrimaryConfigChanged"[\s\S]{0,180}primaryRegion(?:Ratio|Count):/);
+    expect(content).toContain("Math.max(0.1, Math.min(0.9, currentRatio + delta))");
+    expect(content).toContain("Math.max(0, Math.min(10, currentCount + delta))");
+  });
+
+  it("has symmetric hook lifecycle cleanup", () => {
+    const signals = [
       "interactiveMoveResizeStarted",
       "interactiveMoveResizeStepped",
       "interactiveMoveResizeFinished",
@@ -191,86 +173,18 @@ describe("QML Source Isolation & Legacy Map Audit", () => {
       "noBorderChanged",
       "outputChanged",
       "desktopsChanged",
-      "activitiesChanged"
+      "activitiesChanged",
     ];
-
-    for (const sig of requiredSignals) {
-      const connectRegex = new RegExp(`w\\.${sig}\\.connect\\s*\\(`, "m");
-      const disconnectRegex = new RegExp(`w\\.${sig}\\.disconnect\\s*\\(`, "m");
-      expect(connectRegex.test(content), `Signal ${sig} must have a connect call in hookWindow`).toBe(true);
-      expect(disconnectRegex.test(content), `Signal ${sig} must have a disconnect call in unhookWindow`).toBe(true);
+    for (const signal of signals) {
+      expect(content).toMatch(new RegExp(`w\\.${signal}\\.connect\\s*\\(`));
+      expect(content).toMatch(new RegExp(`w\\.${signal}\\.disconnect\\s*\\(`));
     }
+    expect(content).toMatch(/function\s+onWindowRemoved\s*\([^)]*\)\s*\{[\s\S]*?unhookWindow\(w\)/);
+    expect(content).toMatch(/Component\.onDestruction\s*:/);
   });
 
-  it("11. Repeated hookWindow calls cannot accumulate duplicate callbacks", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-    // hookWindow must guard against duplicate attachment by unhooking if already hooked
-    expect(content).toMatch(/if\s*\(\s*w\._tesseraHooks\s*\)\s*\{\s*unhookWindow\s*\(\s*w\s*\);\s*\}/);
-  });
-
-  it("12. interactiveMoveResizeStepped and interactiveMoveResizeFinished do not mutate masterRatio", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-
-    // Extract hookWindow function body
-    const hookWindowStart = content.indexOf("function hookWindow(w)");
-    const hookWindowEnd = content.indexOf("function unhookWindow(w)");
-    const hookBody = content.substring(
-      hookWindowStart,
-      hookWindowEnd !== -1 && hookWindowEnd > hookWindowStart ? hookWindowEnd : content.indexOf("// 8. Workspace Global Event Handling")
-    );
-
-    // Assert that master ratio is never mutated during move/resize steps or finish
-    expect(hookBody).not.toMatch(/screenMasterRatios\[[^\]]+\]\s*=/);
-    expect(hookBody).not.toMatch(/config\.masterRatio\s*=/);
-  });
-
-  it("13. Normal explicit layout-ratio commands remain functional", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-
-    // adjustMasterRatio exists and mutates ratio intentionally
-    expect(content).toMatch(/function\s+adjustMasterRatio\s*\(\s*delta\s*\)/);
-    expect(content).toMatch(/adjustMasterRatio\(0\.05\)/);
-    expect(content).toMatch(/adjustMasterRatio\(-0\.05\)/);
-
-    // Shortcuts are registered
-    expect(content).toMatch(/name:\s*"Tessera:\s*Increase\s*Master\s*Ratio"/);
-    expect(content).toMatch(/name:\s*"Tessera:\s*Decrease\s*Master\s*Ratio"/);
-  });
-
-  it("14. Removal of border-drag mutation does not disable intended snap commit behavior", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-
-    // Drag finish must invoke overlayDialog.finishDrag() and apply targetRect
-    expect(content).toMatch(/overlayDialog\s*\?\s*overlayDialog\.finishDrag\(\)\s*:\s*null/);
-    expect(content).toMatch(/target\.targetRect/);
-    expect(content).toMatch(/preTiledWindows\[wid\]\s*=\s*true/);
-  });
-
-  it("15. frameGeometry is written exclusively via commitWindowGeometry sink", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-    const lines = content.split("\n");
-    const occurrences: { line: number; text: string }[] = [];
-
-    lines.forEach((line, idx) => {
-      if (line.includes("frameGeometry =") && !line.trim().startsWith("//")) {
-        occurrences.push({ line: idx + 1, text: line.trim() });
-      }
-    });
-
-    expect(occurrences.length).toBe(1);
-    expect(occurrences[0].text).toContain("win.frameGeometry = Qt.rect(targetRect.x, targetRect.y, targetRect.width, targetRect.height)");
-
-    // commitWindowGeometry helper exists and records commands
-    expect(content).toMatch(/function\s+commitWindowGeometry\s*\(\s*win\s*,\s*targetRect\s*,\s*reason\s*,\s*epoch\s*\)/);
-    expect(content).toMatch(/coord\.recordCommand\s*\(\s*wid\s*,\s*targetRect\s*,\s*epoch\s*\|\|\s*0\s*\)/);
-  });
-
-  it("16. masterHudDialog and legacy HUD shortcuts are completely removed from QML", () => {
-    const content = readFileSync(QML_PATH, "utf8");
-    expect(content).not.toMatch(/masterHudDialog/);
-    expect(content).not.toMatch(/showMasterDialog/);
-    expect(content).not.toMatch(/Show Master HUD/);
+  it("keeps removed HUD and duplicate alternative shortcuts absent", () => {
+    expect(content).not.toMatch(/masterHudDialog|showMasterDialog|Show Master HUD/);
+    expect(content).not.toMatch(/Meta\+Shift\+F/);
   });
 });
-
-

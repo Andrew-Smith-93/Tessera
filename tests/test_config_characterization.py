@@ -69,10 +69,11 @@ class TestConfigCharacterization(unittest.TestCase):
         self.assertIn("primaryRegionCount", main_xml_keys)
         self.assertIn("reconcileDebounceMs", main_xml_keys)
 
-        # Fictitious keys are excluded
+        # Fictitious animation keys are excluded; overlay polling is now a
+        # supported runtime/KCM setting.
         self.assertNotIn("animationMode", main_xml_keys)
         self.assertNotIn("animationDurationMs", main_xml_keys)
-        self.assertNotIn("overlayPollingMs", main_xml_keys)
+        self.assertIn("overlayPollingMs", main_xml_keys)
 
     def test_tessera_settings_hydration_does_not_trigger_autosave(self):
         """

@@ -91,6 +91,7 @@ describe("Phase 2A Runtime Coordinator & Coalesced Reconciliation", () => {
 
     // Now simulate window accepting the geometry (echo handled)
     const appliedRect = tx1!.operations[0].targetRect;
+    coordinator.recordCommand("win-1", appliedRect, tx1!.epoch);
     coordinator.checkAndHandleEcho("win-1", appliedRect);
 
     // Mark screen dirty again with no actual geometry or state difference
@@ -109,6 +110,7 @@ describe("Phase 2A Runtime Coordinator & Coalesced Reconciliation", () => {
     });
     const tx1 = coordinator.reconcile();
     expect(tx1!.operations.length).toBe(1);
+    coordinator.recordCommand("win-1", tx1!.operations[0].targetRect, tx1!.epoch);
     coordinator.checkAndHandleEcho("win-1", tx1!.operations[0].targetRect);
 
     // Change master ratio on the screen: desired rectangle changes
@@ -128,13 +130,20 @@ describe("Phase 2A Runtime Coordinator & Coalesced Reconciliation", () => {
     expect(tx2!.operations.length).toBe(2); // both windows adjusted
   });
 
-  it("4. Matching geometry echoes are suppressed", () => {
+  it("4. Matching geometry echoes are suppressed only after explicit recordCommand", () => {
     coordinator.ingestEvent({
       type: "WindowDiscovered",
       window: makeNormalWindow("win-1")
     });
     const tx = coordinator.reconcile();
     const target = tx!.operations[0].targetRect;
+
+    // Negative assertion: reconcile() by itself does NOT suppress a matching geometry event
+    const preRecordResult = coordinator.checkAndHandleEcho("win-1", target);
+    expect(preRecordResult.isEcho).toBe(false);
+
+    // Simulate sink explicit recordCommand immediately before write
+    coordinator.recordCommand("win-1", target, tx!.epoch);
 
     // Window manager sends back frameGeometryChanged matching the target
     const echoResult = coordinator.checkAndHandleEcho("win-1", target);
@@ -149,7 +158,8 @@ describe("Phase 2A Runtime Coordinator & Coalesced Reconciliation", () => {
       type: "WindowDiscovered",
       window: makeNormalWindow("win-1")
     });
-    coordinator.reconcile();
+    const tx = coordinator.reconcile();
+    coordinator.recordCommand("win-1", tx!.operations[0].targetRect, tx!.epoch);
 
     // WM or user changes geometry to completely different dimensions
     const externalGeom = { x: 50, y: 50, width: 300, height: 200 };
@@ -172,10 +182,30 @@ describe("Phase 2A Runtime Coordinator & Coalesced Reconciliation", () => {
     });
     const tx = coordinator.reconcile();
     const target = tx!.operations[0].targetRect;
+    coordinator.recordCommand("win-1", target, tx!.epoch);
 
     // Simulate echo arriving after expiration (e.g. 500ms later when expiry is 300ms)
     const lateTimestamp = Date.now() + 600;
     const echoResult = coordinator.checkAndHandleEcho("win-1", target, lateTimestamp);
+    expect(echoResult.isEcho).toBe(false);
+  });
+
+  it("6b. Recorded command can be explicitly cleared to prevent echo suppression on rollback", () => {
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeNormalWindow("win-1")
+    });
+    const tx = coordinator.reconcile();
+    const target = tx!.operations[0].targetRect;
+
+    // Explicitly record command as if about to write geometry
+    coordinator.recordCommand("win-1", target, tx!.epoch);
+
+    // Roll back / clear recorded command (e.g. because frameGeometry write threw)
+    coordinator.clearRecordedCommand("win-1");
+
+    // Geometry change arrives; must not be treated as echo
+    const echoResult = coordinator.checkAndHandleEcho("win-1", target);
     expect(echoResult.isEcho).toBe(false);
   });
 
