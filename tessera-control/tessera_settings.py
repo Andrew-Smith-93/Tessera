@@ -7,6 +7,7 @@ Backed by transactional ConfigManager and canonical settings contract.
 
 import sys
 import os
+import json
 import subprocess
 from typing import Any, Dict, Optional
 
@@ -21,9 +22,28 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QColor
 
 from config_manager import ConfigManager
+from config_contract import canonical_workspace_scope_key
 from presets import PRESETS
 from ui_preview import LiveDesktopPreview
 from window_picker import get_active_window_info
+
+
+def load_shortcut_catalog():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(base_dir, "shortcuts.json"),
+        os.path.join(base_dir, "..", "config", "shortcuts.json"),
+    ]
+    for path in candidates:
+        try:
+            with open(path, "r", encoding="utf-8") as shortcut_file:
+                document = json.load(shortcut_file)
+            shortcuts = document.get("shortcuts", [])
+            if isinstance(shortcuts, list):
+                return [(item["label"], item["sequence"]) for item in shortcuts]
+        except (OSError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+    return []
 
 APP_STYLESHEET = """
 QMainWindow {
@@ -318,7 +338,7 @@ class TesseraControlWindow(QMainWindow):
         grid.setSpacing(12)
 
         card_defs = [
-            ("balanced-grid", "Balanced Grid", "Optimal square tiles with equitable distribution (no single dominant master)."),
+            ("balanced-grid", "Balanced Grid", "Optimal square tiles with equitable distribution (no single dominant primary)."),
             ("primary-stack", "Primary + Stack", "Prominent primary work area on left; secondary windows stacked on right."),
             ("binary-split", "Binary Split (BSP)", "Alternates horizontal and vertical partitions recursively (Dwindle style)."),
             ("columns", "Columns", "Arranges all open windows into equal vertical columns across the screen."),
@@ -416,7 +436,7 @@ class TesseraControlWindow(QMainWindow):
         self.primary_ratio_val = QLabel("50%")
         self.primary_ratio_val.setStyleSheet("color: #3daee9; font-weight: bold;")
         self.primary_ratio_slider = QSlider(Qt.Horizontal)
-        self.primary_ratio_slider.setRange(20, 80)
+        self.primary_ratio_slider.setRange(10, 90)
         self.primary_ratio_slider.setValue(50)
         self.primary_ratio_slider.valueChanged.connect(self.on_primary_ratio_changed)
         rg_layout.addWidget(self.primary_ratio_val)
@@ -427,7 +447,7 @@ class TesseraControlWindow(QMainWindow):
         count_grp = QGroupBox("Primary Region Window Count")
         cg_layout = QHBoxLayout(count_grp)
         self.primary_count_spin = QSpinBox()
-        self.primary_count_spin.setRange(1, 5)
+        self.primary_count_spin.setRange(0, 10)
         self.primary_count_spin.setValue(1)
         self.primary_count_spin.valueChanged.connect(self.on_primary_count_changed)
         cg_layout.addWidget(QLabel("Primary Windows:"))
@@ -536,8 +556,14 @@ class TesseraControlWindow(QMainWindow):
     def on_workspace_layout_changed(self):
         if self._is_loading:
             return
-        desk_map = {d: cb.currentText() for d, cb in self.desk_combos.items()}
-        self.cfg_mgr.set_draft_value("desktopLayouts", desk_map)
+        scopes = {
+            canonical_workspace_scope_key("*", desktop_id): {"layout": combo.currentText()}
+            for desktop_id, combo in self.desk_combos.items()
+        }
+        serialized = json.dumps({"version": 1, "scopes": scopes}, separators=(",", ":"), sort_keys=True)
+        ok, err = self.cfg_mgr.set_draft_value("workspaceLayoutsJson", serialized)
+        if not ok:
+            self.set_status(f"Workspace layout validation failed: {err}", is_warning=True)
         self.update_dirty_status()
 
     # -------------------------------------------------------------
@@ -795,31 +821,7 @@ class TesseraControlWindow(QMainWindow):
         lbl.setFont(QFont("SansSerif", 11, QFont.Bold))
         layout.addWidget(lbl)
 
-        shortcuts = [
-            ("Toggle Zone Overlay (KZones-Style)", "Ctrl + Shift + C"),
-            ("Cycle to Next Layout", "Ctrl + Space"),
-            ("Cycle to Previous Layout", "Ctrl + Shift + Space"),
-            ("Toggle Tiling Globally", "Ctrl + Shift + T"),
-            ("Toggle Active Window Floating", "Ctrl + Shift + F"),
-            ("Focus Left Window (WASD)", "Ctrl + Shift + A"),
-            ("Focus Right Window (WASD)", "Ctrl + Shift + D"),
-            ("Focus Up Window (WASD)", "Ctrl + Shift + W"),
-            ("Focus Down Window (WASD)", "Ctrl + Shift + S"),
-            ("Swap Window Left (Counter-Clockwise)", "Ctrl + Shift + Q"),
-            ("Swap Window Right (Clockwise)", "Ctrl + Shift + E"),
-            ("Focus Next Window (Vim)", "Ctrl + Shift + J"),
-            ("Focus Previous Window (Vim)", "Ctrl + Shift + K"),
-            ("Swap Window Forward (Vim)", "Ctrl + Alt + J"),
-            ("Swap Window Backward (Vim)", "Ctrl + Alt + K"),
-            ("Expand Primary Region Ratio", "Ctrl + Shift + L"),
-            ("Shrink Primary Region Ratio", "Ctrl + Shift + H"),
-            ("Increase Primary Region Count", "Ctrl + Shift + I"),
-            ("Decrease Primary Region Count", "Ctrl + Shift + O"),
-            ("Move Window to Next Screen", "Ctrl + Shift + Z"),
-            ("Cycle Layout on Other Screen", "Ctrl + Shift + X"),
-            ("Swap Screen Layouts", "Ctrl + Alt + X"),
-            ("Force Retile Workspace", "Ctrl + Shift + R")
-        ]
+        shortcuts = load_shortcut_catalog()
 
         table = QTableWidget(len(shortcuts), 2)
         table.setHorizontalHeaderLabels(["Action", "Keybinding"])
@@ -887,10 +889,16 @@ class TesseraControlWindow(QMainWindow):
 
             self.game_policy_combo.setCurrentText(self.cfg_mgr.get_draft_value("gameWindowPolicy", "floating"))
 
-            desk_map = self.cfg_mgr.get_draft_value("desktopLayouts", {})
+            serialized_layouts = self.cfg_mgr.get_draft_value("workspaceLayoutsJson", '{"version":1,"scopes":{}}')
+            try:
+                parsed_layouts = json.loads(serialized_layouts)
+                desk_map = parsed_layouts.get("scopes", parsed_layouts) if isinstance(parsed_layouts, dict) else {}
+            except (TypeError, json.JSONDecodeError):
+                desk_map = {}
             for d, combo in self.desk_combos.items():
-                if d in desk_map:
-                    combo.setCurrentText(desk_map[d])
+                scope = desk_map.get(canonical_workspace_scope_key("*", d), {})
+                if isinstance(scope, dict) and scope.get("layout"):
+                    combo.setCurrentText(scope["layout"])
 
             self.populate_rules_table()
             self.refresh_preview()

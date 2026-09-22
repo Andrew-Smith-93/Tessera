@@ -28,7 +28,7 @@
         "monocle",
         "floating"
       ],
-      "legacyAliases": ["master-stack"],
+      "legacyValueAliases": ["master-stack"],
       "description": "Default tiling layout algorithm for new outputs and desktops"
     },
     "gapInner": {
@@ -84,6 +84,13 @@
       "legacyAliases": ["nvidiaDebounceMs"],
       "description": "Debounce period in milliseconds for coalescing window geometry reconciliation events"
     },
+    "overlayPollingMs": {
+      "type": "integer",
+      "default": 16,
+      "minimum": 8,
+      "maximum": 60,
+      "description": "Polling interval in milliseconds while the snap overlay tracks the pointer"
+    },
     "ignoreMinimized": {
       "type": "boolean",
       "default": true,
@@ -107,7 +114,7 @@
     },
     "workspaceLayoutsJson": {
       "type": "string",
-      "default": "{}",
+      "default": "{\"version\":1,\"scopes\":{}}",
       "legacyAliases": ["desktopLayoutsJson"],
       "description": "JSON-serialized map of per-workspace layout assignments scoped by output and desktop"
     }

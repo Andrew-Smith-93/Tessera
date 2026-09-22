@@ -38,6 +38,9 @@
         <entry name="reconcileDebounceMs" type="Int">
             <default>60</default>
         </entry>
+        <entry name="overlayPollingMs" type="Int">
+            <default>16</default>
+        </entry>
         <entry name="ignoreMinimized" type="Bool">
             <default>true</default>
         </entry>
@@ -51,7 +54,7 @@
             <default>[]</default>
         </entry>
         <entry name="workspaceLayoutsJson" type="String">
-            <default>{}</default>
+            <default>{&quot;version&quot;:1,&quot;scopes&quot;:{}}</default>
         </entry>
         <!-- Legacy compatibility entries -->
         <entry name="masterRatio" type="Double">

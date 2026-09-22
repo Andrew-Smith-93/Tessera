@@ -115,6 +115,26 @@
             </property>
            </widget>
           </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="lblOverlayPolling">
+            <property name="text">
+             <string>Snap Overlay Polling:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="kcfg_overlayPollingMs">
+            <property name="suffix">
+             <string> ms</string>
+            </property>
+            <property name="minimum">
+             <number>8</number>
+            </property>
+            <property name="maximum">
+             <number>60</number>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
@@ -186,6 +206,11 @@
               <string>monocle</string>
              </property>
             </item>
+            <item>
+             <property name="text">
+              <string>floating</string>
+             </property>
+            </item>
            </widget>
           </item>
          </layout>
@@ -227,7 +252,7 @@
           <item row="1" column="1">
            <widget class="QSpinBox" name="kcfg_primaryRegionCount">
             <property name="minimum">
-             <number>1</number>
+             <number>0</number>
             </property>
             <property name="maximum">
              <number>10</number>
@@ -323,18 +348,23 @@
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QComboBox" name="kcfg_gameWindowPolicy">
-            <item>
-             <property name="text">
-              <string>floating</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>tile</string>
-             </property>
-            </item>
-           </widget>
+            <widget class="QComboBox" name="kcfg_gameWindowPolicy">
+             <item>
+              <property name="text">
+               <string>floating</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>tiled</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>monocle</string>
+              </property>
+             </item>
+            </widget>
           </item>
          </layout>
         </widget>

@@ -23,6 +23,7 @@ KWINRC_GROUP = "Script-tessera"
 LEGACY_TESSERARC_PATH = os.path.expanduser("~/.config/tesserarc")
 CONFIG_FILE = LEGACY_TESSERARC_PATH
 MIGRATION_BACKUP_PATH = os.path.expanduser("~/.config/tessera_migration_backup.json")
+MISSING_VALUE_SENTINEL = "__TESSERA_KCONFIG_VALUE_MISSING_8f2b70c1__"
 
 class ConfigTransactionError(Exception):
     def __init__(self, message: str, step: str, details: Optional[Dict[str, Any]] = None):
@@ -64,13 +65,20 @@ class ConfigManager:
     # -------------------------------------------------------------------------
 
     def _read_kwin_key_raw(self, key: str, val_type: str) -> Tuple[bool, Optional[str]]:
-        cmd = ["kreadconfig6", "--file", self.kwinrc_file, "--group", KWINRC_GROUP, "--key", key]
-        if val_type == "boolean":
-            cmd.extend(["--type", "bool"])
-        res = self.runner.run(cmd, check=False)
-        if not res.ok or not res.stdout:
+        # A default sentinel distinguishes an absent key from an explicitly
+        # configured empty string. Read raw text so invalid stored values can
+        # be rejected by the canonical validator rather than coerced by KDE.
+        cmd = [
+            "kreadconfig6", "--file", self.kwinrc_file, "--group", KWINRC_GROUP,
+            "--key", key, "--default", MISSING_VALUE_SENTINEL
+        ]
+        try:
+            res = self.runner.run(cmd, check=False)
+        except CommandError:
             return False, None
-        return True, res.stdout.strip()
+        if not res.ok or res.stdout == MISSING_VALUE_SENTINEL:
+            return False, None
+        return True, res.stdout
 
     def _read_kwin_key(self, key: str, val_type: str, default: Any) -> Any:
         present, raw = self._read_kwin_key_raw(key, val_type)
@@ -99,12 +107,28 @@ class ConfigManager:
         cmd = ["kwriteconfig6", "--file", self.kwinrc_file, "--group", KWINRC_GROUP, "--key", key, "--delete"]
         self.runner.run(cmd, check=False)
 
+    def _write_kwin_key_raw(self, key: str, raw_val: str) -> None:
+        cmd = ["kwriteconfig6", "--file", self.kwinrc_file, "--group", KWINRC_GROUP, "--key", key, raw_val]
+        self.runner.run(cmd, check=False)
+
+    def _legacy_aliases_for(self, canonical_key: str) -> List[str]:
+        aliases = set(CANONICAL_PROPERTIES[canonical_key].get("legacyAliases", []))
+        aliases.update(
+            alias for alias, target in LEGACY_KEY_MAP.items()
+            if target == canonical_key
+        )
+        return sorted(aliases)
+
     def _compute_kwin_fingerprint(self) -> str:
         """Computes a fingerprint of current kwinrc keys for concurrency detection."""
         entries = []
-        for key in sorted(CANONICAL_PROPERTIES.keys()):
-            spec = CANONICAL_PROPERTIES[key]
-            present, raw = self._read_kwin_key_raw(key, spec["type"])
+        key_types = {key: spec["type"] for key, spec in CANONICAL_PROPERTIES.items()}
+        for canonical_key, spec in CANONICAL_PROPERTIES.items():
+            for alias in self._legacy_aliases_for(canonical_key):
+                key_types[alias] = spec["type"]
+
+        for key in sorted(key_types):
+            present, raw = self._read_kwin_key_raw(key, key_types[key])
             if present and raw is not None:
                 entries.append(f"{key}={raw}")
         return ";".join(entries)
@@ -125,8 +149,9 @@ class ConfigManager:
             else:
                 val = default
                 # Check legacy aliases if absent
-                if "legacyAliases" in spec:
-                    for alias in spec["legacyAliases"]:
+                aliases = self._legacy_aliases_for(key)
+                if aliases:
+                    for alias in aliases:
                         a_present, a_raw = self._read_kwin_key_raw(alias, val_type)
                         if a_present and a_raw is not None:
                             ok, a_norm, err = normalize_and_validate_value(key, a_raw)
@@ -152,13 +177,13 @@ class ConfigManager:
         if not os.path.exists(self.tesserarc_path):
             return False
 
-        current_ver = self.authoritative_config.get("configSchemaVersion", 1)
         # If already version 2 or above in kwinrc, migration already occurred
-        kwin_ver_res = self.runner.run(
-            ["kreadconfig6", "--file", self.kwinrc_file, "--group", KWINRC_GROUP, "--key", "configSchemaVersion"],
-            check=False
-        )
-        if kwin_ver_res.ok and kwin_ver_res.stdout.strip() in ("2", "3", "4", "5"):
+        kwin_version_present, kwin_version_raw = self._read_kwin_key_raw("configSchemaVersion", "integer")
+        try:
+            kwin_version = int(kwin_version_raw) if kwin_version_present and kwin_version_raw is not None else 0
+        except ValueError:
+            kwin_version = 0
+        if kwin_version >= 2:
             return False
 
         try:
@@ -168,6 +193,8 @@ class ConfigManager:
             # Malformed legacy file: do not crash or corrupt kwinrc
             return False
 
+        config_snapshot = copy.deepcopy(self.authoritative_config)
+        presence_snapshot = set(self.present_kwin_keys)
         unsupported = {}
         migrated = {}
 
@@ -179,8 +206,12 @@ class ConfigManager:
                     v = json.dumps(v)
                 ok, norm, err = normalize_and_validate_value(canon_k, v)
                 if ok:
-                    # Migrate only if not already explicitly different from default in kwinrc
-                    if self.authoritative_config.get(canon_k) == CANONICAL_PROPERTIES[canon_k]["default"]:
+                    spec = CANONICAL_PROPERTIES[canon_k]
+                    explicit_keys = {canon_k, *self._legacy_aliases_for(canon_k)}
+                    # Presence, not value inequality, determines authority: an
+                    # explicitly chosen canonical default must never be
+                    # overwritten by a legacy file.
+                    if self.present_kwin_keys.isdisjoint(explicit_keys):
                         migrated[canon_k] = norm
                         self.authoritative_config[canon_k] = norm
                 else:
@@ -199,10 +230,29 @@ class ConfigManager:
 
         # Write migrated keys and update schema version in kwinrc
         migrated["configSchemaVersion"] = 2
-        for k, v in migrated.items():
-            self._write_kwin_key(k, v)
+        raw_snapshot: Dict[str, Tuple[bool, Optional[str]]] = {}
+        for k in migrated:
+            spec = CANONICAL_PROPERTIES.get(k, {})
+            raw_snapshot[k] = self._read_kwin_key_raw(k, spec.get("type", "string"))
+
+        written_keys = []
+        try:
+            for k, v in migrated.items():
+                self._write_kwin_key(k, v)
+                written_keys.append(k)
+        except Exception:
+            # Migration is best-effort during hydration and must not leave a
+            # partially canonicalized kwinrc if one write fails.
+            self._rollback_raw(raw_snapshot, written_keys)
+            self.authoritative_config = config_snapshot
+            self.present_kwin_keys = presence_snapshot
+            self.last_kwin_snapshot_hash = self._compute_kwin_fingerprint()
+            self.draft_config = copy.deepcopy(self.authoritative_config)
+            return False
 
         self.authoritative_config["configSchemaVersion"] = 2
+        self.present_kwin_keys.update(written_keys)
+        self.last_kwin_snapshot_hash = self._compute_kwin_fingerprint()
         self.draft_config = copy.deepcopy(self.authoritative_config)
         return True
 
@@ -269,7 +319,7 @@ class ConfigManager:
         if not dirty_keys:
             # Clean draft, nothing to persist
             if retile:
-                self.retile_now()
+                return self.retile_now()
             return True, None
 
         # 2. Concurrency Conflict Detection
@@ -277,19 +327,24 @@ class ConfigManager:
         if self.last_kwin_snapshot_hash and current_fingerprint != self.last_kwin_snapshot_hash:
             return False, "Concurrency conflict: kwinrc was modified externally since last read. Please reload settings."
 
-        # 3. Snapshot prior authoritative values and key presence
-        snapshot = copy.deepcopy(self.authoritative_config)
-        presence_snapshot = set(self.present_kwin_keys)
+        # 3. Snapshot exact raw values and key presence for dirty keys before any write
+        raw_snapshot: Dict[str, Tuple[bool, Optional[str]]] = {}
+        for k in dirty_keys:
+            spec = CANONICAL_PROPERTIES[k]
+            raw_snapshot[k] = self._read_kwin_key_raw(k, spec["type"])
 
         # 4. Write changed values
         written_keys = []
+        attempted_key = None
         try:
             for k in dirty_keys:
+                attempted_key = k
                 self._write_kwin_key(k, self.draft_config[k])
                 written_keys.append(k)
         except Exception as e:
-            self._rollback(snapshot, presence_snapshot, written_keys)
-            return False, f"Write failed for key '{written_keys[-1] if written_keys else 'unknown'}': {e}"
+            self._rollback_raw(raw_snapshot, written_keys)
+            failing_key = attempted_key if attempted_key is not None else (written_keys[-1] if written_keys else "unknown")
+            return False, f"Write failed for key '{failing_key}': {e}"
 
         # 5. Readback verification
         for k in dirty_keys:
@@ -297,58 +352,74 @@ class ConfigManager:
             read_back = self._read_kwin_key(k, spec["type"], None)
             expected = self.draft_config[k]
             if read_back != expected:
-                self._rollback(snapshot, presence_snapshot, dirty_keys)
+                self._rollback_raw(raw_snapshot, dirty_keys)
                 return False, f"Readback verification mismatch for key '{k}': expected {expected}, read {read_back}"
 
         # 6. KWin Reconfigure (exactly once)
-        reconfig_res = self.runner.run(
-            ["qdbus6", "org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"],
-            check=False
-        )
+        try:
+            reconfig_res = self.runner.run(
+                ["qdbus6", "org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"],
+                check=False
+            )
+        except CommandError as e:
+            self._rollback_raw(raw_snapshot, dirty_keys)
+            return False, f"KWin reconfigure failed: {e}"
         if not reconfig_res.ok:
-            self._rollback(snapshot, presence_snapshot, dirty_keys)
+            self._rollback_raw(raw_snapshot, dirty_keys)
             return False, f"KWin reconfigure failed: {reconfig_res.stderr or 'DBus error'}"
+
+        # The persisted configuration is authoritative after successful
+        # readback and reconfigure, even when an optional retile side effect
+        # fails. Commit this state before reporting that partial failure.
+        self.authoritative_config = copy.deepcopy(self.draft_config)
+        self.present_kwin_keys.update(dirty_keys)
+        self.last_kwin_snapshot_hash = self._compute_kwin_fingerprint()
 
         # 7. Retile if requested (exactly once)
         if retile:
             retile_ok, retile_err = self.retile_now()
             if not retile_ok:
-                # Configuration was persisted, but retile shortcut failed
-                pass
+                return False, f"Configuration was applied, but retile failed: {retile_err}"
 
-        # 8. Commit authoritative state and update presence
-        self.authoritative_config = copy.deepcopy(self.draft_config)
-        self.present_kwin_keys.update(dirty_keys)
-        self.last_kwin_snapshot_hash = self._compute_kwin_fingerprint()
+        # 8. Return success after the authoritative state was committed above.
         return True, None
 
-    def _rollback(self, snapshot: Dict[str, Any], presence_snapshot: set, keys_to_restore: List[str]) -> None:
-        """Restores snapshot values or deletes previously absent keys on failure."""
-        for k in keys_to_restore:
+    def _rollback_raw(self, raw_snapshot: Dict[str, Tuple[bool, Optional[str]]], keys_to_restore: List[str]) -> None:
+        """Restores exact raw snapshot strings or deletes previously absent keys on failure in reverse write order."""
+        for k in reversed(keys_to_restore):
             try:
-                if k not in presence_snapshot:
+                present, raw_val = raw_snapshot.get(k, (False, None))
+                if not present or raw_val is None:
                     # Key was absent before this transaction; delete it to preserve absence
                     self._delete_kwin_key(k)
                 else:
-                    self._write_kwin_key(k, snapshot[k])
+                    self._write_kwin_key_raw(k, raw_val)
             except Exception:
                 pass
+
+    def _rollback(self, snapshot: Dict[str, Any], presence_snapshot: set, keys_to_restore: List[str]) -> None:
+        """Legacy rollback helper preserving reverse-order restoration."""
+        raw_snapshot = {k: (k in presence_snapshot, str(snapshot[k]) if k in presence_snapshot else None) for k in keys_to_restore}
+        self._rollback_raw(raw_snapshot, keys_to_restore)
 
     def retile_now(self) -> Tuple[bool, Optional[str]]:
         """
         Sends an immediate retile request to KWin via DBus shortcut invocation.
         Does NOT save configuration or invoke KWin reconfigure.
         """
-        res = self.runner.run(
-            [
-                "qdbus6",
-                "org.kde.kglobalaccel",
-                "/component/kwin",
-                "org.kde.kglobalaccel.Component.invokeShortcut",
-                "Tessera: Retile Current Workspace"
-            ],
-            check=False
-        )
+        try:
+            res = self.runner.run(
+                [
+                    "qdbus6",
+                    "org.kde.kglobalaccel",
+                    "/component/kwin",
+                    "org.kde.kglobalaccel.Component.invokeShortcut",
+                    "Tessera: Retile Current Workspace"
+                ],
+                check=False
+            )
+        except CommandError as e:
+            return False, f"Failed to invoke Retile shortcut: {e}"
         if not res.ok:
             return False, f"Failed to invoke Retile shortcut: {res.stderr or 'DBus error'}"
         return True, None
