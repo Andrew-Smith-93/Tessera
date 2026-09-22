@@ -1,0 +1,15 @@
+{
+  "expectedErrorCode": "INVALID_ENVELOPE",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "response",
+    "id": "bad-11",
+    "replyTo": "req-1",
+    "ok": false,
+    "error": {
+      "message": "Missing error code"
+    }
+  }
+}

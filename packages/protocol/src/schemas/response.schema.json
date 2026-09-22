@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tessera.wm/schemas/v1/response.json",
+  "title": "TesseraProtocolResponse",
+  "type": "object",
+  "required": [
+    "protocol",
+    "majorVersion",
+    "minorVersion",
+    "kind",
+    "id",
+    "replyTo",
+    "ok"
+  ],
+  "properties": {
+    "protocol": {
+      "type": "string",
+      "const": "tessera.ipc"
+    },
+    "majorVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "minorVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "kind": {
+      "type": "string",
+      "const": "response"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "replyTo": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "result": {},
+    "error": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {}
+      }
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

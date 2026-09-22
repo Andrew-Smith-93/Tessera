@@ -1,0 +1,13 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "response",
+  "id": "resp-trace-disabled",
+  "replyTo": "req-trace-1",
+  "ok": false,
+  "error": {
+    "code": "TRACE_DISABLED",
+    "message": "Trace recording is disabled on this runtime"
+  }
+}

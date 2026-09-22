@@ -13,17 +13,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: 22
+          cache: 'npm'
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: '3.11'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Run TypeScript Unit Tests
+        run: npm test
+
+      - name: Run TypeScript Typecheck
+        run: npm run typecheck
+
+      - name: Build Monorepo & Fresh JavaScript Layouts Bridge
+        run: npm run build
+
+      - name: Verify Generated Artifacts Up-To-Date
+        run: npm run verify:artifacts
 
       - name: Build Official .kwinscript Bundle
         run: |
           chmod +x package.sh
           ./package.sh
+
+      - name: Validate Package Archive Integrity
+        run: |
+          unzip -t dist/*.kwinscript
+          unzip -l dist/*.kwinscript | grep "contents/code/layouts.js"
 
       - name: Package Standalone Control Center
         run: |
@@ -31,7 +57,7 @@ jobs:
           tar -czf "dist/tessera-control-center-${TAG_NAME}.tar.gz" tessera-control/ desktop/ bin/ README.md LICENSE
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
           files: |
             dist/*.kwinscript

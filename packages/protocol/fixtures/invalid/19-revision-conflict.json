@@ -1,0 +1,14 @@
+{
+  "expectedErrorCode": "REVISION_CONFLICT",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-19",
+    "method": "runtime.requestReconcile",
+    "params": {
+      "expectedRevision": 9999
+    }
+  }
+}

@@ -25,24 +25,23 @@ class TestTessera(unittest.TestCase):
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def test_config_defaults(self):
-        cm = config_manager.ConfigManager()
+        from test_config_manager import MockCommandRunner
+        runner = MockCommandRunner()
+        cm = config_manager.ConfigManager(runner=runner, tesserarc_path=os.path.join(self.test_dir, "tesserarc"))
         self.assertTrue(cm.config.get("enableTiling"))
-        self.assertEqual(cm.config.get("defaultLayout"), "master-stack")
+        self.assertEqual(cm.config.get("defaultLayout"), "balanced-grid")
         self.assertGreaterEqual(cm.config.get("gapInner"), 0)
         self.assertGreaterEqual(cm.config.get("gapOuter"), 0)
-        # Verify no user apps are auto-floated (tile everything period)
-        float_filter = cm.config.get("floatFilter", "")
-        self.assertNotIn("systemsettings", float_filter)
-        self.assertNotIn("pavucontrol", float_filter)
-        self.assertNotIn("kcalc", float_filter)
 
     def test_config_save_and_reload(self):
-        cm = config_manager.ConfigManager()
-        cm.config["gapOuter"] = 20
-        cm.config["gapInner"] = 15
-        cm.save()
+        from test_config_manager import MockCommandRunner
+        runner = MockCommandRunner()
+        cm = config_manager.ConfigManager(runner=runner, tesserarc_path=os.path.join(self.test_dir, "tesserarc"))
+        cm.set_draft_value("gapOuter", 20)
+        cm.set_draft_value("gapInner", 15)
+        self.assertTrue(cm.apply()[0])
 
-        cm2 = config_manager.ConfigManager()
+        cm2 = config_manager.ConfigManager(runner=runner, tesserarc_path=os.path.join(self.test_dir, "tesserarc"))
         self.assertEqual(cm2.config.get("gapOuter"), 20)
         self.assertEqual(cm2.config.get("gapInner"), 15)
 

@@ -2,25 +2,57 @@ name: CI & Packaging Quality Assurance
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "chore/*", "feat/*", "fix/*", "test/*", "audit/*", "refactor/*" ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   validate-and-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: 22
+          cache: 'npm'
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: '3.11'
 
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Run TypeScript Unit Tests (Vitest)
+        run: npm test
+
+      - name: Run TypeScript Typecheck (tsc --build)
+        run: npm run typecheck
+
+      - name: Build Monorepo & Standalone Artifacts
+        run: npm run build
+
+      - name: Verify Generated Artifacts Up-To-Date
+        run: npm run verify:artifacts
+
+      - name: Verify Protocol V1 Freeze Manifest
+        run: npm run verify:freeze
+
+      - name: Verify Runtime Simulator Goldens & Fixed Stress Seeds
+        run: |
+          npm run sim:verify
+          npm run sim:run -- --seed 42 --quiet
+          npm run sim:run -- --seed 12345 --quiet
+          npm run sim:run -- --seed 99999 --quiet
+
       - name: Validate Python Syntax & Bytecode Compilation
         run: |
-          python3 -m py_compile tessera-control/*.py
+          python3 -m py_compile tessera-control/*.py tests/*.py
           echo "All Python modules compiled successfully."
 
       - name: Validate JSON Manifests
@@ -33,13 +65,25 @@ jobs:
           python3 -c "import xml.etree.ElementTree as ET; ET.parse('contents/config/main.xml')"
           echo "contents/config/main.xml is valid XML."
 
-      - name: Run Layout Algorithm Tests
+      - name: Run Python Unit Tests
         run: |
-          python3 tests/test_layouts.py
+          python3 -m unittest discover -s tests -p "test_*.py" -v
 
       - name: Test .kwinscript Release Packaging
         run: |
           chmod +x package.sh
           ./package.sh
+
+      - name: Validate Package Archive Integrity
+        run: |
           ls -la dist/
           unzip -t dist/*.kwinscript
+          unzip -l dist/*.kwinscript | grep "metadata.json"
+          unzip -l dist/*.kwinscript | grep "contents/code/layouts.js"
+          unzip -l dist/*.kwinscript | grep "contents/code/rules.js"
+          unzip -l dist/*.kwinscript | grep "contents/code/reconciler.js"
+          unzip -l dist/*.kwinscript | grep "contents/ui/main.qml"
+          ! unzip -l dist/*.kwinscript | grep -E "contents/code/main\.js|contents/ui/tessera\.qml|contents/ui/ZoneOverlay\.qml|contents/ui/TopNotification\.qml"
+          ! unzip -l dist/*.kwinscript | grep -E "apps/|target/|\.rs$|Cargo\."
+          python3 tests/test_package_manifest.py
+          echo "Package archive structure verified successfully."

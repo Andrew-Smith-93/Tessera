@@ -1,0 +1,14 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "response",
+  "id": "resp-err-1",
+  "replyTo": "req-bad-1",
+  "ok": false,
+  "error": {
+    "code": "WINDOW_NOT_FOUND",
+    "message": "Window with id 'win-nonexistent' not found in retained state",
+    "details": { "windowId": "win-nonexistent" }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "expectedErrorCode": "CONFIG_VALIDATION_FAILED",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-18",
+    "method": "config.applyPatch",
+    "params": {
+      "patch": {
+        "gapInner": -10
+      }
+    }
+  }
+}

@@ -1,0 +1,405 @@
+{
+  "_comment": "Shared workspace-layouts-json validation corpus. Read by Vitest and Python unittest.",
+  "_format": "Each entry: { id, description, input?, valid, canonical?, errorSubstring?, generate_boundary? }",
+  "_generated_cases": "65536-byte and 65537-byte boundary cases are too large to embed; tests generate them at runtime using the 'generate_boundary' key.",
+  "cases": [
+    {
+      "id": "empty_scopes",
+      "description": "Canonical empty scopes document",
+      "input": "{\"version\":1,\"scopes\":{}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{}}"
+    },
+    {
+      "id": "single_scope_layout_only",
+      "description": "Single scope with layout override",
+      "input": "{\"version\":1,\"scopes\":{\"HDMI-1//desk-1\":{\"layout\":\"columns\"}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"HDMI-1//desk-1\":{\"layout\":\"columns\"}}}"
+    },
+    {
+      "id": "single_scope_all_fields",
+      "description": "Single scope with all three override fields",
+      "input": "{\"version\":1,\"scopes\":{\"DP-2//workspace-3\":{\"layout\":\"primary-stack\",\"ratio\":0.65,\"primaryCount\":3}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"DP-2//workspace-3\":{\"layout\":\"primary-stack\",\"ratio\":0.65,\"primaryCount\":3}}}"
+    },
+    {
+      "id": "unicode_scope",
+      "description": "Scope key with Unicode percent-encoded output name",
+      "input": "{\"version\":1,\"scopes\":{\"Caf%C3%A9//Desk1\":{\"layout\":\"monocle\",\"ratio\":0.6,\"primaryCount\":2}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"Caf%C3%A9//Desk1\":{\"layout\":\"monocle\",\"ratio\":0.6,\"primaryCount\":2}}}"
+    },
+    {
+      "id": "scope_encoding_literal_percent",
+      "description": "Scope key with literal percent sign encoded as %25",
+      "input": "{\"version\":1,\"scopes\":{\"100%25//desk%251\":{\"layout\":\"columns\"}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"100%25//desk%251\":{\"layout\":\"columns\"}}}"
+    },
+    {
+      "id": "scope_encoding_literal_slash",
+      "description": "Scope key with literal forward slash encoded as %2F",
+      "input": "{\"version\":1,\"scopes\":{\"a%2Fb//c%2Fd\":{\"layout\":\"columns\"}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"a%2Fb//c%2Fd\":{\"layout\":\"columns\"}}}"
+    },
+    {
+      "id": "scope_encoding_literal_colon",
+      "description": "Scope key with literal colon encoded as %3A",
+      "input": "{\"version\":1,\"scopes\":{\"DP%3A1//desk%3A1\":{\"layout\":\"columns\"}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"DP%3A1//desk%3A1\":{\"layout\":\"columns\"}}}"
+    },
+    {
+      "id": "scope_encoding_literal_space",
+      "description": "Scope key with literal space encoded as %20",
+      "input": "{\"version\":1,\"scopes\":{\"HDMI%201//Desk%201\":{\"layout\":\"columns\"}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"HDMI%201//Desk%201\":{\"layout\":\"columns\"}}}"
+    },
+    {
+      "id": "multiple_scopes_sorted",
+      "description": "Multiple versioned scopes in canonical sorted order",
+      "input": "{\"version\":1,\"scopes\":{\"A-out//A-desk\":{\"layout\":\"columns\"},\"Z-out//Z-desk\":{\"layout\":\"rows\"}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"A-out//A-desk\":{\"layout\":\"columns\"},\"Z-out//Z-desk\":{\"layout\":\"rows\"}}}"
+    },
+    {
+      "id": "legacy_unversioned_unsorted_migration",
+      "description": "Legacy unversioned map with unsorted keys migrates to deterministic sorted canonical document",
+      "input": "{\"Z-out//Z-desk\":{\"layout\":\"rows\"},\"A-out//A-desk\":{\"layout\":\"columns\"}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"A-out//A-desk\":{\"layout\":\"columns\"},\"Z-out//Z-desk\":{\"layout\":\"rows\"}}}"
+    },
+    {
+      "id": "wildcard_scope",
+      "description": "Wildcard scope key using '*' (safe in encodeURIComponent)",
+      "input": "{\"version\":1,\"scopes\":{\"*//desk-1\":{\"layout\":\"floating\"}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"*//desk-1\":{\"layout\":\"floating\"}}}"
+    },
+    {
+      "id": "legacy_unversioned_master_stack",
+      "description": "Legacy unversioned map with master-stack migrates to primary-stack",
+      "input": "{\"HDMI-1//desk-1\":{\"layout\":\"master-stack\",\"ratio\":0.55}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"HDMI-1//desk-1\":{\"layout\":\"primary-stack\",\"ratio\":0.55}}}"
+    },
+    {
+      "id": "legacy_unversioned_empty",
+      "description": "Legacy unversioned empty map",
+      "input": "{}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{}}"
+    },
+    {
+      "id": "ratio_boundary_low",
+      "description": "Ratio at exactly 0.10 (minimum boundary)",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":0.1}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":0.1}}}"
+    },
+    {
+      "id": "ratio_boundary_high",
+      "description": "Ratio at exactly 0.90 (maximum boundary)",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":0.9}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":0.9}}}"
+    },
+    {
+      "id": "primary_count_zero",
+      "description": "primaryCount at 0 (minimum boundary)",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"primaryCount\":0}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"out//desk\":{\"primaryCount\":0}}}"
+    },
+    {
+      "id": "primary_count_ten",
+      "description": "primaryCount at 10 (maximum boundary)",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"primaryCount\":10}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"out//desk\":{\"primaryCount\":10}}}"
+    },
+    {
+      "id": "empty_scope_data",
+      "description": "Scope with empty override object (no fields specified)",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{}}}",
+      "valid": true,
+      "canonical": "{\"version\":1,\"scopes\":{\"out//desk\":{}}}"
+    },
+    {
+      "id": "accept_50_scopes",
+      "description": "50 scopes is at the exact limit",
+      "generate_boundary": "50_scopes",
+      "valid": true
+    },
+    {
+      "id": "accept_65536_bytes",
+      "description": "65536 bytes is at the exact limit",
+      "generate_boundary": "65536_bytes",
+      "valid": true
+    },
+
+    {
+      "id": "reject_empty_string",
+      "description": "Empty string is not valid JSON — must be rejected, not defaulted",
+      "input": "",
+      "valid": false,
+      "errorSubstring": ""
+    },
+    {
+      "id": "reject_array_root",
+      "description": "Array root — must be an object",
+      "input": "[]",
+      "valid": false,
+      "errorSubstring": "object"
+    },
+    {
+      "id": "reject_version_2",
+      "description": "Unsupported version 2",
+      "input": "{\"version\":2,\"scopes\":{}}",
+      "valid": false,
+      "errorSubstring": "version"
+    },
+    {
+      "id": "reject_version_string",
+      "description": "Version as string instead of integer",
+      "input": "{\"version\":\"1\",\"scopes\":{}}",
+      "valid": false,
+      "errorSubstring": "version"
+    },
+    {
+      "id": "reject_51_scopes",
+      "description": "51 scopes exceeds the 50-entry limit",
+      "generate_boundary": "51_scopes",
+      "valid": false,
+      "errorSubstring": "50"
+    },
+    {
+      "id": "reject_65537_bytes",
+      "description": "65537 bytes exceeds the 64 KiB limit",
+      "generate_boundary": "65537_bytes",
+      "valid": false,
+      "errorSubstring": "64"
+    },
+    {
+      "id": "reject_duplicate_keys_root",
+      "description": "Duplicate keys at the root level",
+      "input": "{\"version\":1,\"scopes\":{},\"version\":1}",
+      "valid": false,
+      "errorSubstring": "uplicate"
+    },
+    {
+      "id": "reject_duplicate_keys_scopes",
+      "description": "Duplicate keys inside the scopes object",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{},\"out//desk\":{}}}",
+      "valid": false,
+      "errorSubstring": "uplicate"
+    },
+    {
+      "id": "reject_duplicate_keys_scope_data",
+      "description": "Duplicate keys inside a scope data object",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"layout\":\"columns\",\"layout\":\"rows\"}}}",
+      "valid": false,
+      "errorSubstring": "uplicate"
+    },
+    {
+      "id": "reject_unsafe_proto",
+      "description": "Scope key decodes to __proto__",
+      "input": "{\"version\":1,\"scopes\":{\"__proto__//desk\":{\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": "nsafe"
+    },
+    {
+      "id": "reject_unsafe_prototype",
+      "description": "Scope key decodes to prototype",
+      "input": "{\"version\":1,\"scopes\":{\"out//prototype\":{\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": "nsafe"
+    },
+    {
+      "id": "reject_unsafe_constructor",
+      "description": "Scope key decodes to constructor",
+      "input": "{\"version\":1,\"scopes\":{\"constructor//desk\":{\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": "nsafe"
+    },
+    {
+      "id": "reject_invalid_percent_encoding",
+      "description": "Invalid percent escape %ZZ in scope key",
+      "input": "{\"version\":1,\"scopes\":{\"out%ZZ//desk\":{\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": ""
+    },
+    {
+      "id": "reject_invalid_utf8_overlong",
+      "description": "Overlong UTF-8 sequence %C0%AF in scope key",
+      "input": "{\"version\":1,\"scopes\":{\"out%C0%AF//desk\":{\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": ""
+    },
+    {
+      "id": "reject_nan_ratio",
+      "description": "NaN as ratio value",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":NaN}}}",
+      "valid": false,
+      "errorSubstring": ""
+    },
+    {
+      "id": "reject_bool_ratio",
+      "description": "Boolean true used as ratio (not a number)",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":true}}}",
+      "valid": false,
+      "errorSubstring": "ratio"
+    },
+    {
+      "id": "reject_bool_primary_count",
+      "description": "Boolean false used as primaryCount (not an integer)",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"primaryCount\":false}}}",
+      "valid": false,
+      "errorSubstring": "primaryCount"
+    },
+    {
+      "id": "reject_unknown_root_field",
+      "description": "Unknown field at root level in versioned document",
+      "input": "{\"version\":1,\"scopes\":{},\"extra\":true}",
+      "valid": false,
+      "errorSubstring": "unknown"
+    },
+    {
+      "id": "reject_unknown_scope_field",
+      "description": "Unknown field inside scope data",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"layout\":\"columns\",\"color\":\"red\"}}}",
+      "valid": false,
+      "errorSubstring": "unknown"
+    },
+    {
+      "id": "reject_non_canonical_encoding",
+      "description": "Scope key uses lowercase hex in percent encoding instead of uppercase",
+      "input": "{\"version\":1,\"scopes\":{\"Caf%c3%a9//Desk1\":{\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": "canonical"
+    },
+    {
+      "id": "reject_ratio_below_min",
+      "description": "Ratio 0.09 below minimum 0.10",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":0.09}}}",
+      "valid": false,
+      "errorSubstring": "ratio"
+    },
+    {
+      "id": "reject_ratio_above_max",
+      "description": "Ratio 0.91 above maximum 0.90",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":0.91}}}",
+      "valid": false,
+      "errorSubstring": "ratio"
+    },
+    {
+      "id": "reject_primary_count_negative",
+      "description": "primaryCount -1 below minimum 0",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"primaryCount\":-1}}}",
+      "valid": false,
+      "errorSubstring": "primaryCount"
+    },
+    {
+      "id": "reject_primary_count_eleven",
+      "description": "primaryCount 11 above maximum 10",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"primaryCount\":11}}}",
+      "valid": false,
+      "errorSubstring": "primaryCount"
+    },
+    {
+      "id": "reject_invalid_layout",
+      "description": "Unknown layout name",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"layout\":\"spiral\"}}}",
+      "valid": false,
+      "errorSubstring": "layout"
+    },
+    {
+      "id": "reject_scope_key_no_separator",
+      "description": "Scope key missing // separator",
+      "input": "{\"version\":1,\"scopes\":{\"out-desk\":{\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": "scope"
+    },
+    {
+      "id": "reject_scope_key_empty_part",
+      "description": "Scope key with empty output part",
+      "input": "{\"version\":1,\"scopes\":{\"//desk\":{\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": "scope"
+    },
+    {
+      "id": "reject_scope_data_array",
+      "description": "Scope data is an array instead of object",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":[]}}",
+      "valid": false,
+      "errorSubstring": "object"
+    },
+    {
+      "id": "reject_scope_data_null",
+      "description": "Scope data is null instead of object",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":null}}",
+      "valid": false,
+      "errorSubstring": "object"
+    },
+    {
+      "id": "reject_scopes_not_object",
+      "description": "Scopes value is an array",
+      "input": "{\"version\":1,\"scopes\":[]}",
+      "valid": false,
+      "errorSubstring": "object"
+    },
+    {
+      "id": "reject_ratio_float_primary_count",
+      "description": "primaryCount as float 2.5 — must be integer",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"primaryCount\":2.5}}}",
+      "valid": false,
+      "errorSubstring": "primaryCount"
+    },
+    {
+      "id": "reject_ratio_infinity",
+      "description": "Ratio as Infinity",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":Infinity}}}",
+      "valid": false,
+      "errorSubstring": ""
+    },
+    {
+      "id": "reject_non_canonical_key_order",
+      "description": "Valid scopes but keys not in sorted order — non-canonical encoding",
+      "input": "{\"version\":1,\"scopes\":{\"Z-out//Z-desk\":{\"layout\":\"rows\"},\"A-out//A-desk\":{\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": "canonical"
+    },
+    {
+      "id": "reject_versioned_master_stack",
+      "description": "Versioned document cannot use legacy master-stack alias; only unversioned legacy migrates",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"layout\":\"master-stack\"}}}",
+      "valid": false,
+      "errorSubstring": "canonical"
+    },
+    {
+      "id": "reject_versioned_noncanonical_nested_field_order",
+      "description": "Versioned document with non-canonical nested field order (ratio before layout)",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":0.5,\"layout\":\"columns\"}}}",
+      "valid": false,
+      "errorSubstring": "canonical"
+    },
+    {
+      "id": "reject_versioned_ratio_string",
+      "description": "Versioned document with ratio as string rather than float",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"ratio\":\"0.5\"}}}",
+      "valid": false,
+      "errorSubstring": "ratio"
+    },
+    {
+      "id": "reject_versioned_primary_count_string",
+      "description": "Versioned document with primaryCount as string rather than int",
+      "input": "{\"version\":1,\"scopes\":{\"out//desk\":{\"primaryCount\":\"1\"}}}",
+      "valid": false,
+      "errorSubstring": "primaryCount"
+    }
+  ]
+}

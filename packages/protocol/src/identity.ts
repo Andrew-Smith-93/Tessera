@@ -14,4 +14,5 @@ export type WindowClassification =
   | "floating"
   | "dialog"
   | "fullscreen"
+  | "fullscreen-like"
   | "ignored";

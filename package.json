@@ -3,20 +3,35 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Andrew-Smith-93/tiling-window-manager.git"
+  },
+  "homepage": "https://github.com/Andrew-Smith-93/tiling-window-manager#readme",
+  "bugs": {
+    "url": "https://github.com/Andrew-Smith-93/tiling-window-manager/issues"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "tsc --build && npm run bundle:kwin",
+    "clean": "tsc --build --clean && rm -rf dist apps/*/dist packages/*/dist *.tsbuildinfo */*/*.tsbuildinfo",
     "bundle:kwin": "node apps/kwin-adapter/esbuild.config.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --build"
+    "typecheck": "tsc --build",
+    "verify:artifacts": "git diff --exit-code HEAD -- contents/code/layouts.js contents/code/rules.js contents/code/reconciler.js packages/protocol/src/schemas/*.schema.json",
+    "verify:freeze": "vitest run packages/protocol/tests/freeze-manifest.test.ts",
+    "generate:schemas": "node packages/protocol/scripts/generate-schemas.mjs",
+    "sim:run": "node apps/runtime-simulator/bin/sim-cli.mjs",
+    "sim:verify": "node apps/runtime-simulator/bin/sim-cli.mjs --verify-goldens",
+    "sim:update-goldens": "node apps/runtime-simulator/bin/sim-cli.mjs --update-goldens"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
     "typescript": "^5.7.3",
-    "vitest": "^5.0.1"
+    "vitest": "^3.0.7"
   }
 }

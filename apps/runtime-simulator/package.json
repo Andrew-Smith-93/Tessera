@@ -1,0 +1,19 @@
+{
+  "name": "@tessera/runtime-simulator",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "tessera-sim": "./bin/sim-cli.mjs"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@tessera/protocol": "*",
+    "@tessera/layout-core": "*",
+    "@tessera/rules-engine": "*",
+    "@tessera/kwin-adapter": "*"
+  }
+}

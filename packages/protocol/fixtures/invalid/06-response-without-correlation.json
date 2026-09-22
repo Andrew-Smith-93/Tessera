@@ -1,0 +1,11 @@
+{
+  "expectedErrorCode": "INVALID_ENVELOPE",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "response",
+    "id": "bad-06",
+    "ok": true
+  }
+}

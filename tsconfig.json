@@ -4,6 +4,7 @@
     { "path": "./packages/protocol" },
     { "path": "./packages/layout-core" },
     { "path": "./packages/rules-engine" },
-    { "path": "./apps/kwin-adapter" }
+    { "path": "./apps/kwin-adapter" },
+    { "path": "./apps/runtime-simulator" }
   ]
 }

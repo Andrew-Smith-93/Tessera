@@ -1,0 +1,15 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "request",
+  "id": "req-cfg-app-1",
+  "method": "config.applyPatch",
+  "params": {
+    "patch": {
+      "gapInner": 12
+    },
+    "expectedRevision": 1,
+    "idempotencyKey": "patch-key-123"
+  }
+}

@@ -1,0 +1,400 @@
+{
+  "digest": "18ed855eff54d17a4bbb557027d6ed624c0b6921a05307da15d85dfe4fbf70cb",
+  "fixtureName": "03-master-count-ratio-change",
+  "finalTick": 0,
+  "diagnostics": {
+    "totalEvents": 9,
+    "totalTransactions": 3,
+    "totalLayoutComputations": 3,
+    "totalGeometryWrites": 12,
+    "skippedWrites": 0,
+    "suppressedEchoes": 12,
+    "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
+    "unaffectedScreensRecomputed": 0
+  },
+  "canonicalState": {
+    "diagnostics": {
+      "committedSnapOperations": 0,
+      "previewOnlyOperations": 0,
+      "skippedWrites": 0,
+      "suppressedEchoes": 12,
+      "totalEvents": 9,
+      "totalGeometryWrites": 12,
+      "totalLayoutComputations": 3,
+      "totalTransactions": 3,
+      "unaffectedScreensRecomputed": 0
+    },
+    "finalTick": 0,
+    "fixtureName": "03-master-count-ratio-change",
+    "invariants": {
+      "passed": true,
+      "violations": []
+    },
+    "retainedScreens": [
+      {
+        "activeLayout": "master-stack",
+        "gaps": {
+          "inner": 8,
+          "outer": 10
+        },
+        "geometry": {
+          "height": 1080,
+          "width": 1920,
+          "x": 0,
+          "y": 0
+        },
+        "masterCount": 2,
+        "masterRatio": 0.65,
+        "name": "HDMI-A-1",
+        "orderedWindowIds": [
+          "win-1",
+          "win-2",
+          "win-3",
+          "win-4"
+        ],
+        "outputId": "HDMI-A-1",
+        "persistentOrder": [
+          "win-1",
+          "win-2",
+          "win-3",
+          "win-4"
+        ],
+        "usableArea": {
+          "height": 1080,
+          "width": 1920,
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "retainedWindows": [
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 526,
+          "width": 1234,
+          "x": 10,
+          "y": 10
+        },
+        "frameGeometry": {
+          "height": 526,
+          "width": 1234,
+          "x": 10,
+          "y": 10
+        },
+        "fullScreen": false,
+        "id": "win-1",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "HDMI-A-1",
+        "outputId": "HDMI-A-1",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      },
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 526,
+          "width": 1234,
+          "x": 10,
+          "y": 544
+        },
+        "frameGeometry": {
+          "height": 526,
+          "width": 1234,
+          "x": 10,
+          "y": 544
+        },
+        "fullScreen": false,
+        "id": "win-2",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "HDMI-A-1",
+        "outputId": "HDMI-A-1",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      },
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 526,
+          "width": 658,
+          "x": 1252,
+          "y": 10
+        },
+        "frameGeometry": {
+          "height": 526,
+          "width": 658,
+          "x": 1252,
+          "y": 10
+        },
+        "fullScreen": false,
+        "id": "win-3",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "HDMI-A-1",
+        "outputId": "HDMI-A-1",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      },
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 526,
+          "width": 658,
+          "x": 1252,
+          "y": 544
+        },
+        "frameGeometry": {
+          "height": 526,
+          "width": 658,
+          "x": 1252,
+          "y": 544
+        },
+        "fullScreen": false,
+        "id": "win-4",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "HDMI-A-1",
+        "outputId": "HDMI-A-1",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      }
+    ],
+    "schemaVersion": "1.0.0",
+    "transactions": [
+      {
+        "affectedScreens": [
+          "HDMI-A-1"
+        ],
+        "epoch": 1,
+        "operations": [
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 1060,
+              "width": 946,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-1"
+          },
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 346,
+              "width": 946,
+              "x": 964,
+              "y": 10
+            },
+            "windowId": "win-2"
+          },
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 352,
+              "width": 946,
+              "x": 964,
+              "y": 364
+            },
+            "windowId": "win-3"
+          },
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 346,
+              "width": 946,
+              "x": 964,
+              "y": 724
+            },
+            "windowId": "win-4"
+          }
+        ],
+        "reasons": [
+          "WindowDiscovered"
+        ],
+        "skippedWrites": 0,
+        "tick": 0
+      },
+      {
+        "affectedScreens": [
+          "HDMI-A-1"
+        ],
+        "epoch": 2,
+        "operations": [
+          {
+            "previousRect": {
+              "height": 1060,
+              "width": 946,
+              "x": 10,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 1060,
+              "width": 1234,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-1"
+          },
+          {
+            "previousRect": {
+              "height": 346,
+              "width": 946,
+              "x": 964,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 346,
+              "width": 658,
+              "x": 1252,
+              "y": 10
+            },
+            "windowId": "win-2"
+          },
+          {
+            "previousRect": {
+              "height": 352,
+              "width": 946,
+              "x": 964,
+              "y": 364
+            },
+            "targetRect": {
+              "height": 352,
+              "width": 658,
+              "x": 1252,
+              "y": 364
+            },
+            "windowId": "win-3"
+          },
+          {
+            "previousRect": {
+              "height": 346,
+              "width": 946,
+              "x": 964,
+              "y": 724
+            },
+            "targetRect": {
+              "height": 346,
+              "width": 658,
+              "x": 1252,
+              "y": 724
+            },
+            "windowId": "win-4"
+          }
+        ],
+        "reasons": [
+          "ScreenMasterConfigChanged"
+        ],
+        "skippedWrites": 0,
+        "tick": 0
+      },
+      {
+        "affectedScreens": [
+          "HDMI-A-1"
+        ],
+        "epoch": 3,
+        "operations": [
+          {
+            "previousRect": {
+              "height": 1060,
+              "width": 1234,
+              "x": 10,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 526,
+              "width": 1234,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-1"
+          },
+          {
+            "previousRect": {
+              "height": 346,
+              "width": 658,
+              "x": 1252,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 526,
+              "width": 1234,
+              "x": 10,
+              "y": 544
+            },
+            "windowId": "win-2"
+          },
+          {
+            "previousRect": {
+              "height": 352,
+              "width": 658,
+              "x": 1252,
+              "y": 364
+            },
+            "targetRect": {
+              "height": 526,
+              "width": 658,
+              "x": 1252,
+              "y": 10
+            },
+            "windowId": "win-3"
+          },
+          {
+            "previousRect": {
+              "height": 346,
+              "width": 658,
+              "x": 1252,
+              "y": 724
+            },
+            "targetRect": {
+              "height": 526,
+              "width": 658,
+              "x": 1252,
+              "y": 544
+            },
+            "windowId": "win-4"
+          }
+        ],
+        "reasons": [
+          "ScreenMasterConfigChanged"
+        ],
+        "skippedWrites": 0,
+        "tick": 0
+      }
+    ]
+  }
+}

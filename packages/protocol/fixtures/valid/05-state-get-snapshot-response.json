@@ -1,0 +1,52 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "response",
+  "id": "resp-snap-1",
+  "replyTo": "req-snap-1",
+  "ok": true,
+  "result": {
+    "revision": 1,
+    "screens": [
+      {
+        "outputId": "HDMI-A-1",
+        "name": "HDMI-A-1",
+        "geometry": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+        "usableArea": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+        "activeLayout": "master-stack",
+        "masterCount": 1,
+        "masterRatio": 0.5,
+        "gaps": { "inner": 8, "outer": 10 },
+        "orderedWindowIds": ["win-1"],
+        "persistentOrder": ["win-1"]
+      }
+    ],
+    "windows": [
+      {
+        "id": "win-1",
+        "resourceClass": "Alacritty",
+        "outputId": "HDMI-A-1",
+        "classification": "tiled",
+        "tileable": true,
+        "minimized": false,
+        "fullScreen": false,
+        "noBorder": false,
+        "maximizeMode": 0,
+        "isManualFloating": false,
+        "frameGeometry": { "x": 10, "y": 10, "width": 946, "height": 1060 },
+        "desiredGeometry": { "x": 10, "y": 10, "width": 946, "height": 1060 },
+        "preMinimizeGeometry": null,
+        "outputAffinity": "HDMI-A-1"
+      }
+    ],
+    "config": {
+      "enableTiling": true,
+      "defaultLayout": "master-stack"
+    },
+    "diagnostics": {
+      "totalEvents": 10,
+      "totalTransactions": 2
+    }
+  }
+}

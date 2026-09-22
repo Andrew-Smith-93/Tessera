@@ -17,32 +17,32 @@ export function registerShortcuts(kwin: KWinGlobal, engine: TilingEngine): void 
     () => engine.cycleCurrentScreenLayout(false)
   );
 
-  // Master count adjustments (active screen only)
+  // Primary count adjustments (active screen only)
   kwin.registerShortcut(
-    "Tessera: Increase Master Count",
-    "Add one master window slot to active screen",
+    "Tessera: Increase Primary Count",
+    "Add one primary window slot to active screen",
     "Meta+]",
     () => engine.adjustCurrentScreenMasterCount(1)
   );
 
   kwin.registerShortcut(
-    "Tessera: Decrease Master Count",
-    "Remove one master window slot from active screen",
+    "Tessera: Decrease Primary Count",
+    "Remove one primary window slot from active screen",
     "Meta+[",
     () => engine.adjustCurrentScreenMasterCount(-1)
   );
 
-  // Master ratio adjustments
+  // Primary ratio adjustments
   kwin.registerShortcut(
-    "Tessera: Expand Master Area",
-    "Increase master pane width ratio on active screen",
+    "Tessera: Expand Primary Area",
+    "Increase primary pane width ratio on active screen",
     "Meta+L",
     () => engine.adjustCurrentScreenMasterRatio(0.05)
   );
 
   kwin.registerShortcut(
-    "Tessera: Shrink Master Area",
-    "Decrease master pane width ratio on active screen",
+    "Tessera: Shrink Primary Area",
+    "Decrease primary pane width ratio on active screen",
     "Meta+H",
     () => engine.adjustCurrentScreenMasterRatio(-0.05)
   );

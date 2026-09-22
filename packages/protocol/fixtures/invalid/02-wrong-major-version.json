@@ -1,0 +1,11 @@
+{
+  "expectedErrorCode": "UNSUPPORTED_MAJOR_VERSION",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 2,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-02",
+    "method": "state.getSnapshot"
+  }
+}

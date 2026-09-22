@@ -1,0 +1,12 @@
+{
+  "expectedErrorCode": "INVALID_ENVELOPE",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-10",
+    "method": "config.applyPatch",
+    "params": "should-be-an-object"
+  }
+}

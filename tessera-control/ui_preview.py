@@ -46,6 +46,13 @@ class LiveDesktopPreview(QWidget):
             self.anim.setEasingCurve(QEasingCurve.Linear)
 
     def update_params(self, layout_type, gap_inner, gap_outer, master_ratio, master_count, window_count=3):
+        if layout_type == "primary-stack":
+            layout_type = "master-stack"
+        elif layout_type == "balanced-grid":
+            layout_type = "grid"
+        elif layout_type == "binary-split":
+            layout_type = "bsp"
+
         self.layout_type = layout_type
         self.gap_inner = gap_inner
         self.gap_outer = gap_outer

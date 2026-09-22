@@ -1,0 +1,14 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "response",
+  "id": "resp-ack-replay",
+  "replyTo": "req-cfg-app-dup",
+  "ok": true,
+  "result": {
+    "acknowledged": true,
+    "commandId": "cmd-1",
+    "stateRevision": 2
+  }
+}

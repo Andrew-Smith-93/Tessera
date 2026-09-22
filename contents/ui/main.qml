@@ -3,8 +3,7 @@ import QtQuick.Layouts
 import org.kde.kwin
 import org.kde.plasma.core as PlasmaCore
 
-import "../code/layouts.js" as LayoutsModule
-import "../code/rules.js" as RulesModule
+import "../code/reconciler.js" as ReconcilerModule
 
 Item {
     id: root
@@ -14,36 +13,72 @@ Item {
     // =========================================================================
     property var config: ({
         enableTiling: true,
-        defaultLayout: "master-stack",
+        defaultLayout: "balanced-grid",
         gapInner: 8,
         gapOuter: 10,
-        masterRatio: 0.50,
-        masterCount: 1,
+        primaryRegionRatio: 0.50,
+        primaryRegionCount: 1,
+        reconcileDebounceMs: 60,
         perDesktopLayout: true,
         tileNewWindows: true,
         showOsd: true,
-        nvidiaDebounceMs: 60,
         smoothResize: false,
         ignoreMinimized: true,
+        gameWindowPolicy: "floating",
         floatFilter: "tessera,tessera-settings,tessera_settings.py",
         customRulesJson: "[]",
-        desktopLayoutsJson: "{}"
+        workspaceLayoutsJson: '{"version":1,"scopes":{}}'
     })
 
     // =========================================================================
     // 2. State Tracking
     // =========================================================================
-    property var desktopLayouts: ({})
-    property var floatingWindows: ({})   // windowId -> boolean (manual float)
-    property var preTiledWindows: ({})   // windowId -> boolean (single-window snap)
-    property var screenTiledWindows: ({}) // screenName -> array of windows
-    property var savedTiledGeometries: ({}) // windowId -> Qt.rect
-    property var savedMinimGeometries: ({}) // windowId -> Qt.rect
     property var wasDraggingMaximized: ({}) // windowId -> boolean
-    property var persistentScreenOrder: ({}) // screenName -> array of windowIds
-    property var currentLayoutList: ["master-stack", "bsp", "columns", "rows", "grid", "monocle", "floating"]
+    property var currentLayoutList: ["balanced-grid", "primary-stack", "binary-split", "columns", "rows", "monocle", "floating"]
     property bool isArranging: false
     property var currentDraggingWindow: null
+
+    // Runtime Mode: "reconciler" (single runtime authority)
+    property string runtimeMode: "reconciler"
+
+    function initRuntimeMode() {
+        runtimeMode = "reconciler";
+        log("Runtime mode initialized: reconciler (single authority)");
+    }
+
+    function getSavedTiledGeometry(wid) {
+        var coord = getCoordinator();
+        if (coord) {
+            var g = coord.getSavedTiledGeometry(wid);
+            if (g) return Qt.rect(g.x, g.y, g.width, g.height);
+        }
+        return null;
+    }
+
+    function setSavedTiledGeometry(wid, rect) {
+        if (!rect) return;
+        var coord = getCoordinator();
+        if (coord) {
+            coord.setSavedTiledGeometry(wid, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+        }
+    }
+
+    function getPreMinimizeGeometry(wid) {
+        var coord = getCoordinator();
+        if (coord) {
+            var g = coord.getPreMinimizeGeometry(wid);
+            if (g) return Qt.rect(g.x, g.y, g.width, g.height);
+        }
+        return null;
+    }
+
+    function setPreMinimizeGeometry(wid, rect) {
+        if (!rect) return;
+        var coord = getCoordinator();
+        if (coord) {
+            coord.setPreMinimizeGeometry(wid, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+        }
+    }
 
     function log(msg) {
         console.log("[Tessera] " + msg);
@@ -63,6 +98,25 @@ Item {
         if (!screens || screens.length === 0) return Workspace.activeScreen;
         var cx = rect.x + Math.floor((rect.width || 10) / 2);
         var cy = rect.y + Math.floor((rect.height || 10) / 2);
+
+        if (typeof ReconcilerModule !== "undefined" && ReconcilerModule.resolveCursorTargetScreen) {
+            var normScreens = [];
+            for (var s = 0; s < screens.length; s++) {
+                var scr = screens[s];
+                if (!scr) continue;
+                var a = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
+                normScreens.push(ReconcilerModule.toNormalizedScreen(scr, a));
+            }
+            if (normScreens.length > 0) {
+                var target = ReconcilerModule.resolveCursorTargetScreen(normScreens, { x: cx, y: cy }, getScreenName(Workspace.activeScreen));
+                for (var i = 0; i < screens.length; i++) {
+                    if (getScreenName(screens[i]) === target.outputId) {
+                        return screens[i];
+                    }
+                }
+            }
+        }
+
         for (var i = 0; i < screens.length; i++) {
             var a = Workspace.clientArea(KWin.MaximizeArea, screens[i], Workspace.currentDesktop);
             if (cx >= a.x && cx < a.x + a.width && cy >= a.y && cy < a.y + a.height) {
@@ -77,34 +131,48 @@ Item {
     // =========================================================================
     function loadConfig() {
         config.enableTiling = KWin.readConfig("enableTiling", true);
-        config.defaultLayout = KWin.readConfig("defaultLayout", "master-stack");
+        var readDefLayout = KWin.readConfig("defaultLayout", "balanced-grid");
+        if (readDefLayout === "master-stack") {
+            readDefLayout = "primary-stack";
+        }
+        config.defaultLayout = readDefLayout || "balanced-grid";
         config.gapInner = KWin.readConfig("gapInner", 8);
         config.gapOuter = KWin.readConfig("gapOuter", 10);
-        config.masterRatio = KWin.readConfig("masterRatio", 0.50);
-        config.masterCount = KWin.readConfig("masterCount", 1);
+        config.primaryRegionRatio = KWin.readConfig("primaryRegionRatio", KWin.readConfig("masterRatio", 0.50));
+        config.primaryRegionCount = KWin.readConfig("primaryRegionCount", KWin.readConfig("masterCount", 1));
+        config.reconcileDebounceMs = KWin.readConfig("reconcileDebounceMs", KWin.readConfig("nvidiaDebounceMs", 60));
         config.perDesktopLayout = KWin.readConfig("perDesktopLayout", true);
         config.tileNewWindows = KWin.readConfig("tileNewWindows", true);
         config.showOsd = KWin.readConfig("showOsd", true);
-        config.nvidiaDebounceMs = KWin.readConfig("nvidiaDebounceMs", 60);
-        config.overlayPollingMs = KWin.readConfig("overlayPollingMs", 16);
         config.smoothResize = KWin.readConfig("smoothResize", false);
         config.ignoreMinimized = KWin.readConfig("ignoreMinimized", true);
+        config.gameWindowPolicy = KWin.readConfig("gameWindowPolicy", "floating");
         config.floatFilter = KWin.readConfig("floatFilter", "tessera,tessera-settings,tessera_settings.py");
         config.customRulesJson = KWin.readConfig("customRulesJson", "[]");
-        config.desktopLayoutsJson = KWin.readConfig("desktopLayoutsJson", "{}");
-
-        try {
-            desktopLayouts = JSON.parse(config.desktopLayoutsJson || "{}");
-        } catch (e) {
-            desktopLayouts = {};
-        }
+        config.workspaceLayoutsJson = KWin.readConfig("workspaceLayoutsJson", '{"version":1,"scopes":{}}');
 
         var allWins = Workspace.stackingOrder || [];
         for (var i = 0; i < allWins.length; i++) {
             hookWindow(allWins[i]);
         }
+        if (coordinator) {
+            coordinator.updateConfig({
+                enableTiling: config.enableTiling,
+                defaultLayout: config.defaultLayout,
+                gapInner: config.gapInner,
+                gapOuter: config.gapOuter,
+                primaryRegionRatio: config.primaryRegionRatio,
+                primaryRegionCount: config.primaryRegionCount,
+                perDesktopLayout: config.perDesktopLayout,
+                ignoreMinimized: config.ignoreMinimized,
+                gameWindowPolicy: config.gameWindowPolicy || "floating",
+                floatFilter: config.floatFilter,
+                customRules: config.customRulesJson,
+                workspaceLayoutsJson: config.workspaceLayoutsJson
+            });
+        }
 
-        log("Config reloaded live: gaps=" + config.gapInner + "/" + config.gapOuter + " ratio=" + config.masterRatio + " tiling=" + config.enableTiling);
+        log("Config reloaded live: gaps=" + config.gapInner + "/" + config.gapOuter + " ratio=" + config.primaryRegionRatio + " tiling=" + config.enableTiling);
     }
 
     // Listen to KWin options.configChanged (fires on org.kde.KWin.reconfigure)
@@ -137,10 +205,6 @@ Item {
         return desk ? (desk.id || desk.name || desk.toString()) : "default";
     }
 
-    property var screenLayouts: ({})      // screenName:desktopKey -> layoutName
-    property var screenMasterRatios: ({}) // screenName -> master ratio
-    property var screenMasterCounts: ({}) // screenName -> master count
-
     function getCurrentTargetScreen() {
         // 1. First priority: Screen containing the mouse cursor (where user is physically interacting)
         var curPos = Workspace.cursorPos;
@@ -165,15 +229,29 @@ Item {
 
     function getActiveLayout(screen) {
         var scr = screen || getCurrentTargetScreen();
-        var key = getLayoutKey(scr);
-        return screenLayouts[key] || desktopLayouts[getCurrentDesktopKey()] || config.defaultLayout || "master-stack";
+        var sName = getScreenName(scr);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (coord) {
+            var ws = coord.getOrCreateWorkspace(sName, deskKey);
+            return ws.activeLayout || config.defaultLayout || "balanced-grid";
+        }
+        return config.defaultLayout || "balanced-grid";
     }
 
     function setActiveLayout(layoutName, screen) {
         var scr = screen || getCurrentTargetScreen();
-        var key = getLayoutKey(scr);
-        screenLayouts[key] = layoutName;
-        desktopLayouts[getCurrentDesktopKey()] = layoutName;
+        var sName = getScreenName(scr);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (coord) {
+            coord.ingestEvent({
+                type: "WorkspaceLayoutChanged",
+                outputId: sName,
+                desktopId: deskKey,
+                layout: layoutName
+            });
+        }
         var sLabel = scr ? (scr.name || "Screen") : "Screen";
         osdCall.notify(sLabel + " Layout: " + layoutName.toUpperCase(), "preferences-desktop-virtual");
         retileNow();
@@ -210,209 +288,231 @@ Item {
 
     function checkFilter(w) {
         if (!w) return false;
-        if (!w.managed) return false;
-
-        // Skip non-normal system surfaces (wallpaper, docks/panels, notifications)
-        if (w.desktopWindow || w.dock || w.splash || w.notification || w.onScreenDisplay) {
-            return false;
+        var coord = getCoordinator();
+        if (coord) {
+            var ret = coord.getRetainedWindow(getWindowId(w));
+            if (ret) return ret.tileable;
         }
-        if (w.popupMenu || w.tooltip || w.specialWindow) {
-            return false;
-        }
-
-        // Only Tessera Control Center itself floats by default
-        var rClass = w.resourceClass ? w.resourceClass.toString().toLowerCase() : "";
-        var caption = w.caption ? w.caption.toString().toLowerCase() : "";
-        if (rClass.indexOf("tessera") !== -1 || caption.indexOf("tessera control center") !== -1) {
-            return false;
-        }
-
-        // Check custom rules if explicitly defined by user
-        if (config.customRulesJson && config.customRulesJson !== "[]") {
-            try {
-                var rules = JSON.parse(config.customRulesJson);
-                for (var r = 0; r < rules.length; r++) {
-                    var rule = rules[r];
-                    if (rule.matchType === "class" && rClass.indexOf(rule.pattern.toLowerCase()) !== -1) {
-                        return rule.action !== "float";
-                    }
-                    if (rule.matchType === "title" && caption.indexOf(rule.pattern.toLowerCase()) !== -1) {
-                        return rule.action !== "float";
-                    }
-                }
-            } catch (e) {}
-        }
-
-        // Everything else tiles (System Settings, pavucontrol, kcalc, steam, dialogs, etc.)
         return true;
     }
 
-    function getTileableWindows(screen) {
-        var allWindows = Workspace.stackingOrder || [];
-        var tileables = [];
-        var sName = getScreenName(screen);
+    // =========================================================================
+    // 5. Retained Coordinator & Coalesced Reconciliation Pipeline
+    // =========================================================================
+    property var coordinator: null
 
-        for (var i = 0; i < allWindows.length; i++) {
-            var w = allWindows[i];
-            if (!w || !checkFilter(w)) continue;
-            if (!isWindowOnCurrentDesktop(w)) continue;
-
-            // Check screen affinity by actual physical center coordinates (never stale w.output)
-            var wScreen = getScreenForPos(w.frameGeometry);
-            if (sName && getScreenName(wScreen) !== sName) continue;
-
-            var wid = getWindowId(w);
-            if (floatingWindows[wid] === true) continue;
-
-            if (config.ignoreMinimized && w.minimized) continue;
-
-            tileables.push(w);
+    function getCoordinator() {
+        if (!coordinator && typeof ReconcilerModule !== "undefined" && ReconcilerModule.ReconcilerBridge) {
+            coordinator = ReconcilerModule.ReconcilerBridge.createCoordinator({
+                enableTiling: config.enableTiling,
+                defaultLayout: config.defaultLayout,
+                gapInner: config.gapInner,
+                gapOuter: config.gapOuter,
+                primaryRegionRatio: config.primaryRegionRatio,
+                primaryRegionCount: config.primaryRegionCount,
+                perDesktopLayout: config.perDesktopLayout,
+                ignoreMinimized: config.ignoreMinimized,
+                gameWindowPolicy: config.gameWindowPolicy || "floating",
+                floatFilter: config.floatFilter,
+                customRules: config.customRulesJson,
+                workspaceLayoutsJson: config.workspaceLayoutsJson
+            });
         }
-
-        // Maintain persistent slot order per screen so windows NEVER swap on minimize/restore!
-        var persistentOrder = persistentScreenOrder[sName] || [];
-        var newOrder = [];
-
-        var activeIds = [];
-        for (var a = 0; a < tileables.length; a++) {
-            activeIds.push(getWindowId(tileables[a]));
-        }
-
-        // 1. Keep existing persistent order for windows that are currently on this screen
-        var prunedPersistent = [];
-        for (var p = 0; p < persistentOrder.length; p++) {
-            var pWid = persistentOrder[p];
-            var found = false;
-            for (var t = 0; t < tileables.length; t++) {
-                if (getWindowId(tileables[t]) === pWid) {
-                    newOrder.push(tileables[t]);
-                    found = true;
-                    break;
-                }
-            }
-            if (found || (savedMinimGeometries[pWid] && getScreenName(getScreenForPos(savedMinimGeometries[pWid])) === sName)) {
-                prunedPersistent.push(pWid);
-            }
-        }
-        persistentOrder = prunedPersistent;
-
-        // 2. Add any brand-new windows that arrived on this screen
-        for (var t2 = 0; t2 < tileables.length; t2++) {
-            if (newOrder.indexOf(tileables[t2]) === -1) {
-                newOrder.push(tileables[t2]);
-                var tWid = getWindowId(tileables[t2]);
-                if (persistentOrder.indexOf(tWid) === -1) {
-                    persistentOrder.push(tWid);
-                }
-                // Purge this window from any other screen's persistent list
-                for (var oScr in persistentScreenOrder) {
-                    if (oScr !== sName) {
-                        var oList = persistentScreenOrder[oScr] || [];
-                        var oIdx = oList.indexOf(tWid);
-                        if (oIdx !== -1) {
-                            oList.splice(oIdx, 1);
-                            persistentScreenOrder[oScr] = oList;
-                        }
-                    }
-                }
-            }
-        }
-
-        persistentScreenOrder[sName] = persistentOrder;
-        screenTiledWindows[sName] = newOrder;
-        return newOrder;
+        return coordinator;
     }
 
-    // =========================================================================
-    // 5. Layout Calculation & Geometry Application
-    // =========================================================================
-    function retileNow() {
-        if (!config.enableTiling || isArranging) return;
-        isArranging = true;
+    Timer {
+        id: reconcileTimer
+        interval: Math.max(0, config.reconcileDebounceMs || 0)
+        repeat: false
+        running: false
+        onTriggered: {
+            performReconciliation();
+        }
+    }
 
+    function scheduleReconcile(reason, targetScreenName) {
+        var coord = getCoordinator();
+        if (coord && reason) {
+            if (targetScreenName && targetScreenName !== "default") {
+                coord.markScreenDirty(targetScreenName, reason);
+            } else {
+                coord.invalidateAllScreens(reason);
+            }
+        }
+        if (!reconcileTimer.running) {
+            reconcileTimer.start();
+        }
+    }
+
+    function commitWindowGeometry(win, targetRect, reason, epoch) {
+        if (!win || !targetRect) return { outcome: "rejected", normalized: null };
+
+        var coord = getCoordinator();
+        if (!coord) {
+            return { outcome: "rejected", normalized: null };
+        }
+
+        var targetScr = getScreenForPos(targetRect) || win.output || (win.frameGeometry ? getScreenForPos(win.frameGeometry) : null);
+        var bounds = targetScr ? Workspace.clientArea(KWin.MaximizeArea, targetScr, Workspace.currentDesktop) : null;
+        var evalResult = ReconcilerModule.ReconcilerBridge.evaluateCommitGeometry(win, targetRect, bounds);
+        if (evalResult.outcome === "rejected") {
+            return { outcome: "rejected", normalized: null };
+        }
+        if (evalResult.outcome === "unchanged-valid") {
+            return { outcome: "unchanged-valid", normalized: evalResult.normalized };
+        }
+
+        var normalized = evalResult.normalized;
+        var wid = getWindowId(win);
         try {
-            var screens = Workspace.screens || [Workspace.activeScreen];
+            coord.recordCommand(wid, normalized, epoch || 0);
+            win.frameGeometry = Qt.rect(normalized.x, normalized.y, normalized.width, normalized.height);
+            return { outcome: "applied", normalized: normalized };
+        } catch (err) {
+            coord.clearRecordedCommand(wid);
+            return { outcome: "rejected", normalized: null };
+        }
+    }
 
-            for (var s = 0; s < screens.length; s++) {
-                var screen = screens[s];
-                if (!screen) continue;
+    function synchronizeScreenTopology(coord) {
+        if (!coord) return;
+        var screens = Workspace.screens || [Workspace.activeScreen];
+        var normScreens = [];
+        for (var s = 0; s < screens.length; s++) {
+            var scr = screens[s];
+            if (!scr) continue;
+            var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
+            if (!area || area.width <= 0 || area.height <= 0) continue;
+            normScreens.push(ReconcilerModule.ReconcilerBridge.toNormalizedScreen(scr, area, Workspace.currentDesktop, Workspace.currentActivity));
+        }
+        coord.ingestEvent({
+            type: "ScreenTopologyChanged",
+            screens: normScreens
+        });
+        for (var i = 0; i < normScreens.length; i++) {
+            var retScr = coord.getOrCreateScreen(normScreens[i]);
+            if (retScr) {
+                retScr.gaps = { inner: config.gapInner, outer: config.gapOuter };
+            }
+        }
+    }
 
-                var area = Workspace.clientArea(KWin.MaximizeArea, screen, Workspace.currentDesktop);
-                if (!area || area.width <= 0 || area.height <= 0) continue;
+    function performReconciliation() {
+        if (!config.enableTiling || isArranging) return;
 
-                var layoutName = getActiveLayout(screen);
-                if (layoutName === "floating") continue;
+        var coord = getCoordinator();
+        if (!coord) {
+            log("Warning: coordinator unavailable in reconciler mode");
+            return;
+        }
 
-                var windows = getTileableWindows(screen);
-                if (windows.length === 0) continue;
+        // 1. Synchronize screen topology with coordinator
+        synchronizeScreenTopology(coord);
 
-                var sName = getScreenName(screen);
-                var effectiveRatio = screenMasterRatios[sName] !== undefined ? screenMasterRatios[sName] : config.masterRatio;
-                var effectiveCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
+        // 2. Synchronize active windows into coordinator retained records
+        var allWins = Workspace.stackingOrder || [];
+        for (var wIdx = 0; wIdx < allWins.length; wIdx++) {
+            var winObj = allWins[wIdx];
+            if (!winObj || !winObj.managed || !winObj.normalWindow) continue;
+            var wid = getWindowId(winObj);
+            var wScr = winObj.output || getScreenForPos(winObj.frameGeometry);
+            var wArea = wScr ? Workspace.clientArea(KWin.MaximizeArea, wScr, Workspace.currentDesktop) : null;
+            var normWin = ReconcilerModule.ReconcilerBridge.toNormalizedWindow(winObj, wScr, wArea);
+            normWin.isManualFloating = coord.isManualFloating(wid);
+            normWin.isDragging = (winObj === currentDraggingWindow);
 
-                var options = {
-                    gapInner: config.gapInner,
-                    gapOuter: config.gapOuter,
-                    masterRatio: effectiveRatio,
-                    masterCount: effectiveCount
-                };
+            var retained = coord.getRetainedWindow(wid);
+            if (!retained) {
+                coord.ingestEvent({ type: "WindowDiscovered", window: normWin });
+            } else {
+                if (normWin.outputId && retained.outputId !== normWin.outputId) {
+                    coord.ingestEvent({
+                        type: "WindowMovedOutput",
+                        windowId: wid,
+                        fromOutputId: retained.outputId,
+                        toOutputId: normWin.outputId
+                    });
+                }
+                coord.ingestEvent({
+                    type: "WindowStateChanged",
+                    windowId: wid,
+                    updates: {
+                        minimized: winObj.minimized,
+                        fullScreen: winObj.fullScreen,
+                        noBorder: winObj.noBorder,
+                        maximizeMode: winObj.maximizeMode,
+                        isManualFloating: normWin.isManualFloating,
+                        isDragging: normWin.isDragging,
+                        frameGeometry: normWin.frameGeometry
+                    }
+                });
+            }
+        }
 
-                var rects = [];
-                switch (layoutName) {
-                    case "master-stack":
-                        rects = LayoutsModule.Layouts.masterStack(area, windows.length, options);
+        // 3. Plan and compute reconciliation transaction
+        var tx = coord.reconcile();
+        if (!tx || tx.operations.length === 0) {
+            return;
+        }
+
+        var diag = coord.getDiagnostics();
+        log("Reconciliation tx: ops=" + tx.operations.length + " reasons=" + (diag.lastTransactionReasons.join(",") || "none") + " totalTx=" + diag.totalReconciliationTransactions + " totalWrites=" + diag.totalGeometryWrites + " skippedWrites=" + diag.skippedIdenticalWrites + " suppressedEchoes=" + diag.suppressedGeometryEchoes + " retainedWins=" + diag.retainedWindowCount + " retainedScreens=" + diag.retainedScreenCount);
+
+        // 4. Apply only changed geometries with feedback protection
+        isArranging = true;
+        try {
+            for (var opIdx = 0; opIdx < tx.operations.length; opIdx++) {
+                var op = tx.operations[opIdx];
+                var targetWin = null;
+                for (var f = 0; f < allWins.length; f++) {
+                    if (getWindowId(allWins[f]) === op.windowId) {
+                        targetWin = allWins[f];
                         break;
-                    case "bsp":
-                        rects = LayoutsModule.Layouts.binarySplit(area, windows.length, options);
-                        break;
-                    case "columns":
-                        rects = LayoutsModule.Layouts.columns(area, windows.length, options);
-                        break;
-                    case "rows":
-                        rects = LayoutsModule.Layouts.rows(area, windows.length, options);
-                        break;
-                    case "grid":
-                        rects = LayoutsModule.Layouts.balancedGrid(area, windows.length, options);
-                        break;
-                    case "monocle":
-                        rects = LayoutsModule.Layouts.monocle(area, windows.length, options);
-                        break;
-                    default:
-                        rects = LayoutsModule.Layouts.masterStack(area, windows.length, options);
-                        break;
+                    }
+                }
+                if (!targetWin) continue;
+                if (targetWin === currentDraggingWindow) continue;
+
+                if (targetWin.maximizeMode !== 0) {
+                    continue;
                 }
 
-                for (var w = 0; w < windows.length && w < rects.length; w++) {
-                    var win = windows[w];
-                    var r = rects[w];
+                var opWid = op.windowId;
+                if (allWins.length === 1 && coord.isPreTiled(opWid)) {
+                    continue;
+                }
 
-                    if (win === currentDraggingWindow) continue;
-
-                    var wid = getWindowId(win);
-                    savedTiledGeometries[wid] = Qt.rect(r.x, r.y, r.width, r.height);
-
-                    // If the window is currently MAXIMIZED:
-                    if (win.maximizeMode !== 0) {
-                        // Allow the window to stay maximized peacefully!
-                        // The background windows are tiled cleanly in their zones.
-                        // Its designated tiled slot in the active layout is tracked in
-                        // savedTiledGeometries[wid], so when it unmaximizes it goes right to where it needs to go!
-                        continue;
-                    }
-
-                    // Single pre-tiled window preservation
-                    if (windows.length === 1 && preTiledWindows[wid] === true) {
-                        continue;
-                    }
-
-                    win.frameGeometry = Qt.rect(r.x, r.y, r.width, r.height);
+                var reconResult = commitWindowGeometry(targetWin, op.targetRect, "reconciliation", op.epoch);
+                if (reconResult.outcome !== "rejected" && reconResult.normalized) {
+                    setSavedTiledGeometry(opWid, reconResult.normalized);
+                    coord.setPreTiled(opWid, false);
                 }
             }
         } catch (err) {
-            log("Retile error: " + err);
+            log("Reconciliation error: internal_failure");
         } finally {
             isArranging = false;
         }
+    }
+
+    function retileScreen() {
+        performReconciliation();
+    }
+
+    function retileNow(targetScreenName) {
+        var coord = getCoordinator();
+        if (coord) {
+            if (targetScreenName && targetScreenName !== "default") {
+                coord.markScreenDirty(targetScreenName, "RetileNow");
+            } else {
+                coord.invalidateAllScreens("RetileNow");
+            }
+        }
+        if (reconcileTimer.running) {
+            reconcileTimer.stop();
+        }
+        performReconciliation();
     }
 
     // =========================================================================
@@ -461,6 +561,11 @@ Item {
             var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
             activeScreenGeom = area;
 
+            if (typeof ReconcilerModule !== "undefined" && ReconcilerModule.computeSnapZones) {
+                snapZones = ReconcilerModule.computeSnapZones(area, config.gapOuter, config.gapInner);
+                return;
+            }
+
             var go = config.gapOuter;
             var gi = config.gapInner;
             var uw = area.width - (go * 2);
@@ -489,11 +594,11 @@ Item {
                 triggerH: 66
             });
 
-            // 2. Left Half (Master Slot)
+            // 2. Left Half (Primary Slot)
             zones.push({
                 type: "half",
                 id: "left-half",
-                title: "Left Half (Master)",
+                title: "Left Half (Primary)",
                 badge: "⊞ Left Split",
                 desc: "50% Primary Pane",
                 slotIndex: 0,
@@ -544,7 +649,7 @@ Item {
                 title: "Bottom-Left Quarter",
                 badge: "◣ Bottom-Left",
                 desc: "25% Quadrant",
-                slotIndex: 0,
+                slotIndex: 3,
                 rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
                 targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
                 triggerX: area.x,
@@ -576,7 +681,7 @@ Item {
                 title: "Bottom-Right Quarter",
                 badge: "◢ Bottom-Right",
                 desc: "25% Quadrant",
-                slotIndex: 1,
+                slotIndex: 2,
                 rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
                 targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
                 triggerX: area.x + Math.floor(area.width * 0.78),
@@ -598,40 +703,43 @@ Item {
             }
 
             var matchedIndex = -1;
-
-            // 1. Check corner quarters first (higher priority in corners)
-            for (var i = 3; i < snapZones.length; i++) {
-                var qz = snapZones[i];
-                if (cursorPos.x >= qz.triggerX && cursorPos.x < qz.triggerX + qz.triggerW &&
-                    cursorPos.y >= qz.triggerY && cursorPos.y < qz.triggerY + qz.triggerH) {
-                    matchedIndex = i;
-                    break;
-                }
-            }
-
-            // 2. Check top maximize bar
-            if (matchedIndex === -1 && snapZones.length > 0) {
-                var mz = snapZones[0];
-                if (cursorPos.x >= mz.triggerX && cursorPos.x < mz.triggerX + mz.triggerW &&
-                    cursorPos.y >= mz.triggerY && cursorPos.y < mz.triggerY + mz.triggerH) {
-                    matchedIndex = 0;
-                }
-            }
-
-            // 3. Check Left/Right halves
-            if (matchedIndex === -1) {
-                if (snapZones.length > 1) {
-                    var lz = snapZones[1];
-                    if (cursorPos.x >= lz.triggerX && cursorPos.x < lz.triggerX + lz.triggerW &&
-                        cursorPos.y >= lz.triggerY && cursorPos.y < lz.triggerY + lz.triggerH) {
-                        matchedIndex = 1;
+            if (typeof ReconcilerModule !== "undefined" && ReconcilerModule.matchSnapZoneHover) {
+                matchedIndex = ReconcilerModule.matchSnapZoneHover(snapZones, cursorPos);
+            } else {
+                // 1. Check corner quarters first (higher priority in corners)
+                for (var i = 3; i < snapZones.length; i++) {
+                    var qz = snapZones[i];
+                    if (cursorPos.x >= qz.triggerX && cursorPos.x < qz.triggerX + qz.triggerW &&
+                        cursorPos.y >= qz.triggerY && cursorPos.y < qz.triggerY + qz.triggerH) {
+                        matchedIndex = i;
+                        break;
                     }
                 }
-                if (snapZones.length > 2 && matchedIndex === -1) {
-                    var rz = snapZones[2];
-                    if (cursorPos.x >= rz.triggerX && cursorPos.x < rz.triggerX + rz.triggerW &&
-                        cursorPos.y >= rz.triggerY && cursorPos.y < rz.triggerY + rz.triggerH) {
-                        matchedIndex = 2;
+
+                // 2. Check top maximize bar
+                if (matchedIndex === -1 && snapZones.length > 0) {
+                    var mz = snapZones[0];
+                    if (cursorPos.x >= mz.triggerX && cursorPos.x < mz.triggerX + mz.triggerW &&
+                        cursorPos.y >= mz.triggerY && cursorPos.y < mz.triggerY + mz.triggerH) {
+                        matchedIndex = 0;
+                    }
+                }
+
+                // 3. Check Left/Right halves
+                if (matchedIndex === -1) {
+                    if (snapZones.length > 1) {
+                        var lz = snapZones[1];
+                        if (cursorPos.x >= lz.triggerX && cursorPos.x < lz.triggerX + lz.triggerW &&
+                            cursorPos.y >= lz.triggerY && cursorPos.y < lz.triggerY + lz.triggerH) {
+                            matchedIndex = 1;
+                        }
+                    }
+                    if (snapZones.length > 2 && matchedIndex === -1) {
+                        var rz = snapZones[2];
+                        if (cursorPos.x >= rz.triggerX && cursorPos.x < rz.triggerX + rz.triggerW &&
+                            cursorPos.y >= rz.triggerY && cursorPos.y < rz.triggerY + rz.triggerH) {
+                            matchedIndex = 2;
+                        }
                     }
                 }
             }
@@ -654,29 +762,8 @@ Item {
         // Live preview of prospective window layout
         function previewProspectiveLayout(draggedWin, targetZone) {
             if (!draggedWin || !targetZone || isArranging) return;
-            var scr = draggedWin.output || getScreenForPos(draggedWin.frameGeometry);
-            var tiled = getTileableWindows(scr);
-            if (tiled.length <= 1) return;
-
-            var area = activeScreenGeom;
-            var go = config.gapOuter;
-            var gi = config.gapInner;
-            var uw = area.width - (go * 2);
-            var uh = area.height - (go * 2);
-            var hw = Math.floor((uw - gi) / 2);
-
-            for (var i = 0; i < tiled.length; i++) {
-                var other = tiled[i];
-                if (other === draggedWin) continue;
-
-                if (targetZone.id === "left-half") {
-                    // dragged window will take left half; other window previews on right half
-                    other.frameGeometry = Qt.rect(area.x + go + hw + gi, area.y + go, uw - hw - gi, uh);
-                } else if (targetZone.id === "right-half") {
-                    // dragged window will take right half; other window previews on left half
-                    other.frameGeometry = Qt.rect(area.x + go, area.y + go, hw, uh);
-                }
-            }
+            // The visual snap overlay card clearly indicates the target placement.
+            // Windows are reconciled authoritatively by the coordinator on commit.
         }
 
         // =====================================================================
@@ -869,490 +956,348 @@ Item {
         }
     }
 
-    // =========================================================================
-    // 6b. Live Master Windows & Screen Configuration HUD (Testing & On-The-Fly)
-    // =========================================================================
-    PlasmaCore.Dialog {
-        id: masterHudDialog
 
-        title: "Tessera Master Configuration"
-        location: PlasmaCore.Types.Desktop
-        type: PlasmaCore.Dialog.OnScreenDisplay
-        backgroundHints: PlasmaCore.Types.NoBackground
-        flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint | Qt.Popup
-        hideOnWindowDeactivate: false
-        visible: false
-        outputOnly: true
-        width: 440
-        height: 220
-
-        property string screenLabel: "Screen"
-        property int masterCountVal: 1
-        property string layoutVal: "MASTER-STACK"
-        property var targetArea: Qt.rect(0, 0, 1920, 1080)
-
-        function popup(scr, count) {
-            var targetScr = scr || getCurrentTargetScreen();
-            var sName = getScreenName(targetScr);
-            var area = Workspace.clientArea(KWin.MaximizeArea, targetScr, Workspace.currentDesktop);
-            targetArea = area;
-            screenLabel = sName;
-            masterCountVal = count;
-            layoutVal = getActiveLayout(targetScr).toUpperCase();
-
-            x = area.x + Math.floor((area.width - width) / 2);
-            y = area.y + Math.floor((area.height - height) / 2);
-            visible = true;
-
-            hudDismissTimer.restart();
-        }
-
-        mainItem: Rectangle {
-            id: hudRootRect
-            implicitWidth: 440
-            implicitHeight: 220
-            radius: 12
-            color: Qt.rgba(0.09, 0.11, 0.14, 0.95)
-            border.color: "#3daee9"
-            border.width: 2
-
-            Timer {
-                id: hudDismissTimer
-                interval: 2400
-                repeat: false
-                onTriggered: masterHudDialog.visible = false
-            }
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 10
-
-                // Header with Screen Name and Layout
-                RowLayout {
-                    Layout.fillWidth: true
-                    Text {
-                        text: "🖥️ " + masterHudDialog.screenLabel
-                        color: "#3daee9"
-                        font.bold: true
-                        font.pixelSize: 16
-                    }
-                    Item { Layout.fillWidth: true }
-                    Rectangle {
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.25)
-                        radius: 4
-                        implicitWidth: layoutText.implicitWidth + 12
-                        implicitHeight: 22
-                        Text {
-                            id: layoutText
-                            anchors.centerIn: parent
-                            text: masterHudDialog.layoutVal
-                            color: "#ffffff"
-                            font.bold: true
-                            font.pixelSize: 11
-                        }
-                    }
-                }
-
-                // Master Count Value
-                RowLayout {
-                    Layout.alignment: Qt.AlignHCenter
-                    spacing: 10
-                    Text {
-                        text: "Master Windows:"
-                        color: "#cfd6df"
-                        font.pixelSize: 15
-                    }
-                    Rectangle {
-                        color: "#3daee9"
-                        radius: 6
-                        implicitWidth: masterHudDialog.masterCountVal === 0 ? 120 : 36
-                        implicitHeight: 28
-                        Text {
-                            anchors.centerIn: parent
-                            text: masterHudDialog.masterCountVal === 0 ? "0 (Balanced Grid)" : masterHudDialog.masterCountVal.toString()
-                            color: "#000000"
-                            font.bold: true
-                            font.pixelSize: masterHudDialog.masterCountVal === 0 ? 11 : 18
-                        }
-                    }
-                }
-
-                // Mini Layout Preview Diagram (Master-Stack when masterCount > 0)
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 8
-                    visible: masterHudDialog.masterCountVal > 0
-
-                    // Master column box
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.20)
-                        border.color: "#3daee9"
-                        border.width: 1
-                        radius: 6
-
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            spacing: 4
-                            Repeater {
-                                model: Math.min(4, masterHudDialog.masterCountVal)
-                                delegate: Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    color: Qt.rgba(0.24, 0.68, 0.91, 0.40)
-                                    radius: 3
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "Master " + (index + 1)
-                                        color: "#ffffff"
-                                        font.pixelSize: 10
-                                        font.bold: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Stack column box
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(1, 1, 1, 0.06)
-                        border.color: Qt.rgba(1, 1, 1, 0.15)
-                        border.width: 1
-                        radius: 6
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            spacing: 4
-                            Repeater {
-                                model: 2
-                                delegate: Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    color: Qt.rgba(1, 1, 1, 0.10)
-                                    radius: 3
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "Stack " + (index + 1)
-                                        color: "#80ffffff"
-                                        font.pixelSize: 10
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Balanced Grid Preview Diagram (Shown when 0 masters)
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: 8
-                    visible: masterHudDialog.masterCountVal === 0
-
-                    // Left End: 2 horizontal splits
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.15)
-                        border.color: "#3daee9"
-                        border.width: 1
-                        radius: 6
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            spacing: 4
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
-                                radius: 3
-                                Text { anchors.centerIn: parent; text: "1 (Left Top)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
-                                radius: 3
-                                Text { anchors.centerIn: parent; text: "2 (Left Btm)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
-                            }
-                        }
-                    }
-
-                    // Center Stack / Column
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.25)
-                        border.color: "#3daee9"
-                        border.width: 1
-                        radius: 6
-                        Text { anchors.centerIn: parent; text: "3 (Center Stack)"; color: "#3daee9"; font.pixelSize: 10; font.bold: true }
-                    }
-
-                    // Right End: 2 horizontal splits
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        color: Qt.rgba(0.24, 0.68, 0.91, 0.15)
-                        border.color: "#3daee9"
-                        border.width: 1
-                        radius: 6
-                        ColumnLayout {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            spacing: 4
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
-                                radius: 3
-                                Text { anchors.centerIn: parent; text: "4 (Right Top)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                color: Qt.rgba(0.24, 0.68, 0.91, 0.35)
-                                radius: 3
-                                Text { anchors.centerIn: parent; text: "5 (Right Btm)"; color: "#ffffff"; font.pixelSize: 9; font.bold: true }
-                            }
-                        }
-                    }
-                }
-
-                Text {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: "Ctrl+Shift+I (Increase) / Ctrl+Shift+O (Decrease)"
-                    color: "#8090a0"
-                    font.pixelSize: 10
-                }
-            }
-        }
-    }
 
     // =========================================================================
     // 7. Window Event Hooks
     // =========================================================================
+    function unhookWindow(w) {
+        if (!w || !w._tesseraHooks) return;
+        try {
+            var h = w._tesseraHooks;
+            if (w.interactiveMoveResizeStarted && h.started) w.interactiveMoveResizeStarted.disconnect(h.started);
+            if (w.interactiveMoveResizeStepped && h.stepped) w.interactiveMoveResizeStepped.disconnect(h.stepped);
+            if (w.interactiveMoveResizeFinished && h.finished) w.interactiveMoveResizeFinished.disconnect(h.finished);
+            if (w.minimizedChanged && h.minimized) w.minimizedChanged.disconnect(h.minimized);
+            if (w.frameGeometryChanged && h.geom) w.frameGeometryChanged.disconnect(h.geom);
+            if (w.fullScreenChanged && h.fullScreen) w.fullScreenChanged.disconnect(h.fullScreen);
+            if (w.maximizedAboutToChange && h.maxAbout) w.maximizedAboutToChange.disconnect(h.maxAbout);
+            if (w.maximizedChanged && h.maxChanged) w.maximizedChanged.disconnect(h.maxChanged);
+            if (w.noBorderChanged && h.noBorder) w.noBorderChanged.disconnect(h.noBorder);
+            if (w.outputChanged && h.output) w.outputChanged.disconnect(h.output);
+            if (w.desktopsChanged && h.desktops) w.desktopsChanged.disconnect(h.desktops);
+            if (w.activitiesChanged && h.activities) w.activitiesChanged.disconnect(h.activities);
+        } catch (e) {
+            // Ignore if already disconnected or window destroyed
+        }
+        delete w._tesseraHooks;
+        delete w._tesseraHooked;
+    }
+
     function hookWindow(w) {
         if (!w || !w.managed || !w.normalWindow) return;
-        if (w._tesseraHooked) return;
+        if (w._tesseraHooks) {
+            unhookWindow(w);
+        }
         w._tesseraHooked = true;
 
-        if (w.interactiveMoveResizeStarted) {
-            w.interactiveMoveResizeStarted.connect(function() {
-                if (w.move && checkFilter(w)) {
-                    currentDraggingWindow = w;
-                    var wid = getWindowId(w);
-                    if (w.maximizeMode !== 0) {
-                        wasDraggingMaximized[wid] = true;
+        var hooks = {};
+
+        var onMoveResizeStarted = function() {
+            if (!root || !root.coordinator) return;
+            if (w.move && checkFilter(w)) {
+                currentDraggingWindow = w;
+                var wid = getWindowId(w);
+                if (w.maximizeMode !== 0) {
+                    wasDraggingMaximized[wid] = true;
+                    if (typeof w.setMaximize === "function") {
+                        w.setMaximize(false, false);
+                    }
+                    var curPos = Workspace.cursorPos;
+                    var targetW = 800;
+                    var targetH = 600;
+                    var saved = getSavedTiledGeometry(wid);
+                    if (saved && saved.width > 100) {
+                        targetW = saved.width;
+                        targetH = saved.height;
+                    }
+                    var newX = Math.round(curPos.x - (targetW / 2));
+                    var newY = Math.max(0, curPos.y - 15);
+                    commitWindowGeometry(w, { x: newX, y: newY, width: targetW, height: targetH }, "drag_start");
+                } else {
+                    wasDraggingMaximized[wid] = false;
+                }
+                var isFromMaximized = !!wasDraggingMaximized[wid];
+                log("Drag started" + (isFromMaximized ? " (from maximized)" : ""));
+                if (overlayDialog) overlayDialog.showOverlay(w);
+            }
+        };
+
+        var onMoveResizeStepped = function() {
+            if (!root || !root.coordinator) return;
+            if (overlayDialog && overlayDialog.visible && currentDraggingWindow === w) {
+                overlayDialog.updateHover(Workspace.cursorPos);
+            }
+        };
+
+        var onMoveResizeFinished = function() {
+            if (!root || !root.coordinator) return;
+            if (currentDraggingWindow === w) {
+                log("Drag finished");
+                var wid = getWindowId(w);
+                var target = overlayDialog ? overlayDialog.finishDrag() : null;
+                if (target) {
+                    if (target.type === "maximize") {
+                        if (typeof w.setMaximize === "function") {
+                            w.setMaximize(true, true);
+                        }
+                        if (coordinator) {
+                            coordinator.setManualFloating(wid, false);
+                        }
+                        osdCall.notify("Maximized", "preferences-system-windows");
+                    } else {
                         if (typeof w.setMaximize === "function") {
                             w.setMaximize(false, false);
                         }
-                        var curPos = Workspace.cursorPos;
-                        var targetW = 800;
-                        var targetH = 600;
-                        if (savedTiledGeometries[wid] && savedTiledGeometries[wid].width > 100) {
-                            targetW = savedTiledGeometries[wid].width;
-                            targetH = savedTiledGeometries[wid].height;
-                        }
-                        var newX = Math.round(curPos.x - (targetW / 2));
-                        var newY = Math.max(0, curPos.y - 15);
-                        w.frameGeometry = Qt.rect(newX, newY, targetW, targetH);
-                    } else {
-                        wasDraggingMaximized[wid] = false;
-                    }
-                    log("Drag started: " + w.caption + (wasDraggingMaximized[wid] ? " (from maximized)" : ""));
-                    overlayDialog.showOverlay(w);
-                }
-            });
-        }
-
-        if (w.interactiveMoveResizeStepped) {
-            w.interactiveMoveResizeStepped.connect(function() {
-                if (overlayDialog.visible && currentDraggingWindow === w) {
-                    overlayDialog.updateHover(Workspace.cursorPos);
-                } else if (w.resize && checkFilter(w)) {
-                    // On-the-fly desktop master resizing!
-                    var scr = w.output || getScreenForPos(w.frameGeometry);
-                    var sName = getScreenName(scr);
-                    var tiled = getTileableWindows(scr);
-                    if (tiled.length > 1 && tiled[0] === w && getActiveLayout(scr) === "master-stack") {
-                        var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
-                        var usableW = area.width - (config.gapOuter * 2);
-                        if (usableW > 0) {
-                            var liveRatio = Math.max(0.20, Math.min(0.80, w.frameGeometry.width / usableW));
-                            screenMasterRatios[sName] = Math.round(liveRatio * 100) / 100;
-                            retileNow();
-                        }
-                    }
-                }
-            });
-        }
-
-        if (w.interactiveMoveResizeFinished) {
-            w.interactiveMoveResizeFinished.connect(function() {
-                if (w.resize && checkFilter(w)) {
-                    var scr = w.output || getScreenForPos(w.frameGeometry);
-                    var sName = getScreenName(scr);
-                    var tiled = getTileableWindows(scr);
-                    if (tiled.length > 1 && tiled[0] === w && getActiveLayout(scr) === "master-stack") {
-                        var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
-                        var usableW = area.width - (config.gapOuter * 2);
-                        if (usableW > 0) {
-                            var newRatio = Math.max(0.20, Math.min(0.80, w.frameGeometry.width / usableW));
-                            newRatio = Math.round(newRatio * 100) / 100;
-                            screenMasterRatios[sName] = newRatio;
-                            config.masterRatio = newRatio;
-                            log("Desktop on-the-fly master ratio updated to " + Math.round(newRatio * 100) + "% for screen " + sName);
-                            retileNow();
-                        }
-                    }
-                }
-                if (currentDraggingWindow === w) {
-                    log("Drag finished: " + w.caption);
-                    var wid = getWindowId(w);
-                    var target = overlayDialog.finishDrag();
-                    if (target) {
-                        if (target.type === "maximize") {
-                            if (typeof w.setMaximize === "function") {
-                                w.setMaximize(true, true);
+                        var snapResult = commitWindowGeometry(w, target.targetRect, "snap_drop");
+                        if (snapResult.outcome !== "rejected" && snapResult.normalized) {
+                            if (coordinator) {
+                                coordinator.setManualFloating(wid, false);
+                                coordinator.setPreTiled(wid, true);
                             }
-                            delete preTiledWindows[wid];
-                            floatingWindows[wid] = false;
-                            osdCall.notify("Maximized", "preferences-system-windows");
-                        } else {
-                            if (typeof w.setMaximize === "function") {
-                                w.setMaximize(false, false);
-                            }
-                            w.frameGeometry = Qt.rect(target.targetRect.x, target.targetRect.y, target.targetRect.width, target.targetRect.height);
-                            preTiledWindows[wid] = true;
-                            floatingWindows[wid] = false;
 
-                            // Update window order on this screen
                             var scr = getScreenForPos(target.targetRect);
                             var sName = getScreenName(scr);
-                            var currentWins = screenTiledWindows[sName] || [];
-                            var list = [];
-                            for (var k = 0; k < currentWins.length; k++) {
-                                if (currentWins[k] !== w) list.push(currentWins[k]);
-                            }
-                            if (target.slotIndex === 0) {
-                                list.unshift(w);
-                            } else {
-                                list.push(w);
-                            }
-                            screenTiledWindows[sName] = list;
-
-                            // Keep persistentScreenOrder in sync
-                            var pOrder = persistentScreenOrder[sName] || [];
-                            var newPOrder = [];
-                            for (var pi = 0; pi < pOrder.length; pi++) {
-                                if (pOrder[pi] !== wid) newPOrder.push(pOrder[pi]);
-                            }
-                            if (target.slotIndex === 0) {
-                                newPOrder.unshift(wid);
-                            } else {
-                                newPOrder.push(wid);
-                            }
-                            persistentScreenOrder[sName] = newPOrder;
-
-                            // Purge wid from any other screens' persistent order
-                            for (var oScr in persistentScreenOrder) {
-                                if (oScr !== sName) {
-                                    var oList = persistentScreenOrder[oScr] || [];
-                                    var oIdx = oList.indexOf(wid);
-                                    if (oIdx !== -1) {
-                                        oList.splice(oIdx, 1);
-                                        persistentScreenOrder[oScr] = oList;
-                                    }
-                                }
+                            var coord = getCoordinator();
+                            if (coord) {
+                                coord.ingestEvent({
+                                    type: "WindowSnapCommitted",
+                                    windowId: wid,
+                                    outputId: sName,
+                                    targetRect: {
+                                        x: snapResult.normalized.x,
+                                        y: snapResult.normalized.y,
+                                        width: snapResult.normalized.width,
+                                        height: snapResult.normalized.height
+                                    },
+                                    slotIndex: target.slotIndex,
+                                    desktopId: getCurrentDesktopKey()
+                                });
                             }
 
-                            savedTiledGeometries[wid] = Qt.rect(target.targetRect.x, target.targetRect.y, target.targetRect.width, target.targetRect.height);
+                            setSavedTiledGeometry(wid, snapResult.normalized);
 
                             osdCall.notify("Snapped: " + target.title, "preferences-system-windows");
                         }
-                    } else {
-                        // Dropped outside any snap zone
-                        var dropScr = getScreenForPos(w.frameGeometry);
-                        var dropSName = getScreenName(dropScr);
-                        for (var oScr2 in persistentScreenOrder) {
-                            if (oScr2 !== dropSName) {
-                                var oList2 = persistentScreenOrder[oScr2] || [];
-                                var oIdx2 = oList2.indexOf(wid);
-                                if (oIdx2 !== -1) {
-                                    oList2.splice(oIdx2, 1);
-                                    persistentScreenOrder[oScr2] = oList2;
-                                }
-                            }
-                        }
-                        if (wasDraggingMaximized[wid]) {
-                            floatingWindows[wid] = false;
-                            delete preTiledWindows[wid];
-                        }
                     }
-                    delete wasDraggingMaximized[wid];
-                    overlayDialog.hideOverlay();
-                    currentDraggingWindow = null;
-                    retileNow();
-                }
-            });
-        }
-
-        if (w.minimizedChanged) {
-            w.minimizedChanged.connect(function() {
-                var wid = getWindowId(w);
-                if (w.minimized) {
-                    savedMinimGeometries[wid] = Qt.rect(w.frameGeometry.x, w.frameGeometry.y, w.frameGeometry.width, w.frameGeometry.height);
                 } else {
-                    // Window was restored from minimize!
-                    // Restore its saved tiled slot geometry immediately
-                    if (savedTiledGeometries[wid]) {
-                        var g = savedTiledGeometries[wid];
-                        w.frameGeometry = Qt.rect(g.x, g.y, g.width, g.height);
+                    // Dropped outside any snap zone
+                    if (wasDraggingMaximized[wid]) {
+                        if (coordinator) {
+                            coordinator.setManualFloating(wid, false);
+                        }
                     }
                 }
+                delete wasDraggingMaximized[wid];
+                if (overlayDialog) overlayDialog.hideOverlay();
+                currentDraggingWindow = null;
                 retileNow();
-            });
-        }
+            }
+        };
 
+        var onMinimizedChanged = function() {
+            if (!root || !root.coordinator) return;
+            var wid = getWindowId(w);
+            if (w.minimized) {
+                setPreMinimizeGeometry(wid, w.frameGeometry);
+            } else {
+                // Window was restored from minimize!
+                // Restore its saved tiled slot geometry immediately
+                var g = getSavedTiledGeometry(wid);
+                if (g) {
+                    var unminResult = commitWindowGeometry(w, g, "unminimize");
+                    if (unminResult.outcome !== "rejected" && unminResult.normalized) {
+                        setSavedTiledGeometry(wid, unminResult.normalized);
+                    }
+                }
+            }
+            var coord = getCoordinator();
+            if (coord) {
+                coord.handleMinimize(wid, w.minimized, {
+                    x: w.frameGeometry.x,
+                    y: w.frameGeometry.y,
+                    width: w.frameGeometry.width,
+                    height: w.frameGeometry.height
+                });
+            }
+            retileNow();
+        };
+
+        var onFrameGeometryChanged = function() {
+            if (!root || !root.coordinator || isArranging) return;
+            var wid = getWindowId(w);
+            var coord = getCoordinator();
+            if (coord) {
+                var echoCheck = coord.checkAndHandleEcho(wid, {
+                    x: w.frameGeometry.x,
+                    y: w.frameGeometry.y,
+                    width: w.frameGeometry.width,
+                    height: w.frameGeometry.height
+                });
+                if (echoCheck.isEcho) {
+                    return;
+                }
+            }
+            scheduleReconcile("WindowGeometryChanged");
+        };
+
+        var onFullScreenChanged = function() {
+            if (!root || !root.coordinator || isArranging) return;
+            var wid = getWindowId(w);
+            var coord = getCoordinator();
+            if (coord) {
+                coord.ingestEvent({
+                    type: "WindowStateChanged",
+                    windowId: wid,
+                    updates: { fullScreen: Boolean(w.fullScreen) }
+                });
+            }
+            scheduleReconcile(w.fullScreen ? "WindowFullscreenEntered" : "WindowFullscreenExited");
+        };
+
+        var onMaximizedAboutToChange = function(mode) {
+            // Coordinator maintains window state authority
+        };
+
+        var onMaximizedChanged = function() {
+            if (!root || !root.coordinator || isArranging) return;
+            var wid = getWindowId(w);
+            var coord = getCoordinator();
+            if (coord) {
+                coord.setPreTiled(wid, false);
+            }
+            if (w.maximizeMode === 0) {
+                if (coord) {
+                    coord.setManualFloating(wid, false);
+                }
+                var target = getSavedTiledGeometry(wid);
+                if (target) {
+                    var unmaxResult = commitWindowGeometry(w, target, "unmaximize");
+                    if (unmaxResult.outcome !== "rejected" && unmaxResult.normalized) {
+                        setSavedTiledGeometry(wid, unmaxResult.normalized);
+                    }
+                }
+            }
+            if (coord) {
+                coord.ingestEvent({
+                    type: "WindowStateChanged",
+                    windowId: wid,
+                    updates: { maximizeMode: w.maximizeMode }
+                });
+            }
+            scheduleReconcile("WindowMaximizedChanged");
+        };
+
+        var onNoBorderChanged = function() {
+            if (!root || !root.coordinator || isArranging) return;
+            var wid = getWindowId(w);
+            var coord = getCoordinator();
+            if (coord) {
+                coord.ingestEvent({
+                    type: "WindowStateChanged",
+                    windowId: wid,
+                    updates: { noBorder: Boolean(w.noBorder) }
+                });
+            }
+            scheduleReconcile("WindowNoBorderChanged");
+        };
+
+        var onOutputChanged = function() {
+            if (!root || !root.coordinator || isArranging) return;
+            scheduleReconcile("WindowOutputChanged");
+        };
+
+        var onDesktopsChanged = function() {
+            if (!root || !root.coordinator || isArranging) return;
+            var wid = getWindowId(w);
+            var coord = getCoordinator();
+            if (coord) {
+                var dIds = [];
+                if (w.desktops) {
+                    for (var dIdx = 0; dIdx < w.desktops.length; dIdx++) {
+                        dIds.push(w.desktops[dIdx].id || String(w.desktops[dIdx]));
+                    }
+                }
+                coord.ingestEvent({
+                    type: "WindowDesktopsChanged",
+                    windowId: wid,
+                    desktopIds: dIds,
+                    onAllDesktops: (w.onAllDesktops === true)
+                });
+            }
+            scheduleReconcile("WindowDesktopsChanged");
+        };
+
+        var onActivitiesChanged = function() {
+            if (!root || !root.coordinator || isArranging) return;
+            var wid = getWindowId(w);
+            var coord = getCoordinator();
+            if (coord) {
+                var acts = [];
+                if (w.activities) {
+                    for (var aIdx = 0; aIdx < w.activities.length; aIdx++) {
+                        acts.push(String(w.activities[aIdx]));
+                    }
+                }
+                coord.ingestEvent({
+                    type: "WindowActivitiesChanged",
+                    windowId: wid,
+                    activities: acts
+                });
+            }
+            scheduleReconcile("WindowActivitiesChanged");
+        };
+
+        if (w.interactiveMoveResizeStarted) {
+            hooks.started = onMoveResizeStarted;
+            w.interactiveMoveResizeStarted.connect(onMoveResizeStarted);
+        }
+        if (w.interactiveMoveResizeStepped) {
+            hooks.stepped = onMoveResizeStepped;
+            w.interactiveMoveResizeStepped.connect(onMoveResizeStepped);
+        }
+        if (w.interactiveMoveResizeFinished) {
+            hooks.finished = onMoveResizeFinished;
+            w.interactiveMoveResizeFinished.connect(onMoveResizeFinished);
+        }
+        if (w.minimizedChanged) {
+            hooks.minimized = onMinimizedChanged;
+            w.minimizedChanged.connect(onMinimizedChanged);
+        }
+        if (w.frameGeometryChanged) {
+            hooks.geom = onFrameGeometryChanged;
+            w.frameGeometryChanged.connect(onFrameGeometryChanged);
+        }
         if (w.fullScreenChanged) {
-            w.fullScreenChanged.connect(function() {
-                retileNow();
-            });
+            hooks.fullScreen = onFullScreenChanged;
+            w.fullScreenChanged.connect(onFullScreenChanged);
         }
-
         if (w.maximizedAboutToChange) {
-            w.maximizedAboutToChange.connect(function(mode) {
-                if (isArranging) return;
-                var wid = getWindowId(w);
-                if (mode === 0) {
-                    floatingWindows[wid] = false;
-                    delete preTiledWindows[wid];
-                }
-            });
+            hooks.maxAbout = onMaximizedAboutToChange;
+            w.maximizedAboutToChange.connect(onMaximizedAboutToChange);
+        }
+        if (w.maximizedChanged) {
+            hooks.maxChanged = onMaximizedChanged;
+            w.maximizedChanged.connect(onMaximizedChanged);
+        }
+        if (w.noBorderChanged) {
+            hooks.noBorder = onNoBorderChanged;
+            w.noBorderChanged.connect(onNoBorderChanged);
+        }
+        if (w.outputChanged) {
+            hooks.output = onOutputChanged;
+            w.outputChanged.connect(onOutputChanged);
+        }
+        if (w.desktopsChanged) {
+            hooks.desktops = onDesktopsChanged;
+            w.desktopsChanged.connect(onDesktopsChanged);
+        }
+        if (w.activitiesChanged) {
+            hooks.activities = onActivitiesChanged;
+            w.activitiesChanged.connect(onActivitiesChanged);
         }
 
-        if (w.maximizedChanged) {
-            w.maximizedChanged.connect(function() {
-                if (isArranging) return;
-                var wid = getWindowId(w);
-                if (w.maximizeMode === 0) {
-                    floatingWindows[wid] = false;
-                    delete preTiledWindows[wid];
-                    if (savedTiledGeometries[wid]) {
-                        var target = savedTiledGeometries[wid];
-                        w.frameGeometry = Qt.rect(target.x, target.y, target.width, target.height);
-                    }
-                    retileNow();
-                }
-            });
-        }
+        w._tesseraHooks = hooks;
     }
 
     // =========================================================================
@@ -1370,38 +1315,61 @@ Item {
             hookWindow(w);
 
             if (config.tileNewWindows) {
-                retileNow();
+                var scr = w.output || getScreenForPos(w.frameGeometry);
+                var area = scr ? Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop) : null;
+                var coord = getCoordinator();
+                if (coord) {
+                    coord.ingestEvent({
+                        type: "WindowDiscovered",
+                        window: ReconcilerModule.ReconcilerBridge.toNormalizedWindow(w, scr, area)
+                    });
+                }
+                scheduleReconcile("WindowAdded");
             }
         }
 
         function onWindowRemoved(w) {
             if (!w) return;
+            unhookWindow(w);
             var wid = getWindowId(w);
-            delete floatingWindows[wid];
-            delete preTiledWindows[wid];
-            delete savedTiledGeometries[wid];
-            delete savedMinimGeometries[wid];
             delete wasDraggingMaximized[wid];
 
-            // Remove from persistentScreenOrder across all screens
-            for (var sName in persistentScreenOrder) {
-                var pList = persistentScreenOrder[sName] || [];
-                var filtered = [];
-                for (var i = 0; i < pList.length; i++) {
-                    if (pList[i] !== wid) filtered.push(pList[i]);
-                }
-                persistentScreenOrder[sName] = filtered;
+            var coord = getCoordinator();
+            if (coord) {
+                coord.setSavedTiledGeometry(wid, null);
+                coord.setPreMinimizeGeometry(wid, null);
+                coord.setPreTiled(wid, false);
+                coord.ingestEvent({ type: "WindowRemoved", windowId: wid });
             }
 
-            retileNow();
+            scheduleReconcile("WindowRemoved");
         }
 
         function onCurrentDesktopChanged() {
-            retileNow();
+            var coord = getCoordinator();
+            if (coord) {
+                var deskKey = getCurrentDesktopKey();
+                var screens = Workspace.screens || [Workspace.activeScreen];
+                for (var s = 0; s < screens.length; s++) {
+                    var scr = screens[s];
+                    if (!scr) continue;
+                    var sName = getScreenName(scr);
+                    coord.ingestEvent({
+                        type: "ScreenDesktopChanged",
+                        outputId: sName,
+                        toDesktopId: deskKey
+                    });
+                }
+            }
+            scheduleReconcile("DesktopChanged");
         }
 
         function onScreensChanged() {
-            retileNow();
+            var coord = getCoordinator();
+            if (coord) {
+                synchronizeScreenTopology(coord);
+            }
+            scheduleReconcile("ScreensChanged");
         }
     }
 
@@ -1421,86 +1389,127 @@ Item {
         if (!w) return;
 
         var wid = getWindowId(w);
-        var currentlyFloating = floatingWindows[wid] === true;
-        floatingWindows[wid] = !currentlyFloating;
-        delete preTiledWindows[wid];
+        var coord = getCoordinator();
+        var currentlyFloating = coord ? coord.isManualFloating(wid) : false;
+        var nextFloating = !currentlyFloating;
 
-        osdCall.notify(floatingWindows[wid] ? "Window Floating" : "Window Tiled", "preferences-system-windows");
+        var coordAfter = false;
+        if (coord) {
+            coord.setManualFloating(wid, nextFloating);
+            if (nextFloating) {
+                coord.setPreTiled(wid, false);
+            }
+            coordAfter = coord.isManualFloating(wid);
+        }
+
+        log("manual floating: " + currentlyFloating + " -> " + nextFloating + ", coordinator: " + currentlyFloating + " -> " + coordAfter);
+
+        osdCall.notify(nextFloating ? "Window Floating" : "Window Tiled", "preferences-system-windows");
         retileNow();
     }
 
     function focusWindow(forward) {
-        var windows = getTileableWindows(Workspace.activeScreen);
-        if (windows.length <= 1) return;
+        var s = Workspace.activeScreen;
+        var sName = getScreenName(s);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (!coord) return;
 
-        var currentIdx = windows.indexOf(Workspace.activeWindow);
-        if (currentIdx === -1) {
-            Workspace.activeWindow = windows[0];
-            return;
+        var ws = coord.getOrCreateWorkspace(sName, deskKey);
+        var order = ws.orderedSlotWindowIds || [];
+        if (order.length <= 1) return;
+
+        var curWin = Workspace.activeWindow;
+        var curWid = curWin ? getWindowId(curWin) : null;
+        var currentIdx = curWid ? order.indexOf(curWid) : -1;
+        if (currentIdx === -1) currentIdx = 0;
+
+        var nextIdx = forward ? ((currentIdx + 1) % order.length) : ((currentIdx - 1 + order.length) % order.length);
+        var nextWid = order[nextIdx];
+
+        var allWins = Workspace.stackingOrder || [];
+        for (var i = 0; i < allWins.length; i++) {
+            if (getWindowId(allWins[i]) === nextWid) {
+                Workspace.activeWindow = allWins[i];
+                return;
+            }
         }
-
-        var nextIdx = forward ? ((currentIdx + 1) % windows.length) : ((currentIdx - 1 + windows.length) % windows.length);
-        Workspace.activeWindow = windows[nextIdx];
     }
 
     function swapWindow(forward) {
         var s = Workspace.activeScreen;
         var sName = getScreenName(s);
-        var windows = screenTiledWindows[sName] || getTileableWindows(s);
-        if (windows.length <= 1) return;
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (!coord) return;
 
-        var currentIdx = windows.indexOf(Workspace.activeWindow);
+        var ws = coord.getOrCreateWorkspace(sName, deskKey);
+        var order = ws.orderedSlotWindowIds || [];
+        if (order.length <= 1) return;
+
+        var curWin = Workspace.activeWindow;
+        if (!curWin) return;
+        var curWid = getWindowId(curWin);
+        var currentIdx = order.indexOf(curWid);
         if (currentIdx === -1) return;
 
-        var targetIdx = forward ? ((currentIdx + 1) % windows.length) : ((currentIdx - 1 + windows.length) % windows.length);
+        var targetIdx = forward ? ((currentIdx + 1) % order.length) : ((currentIdx - 1 + order.length) % order.length);
+        var targetWid = order[targetIdx];
 
-        var temp = windows[currentIdx];
-        windows[currentIdx] = windows[targetIdx];
-        windows[targetIdx] = temp;
-        screenTiledWindows[sName] = windows;
-
-        // Keep persistentScreenOrder in sync with the swap!
-        var newPOrder = [];
-        for (var i = 0; i < windows.length; i++) {
-            newPOrder.push(getWindowId(windows[i]));
-        }
-        persistentScreenOrder[sName] = newPOrder;
-
+        coord.swapWindowSlots(curWid, targetWid);
         retileNow();
     }
 
     function adjustMasterRatio(delta) {
         var scr = getCurrentTargetScreen();
         var sName = getScreenName(scr);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        var currentRatio = config.primaryRegionRatio;
+        if (coord) {
+            var ws = coord.getOrCreateWorkspace(sName, deskKey);
+            currentRatio = ws.primaryRegionRatio;
+        }
 
-        var currentRatio = screenMasterRatios[sName] !== undefined ? screenMasterRatios[sName] : config.masterRatio;
-        var newRatio = Math.max(0.2, Math.min(0.8, currentRatio + delta));
+        var newRatio = Math.max(0.1, Math.min(0.9, currentRatio + delta));
         newRatio = Math.round(newRatio * 100) / 100;
-        screenMasterRatios[sName] = newRatio;
+        if (coord) {
+            coord.ingestEvent({
+                type: "WorkspacePrimaryConfigChanged",
+                outputId: sName,
+                desktopId: deskKey,
+                ratio: newRatio
+            });
+        }
 
-        osdCall.notify(sName + " Master Ratio: " + Math.round(newRatio * 100) + "%", "preferences-desktop-virtual");
+        osdCall.notify(sName + " Primary Ratio: " + Math.round(newRatio * 100) + "%", "preferences-desktop-virtual");
         retileNow();
     }
 
     function adjustMasterCount(delta) {
         var scr = getCurrentTargetScreen();
         var sName = getScreenName(scr);
+        var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        var currentCount = config.primaryRegionCount;
+        if (coord) {
+            var ws = coord.getOrCreateWorkspace(sName, deskKey);
+            currentCount = ws.primaryRegionCount;
+        }
 
-        var currentCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
-        var newCount = Math.max(0, currentCount + delta);
-        screenMasterCounts[sName] = newCount;
+        var newCount = Math.max(0, Math.min(10, currentCount + delta));
+        if (coord) {
+            coord.ingestEvent({
+                type: "WorkspacePrimaryConfigChanged",
+                outputId: sName,
+                desktopId: deskKey,
+                count: newCount
+            });
+        }
 
-        log("adjustMasterCount delta=" + delta + " target=" + sName + " newCount=" + newCount);
-        masterHudDialog.popup(scr, newCount);
+        log("adjustPrimaryCount delta=" + delta + " newCount=" + newCount);
+        osdCall.notify(sName + " Primary Regions: " + newCount, "preferences-system-windows");
         retileNow();
-    }
-
-    function showMasterDialog(targetScreen) {
-        var scr = targetScreen || getCurrentTargetScreen();
-        var sName = getScreenName(scr);
-        var curCount = screenMasterCounts[sName] !== undefined ? screenMasterCounts[sName] : config.masterCount;
-        log("showMasterDialog target=" + sName + " curCount=" + curCount);
-        masterHudDialog.popup(scr, curCount);
     }
 
     function toggleOverlay() {
@@ -1528,34 +1537,18 @@ Item {
         var nextIdx = forward !== false ? ((currentIdx + 1) % screens.length) : ((currentIdx - 1 + screens.length) % screens.length);
         var targetScreen = screens[nextIdx];
 
-        var fromName = getScreenName(currentScreen);
         var toName = getScreenName(targetScreen);
-        var wid = getWindowId(w);
-
-        // Remove from old screen's persistent order
-        var oldList = persistentScreenOrder[fromName] || [];
-        var cleanList = [];
-        for (var i = 0; i < oldList.length; i++) {
-            if (oldList[i] !== wid) cleanList.push(oldList[i]);
-        }
-        persistentScreenOrder[fromName] = cleanList;
-
-        // Add to new screen's persistent order
-        var newList = persistentScreenOrder[toName] || [];
-        if (newList.indexOf(wid) === -1) {
-            newList.push(wid);
-        }
-        persistentScreenOrder[toName] = newList;
 
         var toArea = Workspace.clientArea(KWin.MaximizeArea, targetScreen, Workspace.currentDesktop);
         var curW = Math.min(w.frameGeometry.width, toArea.width - (config.gapOuter * 2));
         var curH = Math.min(w.frameGeometry.height, toArea.height - (config.gapOuter * 2));
         var newX = toArea.x + Math.floor((toArea.width - curW) / 2);
         var newY = toArea.y + Math.floor((toArea.height - curH) / 2);
-        w.frameGeometry = Qt.rect(newX, newY, curW, curH);
-
-        osdCall.notify("Window Moved to " + toName, "preferences-desktop-display");
-        retileNow();
+        var moveResult = commitWindowGeometry(w, { x: newX, y: newY, width: curW, height: curH }, "move_screen");
+        if (moveResult.outcome !== "rejected") {
+            osdCall.notify("Window Moved to " + toName, "preferences-desktop-display");
+            retileNow();
+        }
     }
 
     function cycleOtherScreenLayout() {
@@ -1575,11 +1568,7 @@ Item {
         idx = (idx + 1) % currentLayoutList.length;
         var nextLayout = currentLayoutList[idx];
 
-        var key = getLayoutKey(targetScreen);
-        screenLayouts[key] = nextLayout;
-
-        osdCall.notify(sName + " Layout: " + nextLayout.toUpperCase(), "preferences-desktop-virtual");
-        retileNow();
+        setActiveLayout(nextLayout, targetScreen);
     }
 
     function swapScreenLayouts() {
@@ -1589,20 +1578,45 @@ Item {
         var s0Name = getScreenName(screens[0]);
         var s1Name = getScreenName(screens[1]);
         var deskKey = getCurrentDesktopKey();
+        var coord = getCoordinator();
+        if (!coord) return;
 
-        var key0 = s0Name + ":" + deskKey;
-        var key1 = s1Name + ":" + deskKey;
+        var ws0 = coord.getOrCreateWorkspace(s0Name, deskKey);
+        var ws1 = coord.getOrCreateWorkspace(s1Name, deskKey);
 
-        var l0 = screenLayouts[key0] || desktopLayouts[deskKey] || config.defaultLayout;
-        var l1 = screenLayouts[key1] || desktopLayouts[deskKey] || config.defaultLayout;
+        var l0 = ws0.activeLayout;
+        var l1 = ws1.activeLayout;
+        var r0 = ws0.primaryRegionRatio;
+        var r1 = ws1.primaryRegionRatio;
+        var c0 = ws0.primaryRegionCount;
+        var c1 = ws1.primaryRegionCount;
 
-        screenLayouts[key0] = l1;
-        screenLayouts[key1] = l0;
-
-        var r0 = screenMasterRatios[s0Name] || config.masterRatio;
-        var r1 = screenMasterRatios[s1Name] || config.masterRatio;
-        screenMasterRatios[s0Name] = r1;
-        screenMasterRatios[s1Name] = r0;
+        coord.ingestEvent({
+            type: "WorkspaceLayoutChanged",
+            outputId: s0Name,
+            desktopId: deskKey,
+            layout: l1
+        });
+        coord.ingestEvent({
+            type: "WorkspaceLayoutChanged",
+            outputId: s1Name,
+            desktopId: deskKey,
+            layout: l0
+        });
+        coord.ingestEvent({
+            type: "WorkspacePrimaryConfigChanged",
+            outputId: s0Name,
+            desktopId: deskKey,
+            ratio: r1,
+            count: c1
+        });
+        coord.ingestEvent({
+            type: "WorkspacePrimaryConfigChanged",
+            outputId: s1Name,
+            desktopId: deskKey,
+            ratio: r0,
+            count: c0
+        });
 
         osdCall.notify("Swapped Layouts: " + s0Name + " ↔ " + s1Name, "preferences-desktop-display");
         retileNow();
@@ -1614,35 +1628,35 @@ Item {
 
     ShortcutHandler {
         name: "Tessera: Toggle Zone Overlay"
-        text: "Tessera: Toggle Zone Overlay"
+        text: "Toggle Zone Overlay (KZones-Style)"
         sequence: "Ctrl+Shift+C"
         onActivated: root.toggleOverlay()
     }
 
     ShortcutHandler {
         name: "Tessera: Next Layout"
-        text: "Tessera: Next Layout"
+        text: "Cycle to Next Layout"
         sequence: "Ctrl+Space"
         onActivated: root.cycleLayout(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Previous Layout"
-        text: "Tessera: Previous Layout"
+        text: "Cycle to Previous Layout"
         sequence: "Ctrl+Shift+Space"
         onActivated: root.cycleLayout(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Toggle Tiling"
-        text: "Tessera: Toggle Tiling"
+        text: "Toggle Tiling Globally"
         sequence: "Ctrl+Shift+T"
         onActivated: root.toggleTiling()
     }
 
     ShortcutHandler {
         name: "Tessera: Toggle Window Floating"
-        text: "Tessera: Toggle Window Floating"
+        text: "Toggle Active Window Floating"
         sequence: "Ctrl+Shift+F"
         onActivated: root.toggleActiveFloating()
     }
@@ -1650,105 +1664,105 @@ Item {
     // Left-Hand Directional Navigation (WASD)
     ShortcutHandler {
         name: "Tessera: Focus Left Window"
-        text: "Tessera: Focus Left Window"
+        text: "Focus Left Window (WASD)"
         sequence: "Ctrl+Shift+A"
         onActivated: root.focusWindow(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Right Window"
-        text: "Tessera: Focus Right Window"
+        text: "Focus Right Window (WASD)"
         sequence: "Ctrl+Shift+D"
         onActivated: root.focusWindow(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Up Window"
-        text: "Tessera: Focus Up Window"
+        text: "Focus Up Window (WASD)"
         sequence: "Ctrl+Shift+W"
         onActivated: root.focusWindow(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Down Window"
-        text: "Tessera: Focus Down Window"
+        text: "Focus Down Window (WASD)"
         sequence: "Ctrl+Shift+S"
         onActivated: root.focusWindow(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Swap Left Window"
-        text: "Tessera: Swap Left Window"
+        text: "Swap Window Left (Counter-Clockwise)"
         sequence: "Ctrl+Shift+Q"
         onActivated: root.swapWindow(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Swap Right Window"
-        text: "Tessera: Swap Right Window"
+        text: "Swap Window Right (Clockwise)"
         sequence: "Ctrl+Shift+E"
         onActivated: root.swapWindow(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Next Window"
-        text: "Tessera: Focus Next Window"
+        text: "Focus Next Window (Vim)"
         sequence: "Ctrl+Shift+J"
         onActivated: root.focusWindow(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Previous Window"
-        text: "Tessera: Focus Previous Window"
+        text: "Focus Previous Window (Vim)"
         sequence: "Ctrl+Shift+K"
         onActivated: root.focusWindow(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Swap Window Forward"
-        text: "Tessera: Swap Window Forward"
+        text: "Swap Window Forward (Vim)"
         sequence: "Ctrl+Alt+J"
         onActivated: root.swapWindow(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Swap Window Backward"
-        text: "Tessera: Swap Window Backward"
+        text: "Swap Window Backward (Vim)"
         sequence: "Ctrl+Alt+K"
         onActivated: root.swapWindow(false)
     }
 
     ShortcutHandler {
-        name: "Tessera: Increase Master Ratio"
-        text: "Tessera: Increase Master Ratio"
+        name: "Tessera: Increase Primary Ratio"
+        text: "Expand Primary Region Ratio"
         sequence: "Ctrl+Shift+L"
         onActivated: root.adjustMasterRatio(0.05)
     }
 
     ShortcutHandler {
-        name: "Tessera: Decrease Master Ratio"
-        text: "Tessera: Decrease Master Ratio"
+        name: "Tessera: Decrease Primary Ratio"
+        text: "Shrink Primary Region Ratio"
         sequence: "Ctrl+Shift+H"
         onActivated: root.adjustMasterRatio(-0.05)
     }
 
     ShortcutHandler {
-        name: "Tessera: Increase Master Count"
-        text: "Tessera: Increase Master Count"
+        name: "Tessera: Increase Primary Count"
+        text: "Increase Primary Region Count"
         sequence: "Ctrl+Shift+I"
         onActivated: root.adjustMasterCount(1)
     }
 
     ShortcutHandler {
-        name: "Tessera: Decrease Master Count"
-        text: "Tessera: Decrease Master Count"
+        name: "Tessera: Decrease Primary Count"
+        text: "Decrease Primary Region Count"
         sequence: "Ctrl+Shift+O"
         onActivated: root.adjustMasterCount(-1)
     }
 
     ShortcutHandler {
         name: "Tessera: Retile Current Workspace"
-        text: "Tessera: Retile Current Workspace"
+        text: "Force Retile Workspace"
         sequence: "Ctrl+Shift+R"
         onActivated: {
             root.loadConfig();
@@ -1759,35 +1773,37 @@ Item {
     // Screen Switching & Cross-Monitor Actions (Left-Hand Accessible)
     ShortcutHandler {
         name: "Tessera: Move Window to Next Screen"
-        text: "Tessera: Move Window to Next Screen"
+        text: "Move Window to Next Screen"
         sequence: "Ctrl+Shift+Z"
         onActivated: root.moveWindowToNextScreen(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Cycle Layout on Other Screen"
-        text: "Tessera: Cycle Layout on Other Screen"
+        text: "Cycle Layout on Other Screen"
         sequence: "Ctrl+Shift+X"
         onActivated: root.cycleOtherScreenLayout()
     }
 
     ShortcutHandler {
         name: "Tessera: Swap Screen Layouts"
-        text: "Tessera: Swap Screen Layouts"
+        text: "Swap Screen Layouts"
         sequence: "Ctrl+Alt+X"
         onActivated: root.swapScreenLayouts()
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Show Master HUD"
-        text: "Tessera: Show Master HUD"
-        sequence: "Ctrl+Shift+M"
-        onActivated: root.showMasterDialog()
     }
 
     Component.onCompleted: {
         log("Tessera Declarative Extension loaded with KZones-Style Visual Snap Overlay");
         loadConfig();
+        initRuntimeMode();
         retileNow();
+    }
+
+    Component.onDestruction: {
+        log("Tessera unloading: cleaning up window hooks");
+        var allWins = Workspace.stackingOrder || [];
+        for (var i = 0; i < allWins.length; i++) {
+            unhookWindow(allWins[i]);
+        }
     }
 }

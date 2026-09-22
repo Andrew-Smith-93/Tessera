@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "13-differently-sized-outputs",
+  "description": "4K primary screen (3840x2160) and 1440p secondary screen (2560x1440)",
+  "initialConfig": {
+    "enableTiling": true,
+    "defaultLayout": "master-stack"
+  },
+  "initialScreens": [
+    {
+      "outputId": "4K-Screen",
+      "name": "4K-Screen",
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 3840,
+        "height": 2160
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 0,
+        "width": 3840,
+        "height": 2160
+      }
+    },
+    {
+      "outputId": "1440p-Screen",
+      "name": "1440p-Screen",
+      "geometry": {
+        "x": 3840,
+        "y": 0,
+        "width": 2560,
+        "height": 1440
+      },
+      "usableArea": {
+        "x": 3840,
+        "y": 0,
+        "width": 2560,
+        "height": 1440
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-4k-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-4k-1",
+        "outputId": "4K-Screen",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-4k-2",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-4k-2",
+        "outputId": "4K-Screen",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-1440-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-1440-1",
+        "outputId": "1440p-Screen",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "flush"
+    }
+  ]
+}

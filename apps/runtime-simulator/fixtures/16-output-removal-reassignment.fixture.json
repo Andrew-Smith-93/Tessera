@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "16-output-removal-reassignment",
+  "description": "Removing an output relocates its windows onto remaining output deterministically",
+  "initialConfig": {
+    "enableTiling": true,
+    "defaultLayout": "master-stack"
+  },
+  "initialScreens": [
+    {
+      "outputId": "HDMI-A-1",
+      "name": "HDMI-A-1",
+      "geometry": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "outputId": "DP-1",
+      "name": "DP-1",
+      "geometry": {
+        "x": 1920,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      },
+      "usableArea": {
+        "x": 1920,
+        "y": 0,
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-1",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-1",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-2",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-2",
+        "outputId": "HDMI-A-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-3",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-3",
+        "outputId": "DP-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "window-discovered",
+      "window": {
+        "id": "win-4",
+        "resourceClass": "kitty",
+        "resourceName": "kitty",
+        "title": "Window win-4",
+        "outputId": "DP-1",
+        "frameGeometry": {
+          "x": 100,
+          "y": 100,
+          "width": 600,
+          "height": 400
+        }
+      }
+    },
+    {
+      "type": "flush"
+    },
+    {
+      "type": "screen-removed",
+      "outputId": "DP-1"
+    },
+    {
+      "type": "flush"
+    }
+  ]
+}

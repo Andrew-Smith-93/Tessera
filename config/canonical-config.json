@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tessera.wm/schemas/v2/canonical-config.json",
+  "schemaVersion": 2,
+  "kwinrcGroup": "Script-tessera",
+  "properties": {
+    "configSchemaVersion": {
+      "type": "integer",
+      "default": 2,
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Tessera configuration schema version"
+    },
+    "enableTiling": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable or disable Tessera automatic window tiling"
+    },
+    "defaultLayout": {
+      "type": "string",
+      "default": "balanced-grid",
+      "enum": [
+        "balanced-grid",
+        "primary-stack",
+        "binary-split",
+        "columns",
+        "rows",
+        "monocle",
+        "floating"
+      ],
+      "legacyValueAliases": ["master-stack"],
+      "description": "Default tiling layout algorithm for new outputs and desktops"
+    },
+    "gapInner": {
+      "type": "integer",
+      "default": 8,
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Inner gap spacing between adjacent tiled windows in pixels"
+    },
+    "gapOuter": {
+      "type": "integer",
+      "default": 10,
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Outer gap margin between windows and screen edges in pixels"
+    },
+    "primaryRegionRatio": {
+      "type": "number",
+      "default": 0.50,
+      "minimum": 0.10,
+      "maximum": 0.90,
+      "legacyAliases": ["masterRatio"],
+      "description": "Width or height split ratio allocated to the Primary region in Primary + Stack"
+    },
+    "primaryRegionCount": {
+      "type": "integer",
+      "default": 1,
+      "minimum": 0,
+      "maximum": 10,
+      "legacyAliases": ["masterCount"],
+      "description": "Number of windows accommodated in the Primary region in Primary + Stack"
+    },
+    "perDesktopLayout": {
+      "type": "boolean",
+      "default": true,
+      "description": "Maintain independent layout algorithms and options per virtual desktop"
+    },
+    "tileNewWindows": {
+      "type": "boolean",
+      "default": true,
+      "description": "Automatically tile newly opened windows upon creation"
+    },
+    "showOsd": {
+      "type": "boolean",
+      "default": true,
+      "description": "Display on-screen display notifications on layout and configuration changes"
+    },
+    "reconcileDebounceMs": {
+      "type": "integer",
+      "default": 60,
+      "minimum": 0,
+      "maximum": 1000,
+      "legacyAliases": ["nvidiaDebounceMs"],
+      "description": "Debounce period in milliseconds for coalescing window geometry reconciliation events"
+    },
+    "overlayPollingMs": {
+      "type": "integer",
+      "default": 16,
+      "minimum": 8,
+      "maximum": 60,
+      "description": "Polling interval in milliseconds while the snap overlay tracks the pointer"
+    },
+    "ignoreMinimized": {
+      "type": "boolean",
+      "default": true,
+      "description": "Exclude minimized windows from tile layout solving"
+    },
+    "gameWindowPolicy": {
+      "type": "string",
+      "default": "floating",
+      "enum": ["floating", "tiled", "monocle"],
+      "description": "Tiling classification policy applied to detected game windows"
+    },
+    "floatFilter": {
+      "type": "string",
+      "default": "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1,Steam,steam_app,steamwebhelper",
+      "description": "Comma-separated list of window classes or app IDs to float by default"
+    },
+    "customRulesJson": {
+      "type": "string",
+      "default": "[]",
+      "description": "JSON-serialized list of custom window matching and placement rules"
+    },
+    "workspaceLayoutsJson": {
+      "type": "string",
+      "default": "{\"version\":1,\"scopes\":{}}",
+      "legacyAliases": ["desktopLayoutsJson"],
+      "description": "JSON-serialized map of per-workspace layout assignments scoped by output and desktop"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "expectedErrorCode": "INVALID_ENVELOPE",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "method": "state.getSnapshot"
+  }
+}

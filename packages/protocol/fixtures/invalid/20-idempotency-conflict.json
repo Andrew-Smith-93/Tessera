@@ -1,0 +1,16 @@
+{
+  "expectedErrorCode": "IDEMPOTENCY_CONFLICT",
+  "payload": {
+    "protocol": "tessera.ipc",
+    "majorVersion": 1,
+    "minorVersion": 0,
+    "kind": "request",
+    "id": "bad-20",
+    "method": "runtime.setLayout",
+    "params": {
+      "outputId": "HDMI-A-1",
+      "layout": "grid",
+      "idempotencyKey": "test-idem-conflict"
+    }
+  }
+}

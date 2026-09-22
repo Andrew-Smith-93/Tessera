@@ -1,0 +1,196 @@
+{
+  "digest": "17049606820a9acd7f3c4f431e8b2aaf4b4e4f179f1b0d81f4f71b686b6c60a3",
+  "fixtureName": "11-output-negative-coordinates",
+  "finalTick": 0,
+  "diagnostics": {
+    "totalEvents": 3,
+    "totalTransactions": 1,
+    "totalLayoutComputations": 2,
+    "totalGeometryWrites": 2,
+    "skippedWrites": 0,
+    "suppressedEchoes": 2,
+    "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
+    "unaffectedScreensRecomputed": 0
+  },
+  "canonicalState": {
+    "diagnostics": {
+      "committedSnapOperations": 0,
+      "previewOnlyOperations": 0,
+      "skippedWrites": 0,
+      "suppressedEchoes": 2,
+      "totalEvents": 3,
+      "totalGeometryWrites": 2,
+      "totalLayoutComputations": 2,
+      "totalTransactions": 1,
+      "unaffectedScreensRecomputed": 0
+    },
+    "finalTick": 0,
+    "fixtureName": "11-output-negative-coordinates",
+    "invariants": {
+      "passed": true,
+      "violations": []
+    },
+    "retainedScreens": [
+      {
+        "activeLayout": "master-stack",
+        "gaps": {
+          "inner": 8,
+          "outer": 10
+        },
+        "geometry": {
+          "height": 1080,
+          "width": 1920,
+          "x": -1920,
+          "y": 0
+        },
+        "masterCount": 1,
+        "masterRatio": 0.5,
+        "name": "DP-2",
+        "orderedWindowIds": [
+          "win-left"
+        ],
+        "outputId": "DP-2",
+        "persistentOrder": [
+          "win-left"
+        ],
+        "usableArea": {
+          "height": 1080,
+          "width": 1920,
+          "x": -1920,
+          "y": 0
+        }
+      },
+      {
+        "activeLayout": "master-stack",
+        "gaps": {
+          "inner": 8,
+          "outer": 10
+        },
+        "geometry": {
+          "height": 1080,
+          "width": 1920,
+          "x": 0,
+          "y": 0
+        },
+        "masterCount": 1,
+        "masterRatio": 0.5,
+        "name": "HDMI-A-1",
+        "orderedWindowIds": [
+          "win-right"
+        ],
+        "outputId": "HDMI-A-1",
+        "persistentOrder": [
+          "win-right"
+        ],
+        "usableArea": {
+          "height": 1080,
+          "width": 1920,
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "retainedWindows": [
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 1060,
+          "width": 1900,
+          "x": -1910,
+          "y": 10
+        },
+        "frameGeometry": {
+          "height": 1060,
+          "width": 1900,
+          "x": -1910,
+          "y": 10
+        },
+        "fullScreen": false,
+        "id": "win-left",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "DP-2",
+        "outputId": "DP-2",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      },
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 1060,
+          "width": 1900,
+          "x": 10,
+          "y": 10
+        },
+        "frameGeometry": {
+          "height": 1060,
+          "width": 1900,
+          "x": 10,
+          "y": 10
+        },
+        "fullScreen": false,
+        "id": "win-right",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "HDMI-A-1",
+        "outputId": "HDMI-A-1",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      }
+    ],
+    "schemaVersion": "1.0.0",
+    "transactions": [
+      {
+        "affectedScreens": [
+          "DP-2",
+          "HDMI-A-1"
+        ],
+        "epoch": 1,
+        "operations": [
+          {
+            "previousRect": {
+              "height": 600,
+              "width": 800,
+              "x": -1800,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 1060,
+              "width": 1900,
+              "x": -1910,
+              "y": 10
+            },
+            "windowId": "win-left"
+          },
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 1060,
+              "width": 1900,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-right"
+          }
+        ],
+        "reasons": [
+          "WindowDiscovered"
+        ],
+        "skippedWrites": 0,
+        "tick": 0
+      }
+    ]
+  }
+}

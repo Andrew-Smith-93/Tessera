@@ -1,0 +1,17 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "response",
+  "id": "resp-cfg-1",
+  "replyTo": "req-cfg-1",
+  "ok": true,
+  "result": {
+    "config": {
+      "enableTiling": true,
+      "gapInner": 8,
+      "gapOuter": 10
+    },
+    "revision": 1
+  }
+}

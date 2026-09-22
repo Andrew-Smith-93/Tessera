@@ -1,0 +1,13 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "request",
+  "id": "req-lay-1",
+  "method": "runtime.setLayout",
+  "params": {
+    "outputId": "HDMI-A-1",
+    "layout": "master-stack",
+    "expectedRevision": 1
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "protocol": "tessera.ipc",
+  "majorVersion": 1,
+  "minorVersion": 0,
+  "kind": "response",
+  "id": "resp-1",
+  "replyTo": "req-hello-1",
+  "ok": true,
+  "result": {
+    "serverName": "tessera-runtime",
+    "serverVersion": "1.0.0",
+    "negotiatedMajor": 1,
+    "negotiatedMinor": 0,
+    "capabilities": ["state.inspect", "config.mutate", "runtime.control", "trace.inspect"],
+    "maxFrameSize": 16777216,
+    "limits": {
+      "maxFrameSize": 16777216,
+      "maxNestingDepth": 32,
+      "maxStringLength": 65536,
+      "maxArrayLength": 10000,
+      "maxOutstandingRequests": 1000,
+      "maxSubscriptionCount": 100
+    }
+  }
+}

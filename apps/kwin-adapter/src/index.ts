@@ -2,6 +2,26 @@ import { TilingEngine, type EngineConfig } from "./tiling-engine.js";
 import { registerShortcuts } from "./shortcuts.js";
 import type { LayoutAlgorithm } from "@tessera/protocol";
 
+export { RuntimeCoordinator } from "./runtime-coordinator.js";
+export {
+  ReconcilerBridge,
+  createCoordinator,
+  getOrCreateCoordinator,
+  toNormalizedWindow,
+  toNormalizedScreen,
+  resolveScreenAffinity,
+  resolveCursorTargetScreen,
+  pointToRectDistance,
+  rectIntersectionArea,
+  rectContainsPoint,
+  computeSnapZones,
+  matchSnapZoneHover
+} from "./qml-reconciler-compat.js";
+export * from "./coordinator-types.js";
+export * from "./screen-affinity.js";
+export * from "./snap-zones.js";
+export * from "./trace-recorder.js";
+
 export function initTessera(): TilingEngine {
   const readStr = (key: string, def: string) => String(KWin.readConfig(key, def));
   const readNum = (key: string, def: number) => Number(KWin.readConfig(key, def));

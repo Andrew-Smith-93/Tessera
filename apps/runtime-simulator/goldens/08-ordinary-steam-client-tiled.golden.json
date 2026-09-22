@@ -1,0 +1,168 @@
+{
+  "digest": "103f4139ad66bf1c1e7f707669d2dbbb8f1a47e5b7b7e3053bed0791d0942c60",
+  "fixtureName": "08-ordinary-steam-client-tiled",
+  "finalTick": 0,
+  "diagnostics": {
+    "totalEvents": 3,
+    "totalTransactions": 1,
+    "totalLayoutComputations": 1,
+    "totalGeometryWrites": 2,
+    "skippedWrites": 0,
+    "suppressedEchoes": 2,
+    "previewOnlyOperations": 0,
+    "committedSnapOperations": 0,
+    "unaffectedScreensRecomputed": 0
+  },
+  "canonicalState": {
+    "diagnostics": {
+      "committedSnapOperations": 0,
+      "previewOnlyOperations": 0,
+      "skippedWrites": 0,
+      "suppressedEchoes": 2,
+      "totalEvents": 3,
+      "totalGeometryWrites": 2,
+      "totalLayoutComputations": 1,
+      "totalTransactions": 1,
+      "unaffectedScreensRecomputed": 0
+    },
+    "finalTick": 0,
+    "fixtureName": "08-ordinary-steam-client-tiled",
+    "invariants": {
+      "passed": true,
+      "violations": []
+    },
+    "retainedScreens": [
+      {
+        "activeLayout": "master-stack",
+        "gaps": {
+          "inner": 8,
+          "outer": 10
+        },
+        "geometry": {
+          "height": 1080,
+          "width": 1920,
+          "x": 0,
+          "y": 0
+        },
+        "masterCount": 1,
+        "masterRatio": 0.5,
+        "name": "HDMI-A-1",
+        "orderedWindowIds": [
+          "steam-client",
+          "term-1"
+        ],
+        "outputId": "HDMI-A-1",
+        "persistentOrder": [
+          "steam-client",
+          "term-1"
+        ],
+        "usableArea": {
+          "height": 1080,
+          "width": 1920,
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "retainedWindows": [
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 1060,
+          "width": 946,
+          "x": 10,
+          "y": 10
+        },
+        "frameGeometry": {
+          "height": 1060,
+          "width": 946,
+          "x": 10,
+          "y": 10
+        },
+        "fullScreen": false,
+        "id": "steam-client",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "HDMI-A-1",
+        "outputId": "HDMI-A-1",
+        "preMinimizeGeometry": null,
+        "resourceClass": "steamwebhelper",
+        "tileable": true
+      },
+      {
+        "classification": "tiled",
+        "desiredGeometry": {
+          "height": 1060,
+          "width": 946,
+          "x": 964,
+          "y": 10
+        },
+        "frameGeometry": {
+          "height": 1060,
+          "width": 946,
+          "x": 964,
+          "y": 10
+        },
+        "fullScreen": false,
+        "id": "term-1",
+        "isManualFloating": false,
+        "maximizeMode": 0,
+        "minimized": false,
+        "noBorder": false,
+        "outputAffinity": "HDMI-A-1",
+        "outputId": "HDMI-A-1",
+        "preMinimizeGeometry": null,
+        "resourceClass": "kitty",
+        "tileable": true
+      }
+    ],
+    "schemaVersion": "1.0.0",
+    "transactions": [
+      {
+        "affectedScreens": [
+          "HDMI-A-1"
+        ],
+        "epoch": 1,
+        "operations": [
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 1060,
+              "width": 946,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "steam-client"
+          },
+          {
+            "previousRect": {
+              "height": 400,
+              "width": 600,
+              "x": 100,
+              "y": 100
+            },
+            "targetRect": {
+              "height": 1060,
+              "width": 946,
+              "x": 964,
+              "y": 10
+            },
+            "windowId": "term-1"
+          }
+        ],
+        "reasons": [
+          "WindowDiscovered"
+        ],
+        "skippedWrites": 0,
+        "tick": 0
+      }
+    ]
+  }
+}

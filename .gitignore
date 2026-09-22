@@ -14,6 +14,7 @@ out/
 # Rust target directories
 target/
 */target/
+*/*/target/
 
 # Python cache
 __pycache__/
