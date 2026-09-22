@@ -102,7 +102,7 @@ export class RuntimeSimulator {
           skippedWrites: tx.skippedWrites
         };
         transactions.push(serializableTx);
-        session.applyOperations(serializableTx.operations, clock.now(), coordinator);
+        session.applyOperations(serializableTx.operations, clock.now(), coordinator, serializableTx.epoch);
       }
     };
 
@@ -384,7 +384,7 @@ export class RuntimeSimulator {
               skippedWrites: tx.skippedWrites
             };
             transactions.push(serializableTx);
-            session.applyOperations(serializableTx.operations, clock.now(), coordinator);
+            session.applyOperations(serializableTx.operations, clock.now(), coordinator, serializableTx.epoch);
           }
           break;
         }

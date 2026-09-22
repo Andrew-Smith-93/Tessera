@@ -1,5 +1,5 @@
 {
-  "digest": "50dc12fd509fda3efc52bb1d6186516c4b293136fc5fc4afd743c7db6273f102",
+  "digest": "4cc5c6cdaaee9c8a5c96f2e06b8d7cb9026ca4dbbeb1ada6977d81eaf23ecceb",
   "fixtureName": "07-steam-game-floating-by-default",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

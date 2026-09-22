@@ -54,7 +54,10 @@ export function rectEqualsWithTolerance(
   );
 }
 
-export const GLOBAL_DESKTOP_SCOPE = "__global__";
+// KWin virtual-desktop IDs cannot contain NUL. Keeping the internal sentinel
+// outside the user-ID domain prevents a real desktop named "__global__" from
+// colliding with global-layout mode.
+export const GLOBAL_DESKTOP_SCOPE = "\u0000tessera-global";
 
 export interface RetainedWindowState {
   readonly id: RuntimeWindowId;
@@ -91,6 +94,7 @@ export interface RetainedWindowState {
 }
 
 export type WorkspaceScopeKey = string; // "${encodeURIComponent(outputId)}//${encodeURIComponent(desktopId)}"
+export type RuntimeLayoutAlgorithm = LayoutAlgorithm | "primary-stack";
 
 export function getWorkspaceScopeKey(outputId: string, desktopId: string = "1"): WorkspaceScopeKey {
   return `${encodeURIComponent(outputId)}//${encodeURIComponent(desktopId)}`;
@@ -100,7 +104,7 @@ export interface WorkspaceLayoutState {
   readonly scopeKey: WorkspaceScopeKey;
   readonly outputId: string;
   readonly desktopId: string;
-  activeLayout: LayoutAlgorithm;
+  activeLayout: RuntimeLayoutAlgorithm;
   primaryRegionCount: number;
   primaryRegionRatio: number;
   gaps: GapConfig;
@@ -115,7 +119,7 @@ export interface RetainedScreenState {
   activeDesktopId: string;
   activeActivityId?: string;
   // Compat getters/fields for active desktop's layout state
-  activeLayout: LayoutAlgorithm;
+  activeLayout: RuntimeLayoutAlgorithm;
   masterCount: number;
   masterRatio: number;
   primaryRegionCount: number;
@@ -145,7 +149,7 @@ export interface ReconciliationTransaction {
 
 export interface CoordinatorConfig {
   enableTiling: boolean;
-  defaultLayout: LayoutAlgorithm;
+  defaultLayout: RuntimeLayoutAlgorithm;
   gapInner: number;
   gapOuter: number;
   primaryRegionRatio?: number;
@@ -157,6 +161,7 @@ export interface CoordinatorConfig {
   gameWindowPolicy: GameWindowPolicy;
   floatFilter?: string;
   customRules?: CustomRule[] | string;
+  workspaceLayoutsJson?: string;
   customGamePatterns?: string[];
   geometryTolerancePx?: number;
   echoExpiryMs?: number;
@@ -234,10 +239,10 @@ export type NormalizedEvent =
   | { type: "WindowActivitiesChanged"; windowId: RuntimeWindowId; activities: string[] }
   | { type: "ScreenDesktopChanged"; outputId: string; toDesktopId: string }
   | { type: "ScreenTopologyChanged"; screens: NormalizedScreenInput[] }
-  | { type: "ScreenLayoutChanged"; outputId: string; layout: LayoutAlgorithm; desktopId?: string }
+  | { type: "ScreenLayoutChanged"; outputId: string; layout: RuntimeLayoutAlgorithm; desktopId?: string }
   | { type: "ScreenMasterConfigChanged"; outputId: string; count?: number; ratio?: number; desktopId?: string }
   | { type: "ScreenGapsChanged"; outputId: string; gaps: GapConfig; desktopId?: string }
-  | { type: "WorkspaceLayoutChanged"; outputId: string; desktopId: string; layout: LayoutAlgorithm }
+  | { type: "WorkspaceLayoutChanged"; outputId: string; desktopId: string; layout: RuntimeLayoutAlgorithm }
   | { type: "WorkspacePrimaryConfigChanged"; outputId: string; desktopId: string; count?: number; ratio?: number }
   | { type: "WorkspaceGapsChanged"; outputId: string; desktopId: string; gaps: GapConfig }
   | { type: "GlobalConfigChanged"; config: Partial<CoordinatorConfig> }

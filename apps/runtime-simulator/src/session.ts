@@ -48,10 +48,12 @@ export class SimulatedKWinSession {
   public applyOperations(
     operations: readonly SerializableGeometryOperation[],
     currentTick: number,
-    coordinator: RuntimeCoordinator
+    coordinator: RuntimeCoordinator,
+    epoch: number
   ): void {
     for (const op of operations) {
       this.totalWrites++;
+      coordinator.recordCommand(op.windowId, op.targetRect, epoch);
       this.windows.set(op.windowId, { geometry: { ...op.targetRect } });
 
       switch (this.echoMode) {

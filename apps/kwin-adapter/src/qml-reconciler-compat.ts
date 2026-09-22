@@ -50,6 +50,98 @@ export {
 };
 import type { Rect, RuntimeWindowId } from "@tessera/protocol";
 
+function stableObjectId(value: any, fallback: string = ""): string {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (value.id !== undefined && value.id !== null) return String(value.id);
+  if (value.name !== undefined && value.name !== null) return String(value.name);
+  return fallback;
+}
+
+function finiteNumber(value: any): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+export function normalizeCommitGeometry(target: any, bounds?: Rect): Rect | null {
+  if (!target) return null;
+  const x = finiteNumber(target.x);
+  const y = finiteNumber(target.y);
+  const width = finiteNumber(target.width);
+  const height = finiteNumber(target.height);
+  if (x === null || y === null || width === null || height === null || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  let normalized: Rect = {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height))
+  };
+  if (![normalized.x, normalized.y, normalized.width, normalized.height].every(Number.isSafeInteger)) {
+    return null;
+  }
+
+  if (bounds) {
+    const boundX = finiteNumber(bounds.x);
+    const boundY = finiteNumber(bounds.y);
+    const boundWidth = finiteNumber(bounds.width);
+    const boundHeight = finiteNumber(bounds.height);
+    if (boundX === null || boundY === null || boundWidth === null || boundHeight === null ||
+        boundWidth <= 0 || boundHeight <= 0) {
+      return null;
+    }
+    const boundedWidth = Math.min(normalized.width, Math.round(boundWidth));
+    const boundedHeight = Math.min(normalized.height, Math.round(boundHeight));
+    const minX = Math.round(boundX);
+    const minY = Math.round(boundY);
+    const maxX = Math.round(boundX + boundWidth - boundedWidth);
+    const maxY = Math.round(boundY + boundHeight - boundedHeight);
+    normalized = {
+      x: Math.max(minX, Math.min(maxX, normalized.x)),
+      y: Math.max(minY, Math.min(maxY, normalized.y)),
+      width: boundedWidth,
+      height: boundedHeight
+    };
+  }
+
+  return normalized;
+}
+
+export type CommitOutcome = "applied" | "unchanged-valid" | "rejected";
+
+export interface CommitGeometryEvaluation {
+  outcome: CommitOutcome;
+  normalized: Rect | null;
+}
+
+export function evaluateCommitGeometry(
+  win: { deleted?: boolean; managed?: boolean; frameGeometry?: Rect } | null | undefined,
+  targetRect: any,
+  bounds?: Rect
+): CommitGeometryEvaluation {
+  if (!win || win.deleted === true || win.managed === false || !win.frameGeometry || !targetRect) {
+    return { outcome: "rejected", normalized: null };
+  }
+
+  const normalized = normalizeCommitGeometry(targetRect, bounds);
+  if (!normalized) {
+    return { outcome: "rejected", normalized: null };
+  }
+
+  const current = win.frameGeometry;
+  if (
+    current.x === normalized.x &&
+    current.y === normalized.y &&
+    current.width === normalized.width &&
+    current.height === normalized.height
+  ) {
+    return { outcome: "unchanged-valid", normalized };
+  }
+
+  return { outcome: "applied", normalized };
+}
+
 export function toNormalizedWindow(w: any, screen?: any, usableArea?: Rect): NormalizedWindowInput {
   if (!w) return { id: "unknown", managed: false, normalWindow: false };
 
@@ -66,11 +158,11 @@ export function toNormalizedWindow(w: any, screen?: any, usableArea?: Rect): Nor
     title: w.caption ? String(w.caption) : (w.title ? String(w.title) : ""),
     role: w.windowRole ? String(w.windowRole) : "",
     outputId: screen?.name ? String(screen.name) : (w.output?.name ? String(w.output.name) : "default"),
-    desktopId: w.desktops && w.desktops.length > 0 ? String(w.desktops[0]) : "1",
-    desktopIds: Array.isArray(w.desktops) ? w.desktops.map((d: any) => String(d)) : (w.desktopId ? [String(w.desktopId)] : ["1"]),
+    desktopId: w.desktops && w.desktops.length > 0 ? stableObjectId(w.desktops[0], "1") : stableObjectId(w.desktopId, "1"),
+    desktopIds: Array.isArray(w.desktops) ? w.desktops.map((d: any) => stableObjectId(d)).filter(Boolean) : (w.desktopId ? [stableObjectId(w.desktopId)] : ["1"]),
     onAllDesktops: Boolean(w.onAllDesktops),
-    activityId: w.activities && w.activities.length > 0 ? String(w.activities[0]) : undefined,
-    activities: Array.isArray(w.activities) ? w.activities.map((a: any) => String(a)) : [],
+    activityId: w.activities && w.activities.length > 0 ? stableObjectId(w.activities[0]) : undefined,
+    activities: Array.isArray(w.activities) ? w.activities.map((a: any) => stableObjectId(a)).filter(Boolean) : [],
     minimized: Boolean(w.minimized),
     fullScreen: Boolean(w.fullScreen),
     noBorder: Boolean(w.noBorder),
@@ -112,7 +204,12 @@ export function toNormalizedWindow(w: any, screen?: any, usableArea?: Rect): Nor
   };
 }
 
-export function toNormalizedScreen(scr: any, usableArea?: Rect): NormalizedScreenInput {
+export function toNormalizedScreen(
+  scr: any,
+  usableArea?: Rect,
+  activeDesktop?: any,
+  activeActivity?: any
+): NormalizedScreenInput {
   const outputId = scr?.name ? String(scr.name) : "default";
   const geom: Rect = scr?.geometry ? {
     x: Number(scr.geometry.x || 0),
@@ -132,7 +229,11 @@ export function toNormalizedScreen(scr: any, usableArea?: Rect): NormalizedScree
     outputId,
     name: scr?.name ? String(scr.name) : outputId,
     geometry: geom,
-    usableArea: area
+    usableArea: area,
+    activeDesktopId: stableObjectId(activeDesktop, "1"),
+    activeActivityId: activeActivity === undefined || activeActivity === null
+      ? undefined
+      : stableObjectId(activeActivity)
   };
 }
 
@@ -156,6 +257,8 @@ export const ReconcilerBridge = {
   getOrCreateCoordinator,
   toNormalizedWindow,
   toNormalizedScreen,
+  normalizeCommitGeometry,
+  evaluateCommitGeometry,
   resolveScreenAffinity,
   resolveCursorTargetScreen,
   computeSnapZones,

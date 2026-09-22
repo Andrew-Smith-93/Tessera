@@ -62,11 +62,11 @@ export function computeSnapZones(
     triggerH: 66
   });
 
-  // 2. Left Half (Master Slot) (Index 1)
+  // 2. Left Half (Primary Slot) (Index 1)
   zones.push({
     type: "half",
     id: "left-half",
-    title: "Left Half (Master)",
+    title: "Left Half (Primary)",
     badge: "⊞ Left Split",
     desc: "50% Primary Pane",
     slotIndex: 0,

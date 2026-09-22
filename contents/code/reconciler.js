@@ -24,8 +24,10 @@ var ReconcilerModule = (() => {
     ReconcilerBridge: () => ReconcilerBridge,
     computeSnapZones: () => computeSnapZones,
     createCoordinator: () => createCoordinator,
+    evaluateCommitGeometry: () => evaluateCommitGeometry,
     getOrCreateCoordinator: () => getOrCreateCoordinator,
     matchSnapZoneHover: () => matchSnapZoneHover,
+    normalizeCommitGeometry: () => normalizeCommitGeometry,
     pointToRectDistance: () => pointToRectDistance,
     rectContainsPoint: () => rectContainsPoint,
     rectIntersectionArea: () => rectIntersectionArea,
@@ -356,7 +358,7 @@ var ReconcilerModule = (() => {
   function rectEqualsWithTolerance(a, b, tolerance = DEFAULT_GEOMETRY_TOLERANCE_PX) {
     return Math.abs(a.x - b.x) <= tolerance && Math.abs(a.y - b.y) <= tolerance && Math.abs(a.width - b.width) <= tolerance && Math.abs(a.height - b.height) <= tolerance;
   }
-  var GLOBAL_DESKTOP_SCOPE = "__global__";
+  var GLOBAL_DESKTOP_SCOPE = "\0tessera-global";
   function getWorkspaceScopeKey(outputId, desktopId = "1") {
     return `${encodeURIComponent(outputId)}//${encodeURIComponent(desktopId)}`;
   }
@@ -994,6 +996,19 @@ var ReconcilerModule = (() => {
   };
 
   // apps/kwin-adapter/src/runtime-coordinator.ts
+  var WORKSPACE_LAYOUT_VERSION = 1;
+  var WORKSPACE_LAYOUT_MAX_ENTRIES = 50;
+  var WORKSPACE_LAYOUT_MAX_BYTES = 65536;
+  var VALID_WORKSPACE_LAYOUTS = /* @__PURE__ */ new Set([
+    "balanced-grid",
+    "primary-stack",
+    "binary-split",
+    "columns",
+    "rows",
+    "monocle",
+    "floating"
+  ]);
+  var UNSAFE_SCOPE_PARTS = /* @__PURE__ */ new Set(["__proto__", "prototype", "constructor"]);
   var RuntimeCoordinator = class {
     windows = /* @__PURE__ */ new Map();
     screens = /* @__PURE__ */ new Map();
@@ -1001,6 +1016,7 @@ var ReconcilerModule = (() => {
     inFlightEchoes = /* @__PURE__ */ new Map();
     dirtyScreenIds = /* @__PURE__ */ new Set();
     pendingReasons = /* @__PURE__ */ new Set();
+    workspaceLayoutOverrides = /* @__PURE__ */ new Map();
     clock;
     traceRecorder;
     config;
@@ -1014,6 +1030,7 @@ var ReconcilerModule = (() => {
     suppressedGeometryEchoes = 0;
     lastTransactionReasons = [];
     lastAffectedScreenIds = [];
+    workspaceLayoutConfigError = null;
     constructor(initialConfig, clock = new SystemClock(), traceRecorder = new TraceRecorder()) {
       this.clock = clock;
       this.traceRecorder = traceRecorder;
@@ -1021,7 +1038,7 @@ var ReconcilerModule = (() => {
       const effCount = initialConfig?.primaryRegionCount !== void 0 ? initialConfig.primaryRegionCount : initialConfig?.masterCount ?? 1;
       this.config = {
         enableTiling: initialConfig?.enableTiling ?? true,
-        defaultLayout: initialConfig?.defaultLayout ?? "master-stack",
+        defaultLayout: initialConfig?.defaultLayout ?? "balanced-grid",
         gapInner: initialConfig?.gapInner ?? 8,
         gapOuter: initialConfig?.gapOuter ?? 10,
         primaryRegionRatio: effRatio,
@@ -1033,15 +1050,18 @@ var ReconcilerModule = (() => {
         gameWindowPolicy: initialConfig?.gameWindowPolicy ?? "floating",
         floatFilter: initialConfig?.floatFilter ?? "tessera,tessera-settings,tessera_settings.py",
         customRules: initialConfig?.customRules ?? "[]",
+        workspaceLayoutsJson: initialConfig?.workspaceLayoutsJson ?? '{"version":1,"scopes":{}}',
         customGamePatterns: initialConfig?.customGamePatterns ?? [],
         geometryTolerancePx: initialConfig?.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX,
         echoExpiryMs: initialConfig?.echoExpiryMs ?? DEFAULT_ECHO_EXPIRY_MS
       };
+      this.loadWorkspaceLayoutsJson(initialConfig?.workspaceLayoutsJson);
     }
     getConfig() {
       return { ...this.config };
     }
     updateConfig(updates) {
+      const previousPerDesktopLayout = this.config.perDesktopLayout;
       const effRatio = updates.primaryRegionRatio !== void 0 ? updates.primaryRegionRatio : updates.masterRatio !== void 0 ? updates.masterRatio : this.config.masterRatio;
       const effCount = updates.primaryRegionCount !== void 0 ? updates.primaryRegionCount : updates.masterCount !== void 0 ? updates.masterCount : this.config.masterCount;
       this.config = {
@@ -1052,6 +1072,12 @@ var ReconcilerModule = (() => {
         masterRatio: effRatio,
         masterCount: effCount
       };
+      if (previousPerDesktopLayout !== this.config.perDesktopLayout) {
+        this.rebuildWorkspaceMemberships();
+      }
+      if (updates.workspaceLayoutsJson !== void 0) {
+        this.loadWorkspaceLayoutsJson(updates.workspaceLayoutsJson);
+      }
       this.invalidateAllScreens("GlobalConfigChanged");
     }
     getWorkspaceScopeKey(outputId, desktopId = "1") {
@@ -1080,19 +1106,239 @@ var ReconcilerModule = (() => {
       const key = getWorkspaceScopeKey(outputId, effDeskId);
       let ws = this.workspaces.get(key);
       if (!ws) {
+        const override = this.workspaceLayoutOverrides.get(key) || this.workspaceLayoutOverrides.get(getWorkspaceScopeKey("*", effDeskId));
         ws = {
           scopeKey: key,
           outputId,
           desktopId: effDeskId,
-          activeLayout: this.config.defaultLayout,
-          primaryRegionCount: this.config.primaryRegionCount ?? this.config.masterCount,
-          primaryRegionRatio: this.config.primaryRegionRatio ?? this.config.masterRatio,
+          activeLayout: override?.layout || this.config.defaultLayout,
+          primaryRegionCount: override?.primaryCount ?? this.config.primaryRegionCount ?? this.config.masterCount,
+          primaryRegionRatio: override?.ratio ?? this.config.primaryRegionRatio ?? this.config.masterRatio,
           gaps: { inner: this.config.gapInner, outer: this.config.gapOuter },
           orderedSlotWindowIds: []
         };
         this.workspaces.set(key, ws);
       }
       return ws;
+    }
+    getWorkspaceLayoutConfigError() {
+      return this.workspaceLayoutConfigError;
+    }
+    loadWorkspaceLayoutsJson(serialized) {
+      this.workspaceLayoutOverrides.clear();
+      this.workspaceLayoutConfigError = null;
+      if (serialized === void 0) {
+        this.config.workspaceLayoutsJson = '{"version":1,"scopes":{}}';
+        this.applyWorkspaceLayoutOverrides();
+        return true;
+      }
+      const effectiveSerialized = serialized;
+      try {
+        if (this.utf8ByteLength(effectiveSerialized) > WORKSPACE_LAYOUT_MAX_BYTES) {
+          throw new Error("workspace layout configuration exceeds 64 KiB");
+        }
+        this.assertNoDuplicateJsonKeys(effectiveSerialized);
+        const parsed = JSON.parse(effectiveSerialized);
+        let scopes;
+        let requireCanonicalEncoding = true;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && !Object.prototype.hasOwnProperty.call(parsed, "version") && !Object.prototype.hasOwnProperty.call(parsed, "scopes")) {
+          scopes = parsed;
+          requireCanonicalEncoding = false;
+        } else {
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("workspace layout configuration must be an object");
+          }
+          if (parsed.version !== WORKSPACE_LAYOUT_VERSION) {
+            throw new Error(`unsupported workspace layout version '${String(parsed.version)}'`);
+          }
+          if (!parsed.scopes || typeof parsed.scopes !== "object" || Array.isArray(parsed.scopes)) {
+            throw new Error("workspace layout scopes must be an object");
+          }
+          if (Object.keys(parsed).some((key) => key !== "version" && key !== "scopes")) {
+            throw new Error("workspace layout root contains unknown fields");
+          }
+          scopes = parsed.scopes;
+        }
+        const scopeKeys = Object.keys(scopes);
+        if (scopeKeys.length > WORKSPACE_LAYOUT_MAX_ENTRIES) {
+          throw new Error("workspace layout configuration exceeds 50 scopes");
+        }
+        const canonicalScopes = {};
+        for (const scopeKey of scopeKeys) {
+          const parts = scopeKey.split("//");
+          if (parts.length !== 2 || !parts[0] || !parts[1]) {
+            throw new Error(`invalid workspace scope '${scopeKey}'`);
+          }
+          const outputId = decodeURIComponent(parts[0]);
+          const desktopId = decodeURIComponent(parts[1]);
+          if (UNSAFE_SCOPE_PARTS.has(outputId) || UNSAFE_SCOPE_PARTS.has(desktopId)) {
+            throw new Error(`unsafe workspace scope '${scopeKey}'`);
+          }
+          const canonicalKey = getWorkspaceScopeKey(outputId, desktopId);
+          if (canonicalKey !== scopeKey) {
+            throw new Error(`non-canonical workspace scope '${scopeKey}'`);
+          }
+          const raw = scopes[scopeKey];
+          if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+            throw new Error(`workspace scope '${scopeKey}' must be an object`);
+          }
+          if (Object.keys(raw).some((key) => !["layout", "ratio", "primaryCount"].includes(key))) {
+            throw new Error(`workspace scope '${scopeKey}' contains unknown fields`);
+          }
+          const override = {};
+          if (raw.layout !== void 0) {
+            const layout = raw.layout === "master-stack" ? "primary-stack" : raw.layout;
+            if (typeof layout !== "string" || !VALID_WORKSPACE_LAYOUTS.has(layout)) {
+              throw new Error(`invalid layout in workspace scope '${scopeKey}'`);
+            }
+            override.layout = layout;
+          }
+          if (raw.ratio !== void 0) {
+            if (typeof raw.ratio !== "number" || !Number.isFinite(raw.ratio) || raw.ratio < 0.1 || raw.ratio > 0.9) {
+              throw new Error(`invalid ratio in workspace scope '${scopeKey}'`);
+            }
+            override.ratio = raw.ratio;
+          }
+          if (raw.primaryCount !== void 0) {
+            if (!Number.isInteger(raw.primaryCount) || raw.primaryCount < 0 || raw.primaryCount > 10) {
+              throw new Error(`invalid primaryCount in workspace scope '${scopeKey}'`);
+            }
+            override.primaryCount = raw.primaryCount;
+          }
+          canonicalScopes[canonicalKey] = override;
+        }
+        const canonical = this.canonicalWorkspaceLayoutJson(canonicalScopes);
+        if (requireCanonicalEncoding) {
+          if (canonical !== effectiveSerialized) {
+            throw new Error("workspace layout configuration is not canonically serialized");
+          }
+        }
+        this.config.workspaceLayoutsJson = canonical;
+        for (const key of Object.keys(canonicalScopes).sort()) {
+          this.workspaceLayoutOverrides.set(key, canonicalScopes[key]);
+        }
+        this.applyWorkspaceLayoutOverrides();
+        return true;
+      } catch (error) {
+        this.workspaceLayoutConfigError = error instanceof Error ? error.message : String(error);
+        this.config.workspaceLayoutsJson = '{"version":1,"scopes":{}}';
+        this.applyWorkspaceLayoutOverrides();
+        return false;
+      }
+    }
+    canonicalWorkspaceLayoutJson(scopes) {
+      const orderedScopes = {};
+      for (const key of Object.keys(scopes).sort()) {
+        const value = scopes[key];
+        const orderedValue = {};
+        if (value.layout !== void 0) orderedValue.layout = value.layout;
+        if (value.ratio !== void 0) orderedValue.ratio = value.ratio;
+        if (value.primaryCount !== void 0) orderedValue.primaryCount = value.primaryCount;
+        orderedScopes[key] = orderedValue;
+      }
+      return JSON.stringify({ version: WORKSPACE_LAYOUT_VERSION, scopes: orderedScopes });
+    }
+    utf8ByteLength(value) {
+      let bytes = 0;
+      for (let i = 0; i < value.length; i++) {
+        const code = value.charCodeAt(i);
+        if (code < 128) bytes += 1;
+        else if (code < 2048) bytes += 2;
+        else if (code >= 55296 && code <= 56319 && i + 1 < value.length && value.charCodeAt(i + 1) >= 56320 && value.charCodeAt(i + 1) <= 57343) {
+          bytes += 4;
+          i++;
+        } else bytes += 3;
+      }
+      return bytes;
+    }
+    assertNoDuplicateJsonKeys(serialized) {
+      let offset = 0;
+      const skipWhitespace = () => {
+        while (offset < serialized.length && /\s/.test(serialized[offset])) offset++;
+      };
+      const parseString = () => {
+        const start = offset;
+        if (serialized[offset] !== '"') throw new Error("invalid JSON string");
+        offset++;
+        let escaped = false;
+        while (offset < serialized.length) {
+          const char = serialized[offset++];
+          if (escaped) {
+            escaped = false;
+          } else if (char === "\\") {
+            escaped = true;
+          } else if (char === '"') {
+            return JSON.parse(serialized.slice(start, offset));
+          }
+        }
+        throw new Error("unterminated JSON string");
+      };
+      const parseValue = () => {
+        skipWhitespace();
+        if (serialized[offset] === "{") {
+          parseObject();
+        } else if (serialized[offset] === "[") {
+          offset++;
+          skipWhitespace();
+          if (serialized[offset] === "]") {
+            offset++;
+            return;
+          }
+          while (offset < serialized.length) {
+            parseValue();
+            skipWhitespace();
+            if (serialized[offset] === "]") {
+              offset++;
+              return;
+            }
+            if (serialized[offset] !== ",") throw new Error("invalid JSON array");
+            offset++;
+          }
+        } else if (serialized[offset] === '"') {
+          parseString();
+        } else {
+          const start = offset;
+          while (offset < serialized.length && !/[\s,\]}]/.test(serialized[offset])) offset++;
+          if (offset === start) throw new Error("invalid JSON value");
+        }
+      };
+      const parseObject = () => {
+        const keys = /* @__PURE__ */ new Set();
+        offset++;
+        skipWhitespace();
+        if (serialized[offset] === "}") {
+          offset++;
+          return;
+        }
+        while (offset < serialized.length) {
+          skipWhitespace();
+          const key = parseString();
+          if (keys.has(key)) throw new Error(`duplicate JSON key '${key}'`);
+          keys.add(key);
+          skipWhitespace();
+          if (serialized[offset] !== ":") throw new Error("invalid JSON object");
+          offset++;
+          parseValue();
+          skipWhitespace();
+          if (serialized[offset] === "}") {
+            offset++;
+            return;
+          }
+          if (serialized[offset] !== ",") throw new Error("invalid JSON object");
+          offset++;
+        }
+      };
+      parseValue();
+      skipWhitespace();
+      if (offset !== serialized.length) throw new Error("trailing JSON content");
+    }
+    applyWorkspaceLayoutOverrides() {
+      for (const ws of this.workspaces.values()) {
+        const override = this.workspaceLayoutOverrides.get(ws.scopeKey) || this.workspaceLayoutOverrides.get(getWorkspaceScopeKey("*", ws.desktopId));
+        ws.activeLayout = override?.layout || this.config.defaultLayout;
+        ws.primaryRegionCount = override?.primaryCount ?? this.config.primaryRegionCount ?? this.config.masterCount;
+        ws.primaryRegionRatio = override?.ratio ?? this.config.primaryRegionRatio ?? this.config.masterRatio;
+      }
     }
     getWorkspace(outputId, desktopId = "1") {
       const effDeskId = this.getEffectiveDesktopId(desktopId);
@@ -1170,7 +1416,7 @@ var ReconcilerModule = (() => {
         screen.geometry = { ...input.geometry };
         screen.usableArea = { ...input.usableArea };
         if (input.activeDesktopId) screen.activeDesktopId = input.activeDesktopId;
-        if (input.activeActivityId) screen.activeActivityId = input.activeActivityId;
+        screen.activeActivityId = input.activeActivityId;
       }
       return screen;
     }
@@ -1188,6 +1434,42 @@ var ReconcilerModule = (() => {
         this.dirtyScreenIds.add(screen.outputId);
       }
       this.pendingReasons.add(reason);
+    }
+    removeWindowFromOutputWorkspaces(windowId, outputId) {
+      for (const ws of this.workspaces.values()) {
+        if (ws.outputId !== outputId) continue;
+        let idx = ws.orderedSlotWindowIds.indexOf(windowId);
+        while (idx !== -1) {
+          ws.orderedSlotWindowIds.splice(idx, 1);
+          idx = ws.orderedSlotWindowIds.indexOf(windowId);
+        }
+      }
+    }
+    addWindowToApplicableWorkspaces(win, outputId = win.outputId, activeDesktopId) {
+      const desktopIds = win.desktopIds.length > 0 ? win.desktopIds : [win.desktopId || "1"];
+      let targets;
+      if (this.config.perDesktopLayout === false) {
+        targets = [GLOBAL_DESKTOP_SCOPE];
+      } else if (win.onAllDesktops) {
+        const screen = this.screens.get(outputId);
+        targets = [activeDesktopId || screen?.activeDesktopId || win.desktopId || "1"];
+      } else {
+        targets = [...new Set(desktopIds)];
+      }
+      for (const desktopId of targets) {
+        const ws = this.getOrCreateWorkspace(outputId, desktopId);
+        if (!ws.orderedSlotWindowIds.includes(win.id)) {
+          ws.orderedSlotWindowIds.push(win.id);
+        }
+      }
+    }
+    rebuildWorkspaceMemberships() {
+      for (const ws of this.workspaces.values()) {
+        ws.orderedSlotWindowIds = [];
+      }
+      for (const win of this.windows.values()) {
+        this.addWindowToApplicableWorkspaces(win);
+      }
     }
     classifyWindow(input, screen) {
       const ruleInput = {
@@ -1293,26 +1575,7 @@ var ReconcilerModule = (() => {
             outputAffinity: winInput.outputAffinity || outputId
           };
           this.windows.set(winInput.id, retained);
-          if (this.config.perDesktopLayout === false) {
-            const ws = this.getOrCreateWorkspace(outputId, GLOBAL_DESKTOP_SCOPE);
-            if (!ws.orderedSlotWindowIds.includes(winInput.id)) {
-              ws.orderedSlotWindowIds.push(winInput.id);
-            }
-          } else if (isSticky) {
-            const scr = this.screens.get(outputId);
-            const activeDesk = scr ? scr.activeDesktopId : desktopId;
-            const ws = this.getOrCreateWorkspace(outputId, activeDesk);
-            if (!ws.orderedSlotWindowIds.includes(winInput.id)) {
-              ws.orderedSlotWindowIds.push(winInput.id);
-            }
-          } else {
-            for (const dId of deskIds) {
-              const ws = this.getOrCreateWorkspace(outputId, dId);
-              if (!ws.orderedSlotWindowIds.includes(winInput.id)) {
-                ws.orderedSlotWindowIds.push(winInput.id);
-              }
-            }
-          }
+          this.addWindowToApplicableWorkspaces(retained, outputId);
           this.markScreenDirty(outputId, "WindowDiscovered");
           return { dirty: true, affectedScreens: [outputId], isEcho: false };
         }
@@ -1379,8 +1642,17 @@ var ReconcilerModule = (() => {
           if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
           const prevTileable = win.tileable;
           const prevClass = win.classification;
+          const prevManualFloating = win.isManualFloating;
+          const prevMinimized = win.minimized;
+          const prevFullScreen = win.fullScreen;
+          const prevMaximizeMode = win.maximizeMode;
+          let membershipChanged = false;
           if (event.updates.resourceClass !== void 0) win.resourceClass = event.updates.resourceClass;
+          if (event.updates.resourceName !== void 0) win.resourceName = event.updates.resourceName;
+          if (event.updates.appId !== void 0) win.appId = event.updates.appId;
+          if (event.updates.desktopFileName !== void 0) win.desktopFileName = event.updates.desktopFileName;
           if (event.updates.title !== void 0) win.title = event.updates.title;
+          if (event.updates.role !== void 0) win.role = event.updates.role;
           if (event.updates.frameGeometry !== void 0) {
             win.frameGeometry = { ...event.updates.frameGeometry };
             win.lastObservedGeometry = { ...event.updates.frameGeometry };
@@ -1391,21 +1663,57 @@ var ReconcilerModule = (() => {
             }
             win.minimized = event.updates.minimized;
           }
-          if (event.updates.fullScreen !== void 0) win.fullScreen = event.updates.fullScreen;
-          if (event.updates.noBorder !== void 0) win.noBorder = event.updates.noBorder;
-          if (event.updates.maximizeMode !== void 0) win.maximizeMode = event.updates.maximizeMode;
-          if (event.updates.isManualFloating !== void 0) win.isManualFloating = event.updates.isManualFloating;
-          if (event.updates.isDragging !== void 0) win.isDragging = event.updates.isDragging;
-          if (event.updates.isPreTiled !== void 0) win.isPreTiled = event.updates.isPreTiled;
-          if (event.updates.outputAffinity !== void 0) win.outputAffinity = event.updates.outputAffinity;
-          if (event.updates.onAllDesktops !== void 0) win.onAllDesktops = event.updates.onAllDesktops;
-          if (event.updates.desktopIds !== void 0) win.desktopIds = [...event.updates.desktopIds];
-          if (event.updates.activities !== void 0) win.activities = [...event.updates.activities];
+          if (event.updates.fullScreen !== void 0) {
+            win.fullScreen = event.updates.fullScreen;
+          }
+          if (event.updates.noBorder !== void 0) {
+            win.noBorder = event.updates.noBorder;
+          }
+          if (event.updates.maximizeMode !== void 0) {
+            win.maximizeMode = event.updates.maximizeMode;
+          }
+          if (event.updates.isManualFloating !== void 0) {
+            win.isManualFloating = event.updates.isManualFloating;
+          }
+          if (event.updates.isDragging !== void 0) {
+            win.isDragging = event.updates.isDragging;
+          }
+          if (event.updates.isPreTiled !== void 0) {
+            win.isPreTiled = event.updates.isPreTiled;
+          }
+          if (event.updates.outputAffinity !== void 0) {
+            win.outputAffinity = event.updates.outputAffinity;
+          }
+          if (event.updates.onAllDesktops !== void 0 && event.updates.onAllDesktops !== win.onAllDesktops) {
+            win.onAllDesktops = event.updates.onAllDesktops;
+            membershipChanged = true;
+          }
+          if (event.updates.desktopIds !== void 0) {
+            const nextDesktopIds = [...event.updates.desktopIds];
+            if (nextDesktopIds.length !== win.desktopIds.length || nextDesktopIds.some((id) => !win.desktopIds.includes(id))) {
+              membershipChanged = true;
+            }
+            win.desktopIds = nextDesktopIds;
+            if (nextDesktopIds.length > 0) win.desktopId = nextDesktopIds[0];
+          }
+          if (event.updates.activities !== void 0) {
+            const nextActivities = [...event.updates.activities];
+            win.activities = nextActivities;
+            win.activityId = nextActivities[0];
+          }
+          if (membershipChanged) {
+            this.removeWindowFromOutputWorkspaces(win.id, win.outputId);
+            this.addWindowToApplicableWorkspaces(win);
+          }
           const screen = this.screens.get(win.outputId);
           const newClassResult = this.classifyWindow({
             id: win.id,
             resourceClass: win.resourceClass,
+            resourceName: win.resourceName,
+            appId: win.appId,
+            desktopFileName: win.desktopFileName,
             title: win.title,
+            role: win.role,
             noBorder: win.noBorder,
             maximizeMode: win.maximizeMode,
             fullScreen: win.fullScreen,
@@ -1416,8 +1724,8 @@ var ReconcilerModule = (() => {
           }, screen);
           win.classification = newClassResult.classification;
           win.tileable = newClassResult.classification === "tiled";
-          const changed = prevTileable !== win.tileable || prevClass !== win.classification || event.updates.minimized !== void 0;
-          if (changed) {
+          const layoutAffectingStateChanged = prevTileable !== win.tileable || prevClass !== win.classification || prevManualFloating !== win.isManualFloating || prevMinimized !== win.minimized || prevFullScreen !== win.fullScreen || prevMaximizeMode !== win.maximizeMode || membershipChanged;
+          if (layoutAffectingStateChanged) {
             const reason = win.fullScreen ? "WindowFullscreenEntered" : !win.fullScreen && prevClass === "fullscreen" ? "WindowFullscreenExited" : "WindowStateChanged";
             this.markScreenDirty(win.outputId, reason);
             return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
@@ -1426,43 +1734,17 @@ var ReconcilerModule = (() => {
         }
         case "WindowMovedOutput": {
           const win = this.windows.get(event.windowId);
-          const deskId = win ? win.desktopId : "1";
           if (win) {
             win.outputId = event.toOutputId;
             win.outputAffinity = event.toOutputId;
           }
-          for (const ws of this.workspaces.values()) {
-            if (ws.outputId === event.fromOutputId) {
-              const idx = ws.orderedSlotWindowIds.indexOf(event.windowId);
-              if (idx !== -1) ws.orderedSlotWindowIds.splice(idx, 1);
-            }
-          }
+          this.removeWindowFromOutputWorkspaces(event.windowId, event.fromOutputId);
           const oldScreen = this.screens.get(event.fromOutputId);
           if (oldScreen) {
             oldScreen.dirtyReasons.add("WindowMovedOutputSource");
             this.dirtyScreenIds.add(oldScreen.outputId);
           }
-          const targetDesks = win && win.desktopIds && win.desktopIds.length > 0 ? win.desktopIds : [deskId];
-          if (this.config.perDesktopLayout === false) {
-            const newWs = this.getOrCreateWorkspace(event.toOutputId, GLOBAL_DESKTOP_SCOPE);
-            if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
-              newWs.orderedSlotWindowIds.push(event.windowId);
-            }
-          } else if (win && win.onAllDesktops) {
-            const newScr = this.screens.get(event.toOutputId);
-            const actDesk = newScr ? newScr.activeDesktopId : deskId;
-            const newWs = this.getOrCreateWorkspace(event.toOutputId, actDesk);
-            if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
-              newWs.orderedSlotWindowIds.push(event.windowId);
-            }
-          } else {
-            for (const dId of targetDesks) {
-              const newWs = this.getOrCreateWorkspace(event.toOutputId, dId);
-              if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
-                newWs.orderedSlotWindowIds.push(event.windowId);
-              }
-            }
-          }
+          if (win) this.addWindowToApplicableWorkspaces(win, event.toOutputId);
           const newScreen = this.screens.get(event.toOutputId);
           if (newScreen) {
             newScreen.dirtyReasons.add("WindowMovedOutputTarget");
@@ -1474,20 +1756,12 @@ var ReconcilerModule = (() => {
         case "WindowMovedDesktop": {
           const win = this.windows.get(event.windowId);
           if (win) {
-            const oldDeskId = event.fromDesktopId;
             const newDeskId = event.toDesktopId;
             win.desktopId = newDeskId;
             win.desktopIds = [newDeskId];
             win.onAllDesktops = false;
-            const oldWs = this.getWorkspace(win.outputId, oldDeskId);
-            if (oldWs) {
-              const idx = oldWs.orderedSlotWindowIds.indexOf(event.windowId);
-              if (idx !== -1) oldWs.orderedSlotWindowIds.splice(idx, 1);
-            }
-            const newWs = this.getOrCreateWorkspace(win.outputId, newDeskId);
-            if (!newWs.orderedSlotWindowIds.includes(event.windowId)) {
-              newWs.orderedSlotWindowIds.push(event.windowId);
-            }
+            this.removeWindowFromOutputWorkspaces(event.windowId, win.outputId);
+            this.addWindowToApplicableWorkspaces(win);
             this.markScreenDirty(win.outputId, "WindowMovedDesktop");
             return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
           }
@@ -1498,14 +1772,17 @@ var ReconcilerModule = (() => {
           if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
           const newDesks = [...event.desktopIds];
           const newSticky = event.onAllDesktops !== void 0 ? Boolean(event.onAllDesktops) : win.onAllDesktops;
+          const unchanged = newSticky === win.onAllDesktops && newDesks.length === win.desktopIds.length && newDesks.every((id) => win.desktopIds.includes(id));
+          if (unchanged) return { dirty: false, affectedScreens: [], isEcho: false };
           win.desktopIds = newDesks;
           win.onAllDesktops = newSticky;
           if (newDesks.length > 0) {
             win.desktopId = newDesks[0];
           }
+          const activeDesktopId = this.screens.get(win.outputId)?.activeDesktopId || win.desktopId;
           for (const ws of this.workspaces.values()) {
             if (ws.outputId !== win.outputId) continue;
-            const inMembership = newSticky || newDesks.includes(ws.desktopId) || !this.config.perDesktopLayout && ws.desktopId === GLOBAL_DESKTOP_SCOPE;
+            const inMembership = this.config.perDesktopLayout === false ? ws.desktopId === GLOBAL_DESKTOP_SCOPE : newSticky ? ws.desktopId === activeDesktopId : newDesks.includes(ws.desktopId);
             const idx = ws.orderedSlotWindowIds.indexOf(event.windowId);
             if (inMembership && idx === -1) {
               ws.orderedSlotWindowIds.push(event.windowId);
@@ -1513,36 +1790,31 @@ var ReconcilerModule = (() => {
               ws.orderedSlotWindowIds.splice(idx, 1);
             }
           }
-          if (this.config.perDesktopLayout !== false && !newSticky) {
-            for (const dId of newDesks) {
-              const ws = this.getOrCreateWorkspace(win.outputId, dId);
-              if (!ws.orderedSlotWindowIds.includes(event.windowId)) {
-                ws.orderedSlotWindowIds.push(event.windowId);
-              }
-            }
-          }
+          this.addWindowToApplicableWorkspaces(win, win.outputId, activeDesktopId);
           this.markScreenDirty(win.outputId, "WindowDesktopsChanged");
           return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
         }
         case "WindowActivitiesChanged": {
           const win = this.windows.get(event.windowId);
           if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
+          const unchanged = event.activities.length === win.activities.length && event.activities.every((id) => win.activities.includes(id));
+          if (unchanged) return { dirty: false, affectedScreens: [], isEcho: false };
           win.activities = [...event.activities];
-          if (event.activities.length > 0) {
-            win.activityId = event.activities[0];
-          }
-          return { dirty: false, affectedScreens: [], isEcho: false };
+          win.activityId = event.activities.length > 0 ? event.activities[0] : void 0;
+          this.markScreenDirty(win.outputId, "WindowActivitiesChanged");
+          return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
         }
         case "ScreenDesktopChanged": {
           const screen = this.screens.get(event.outputId);
           if (screen) {
+            if (screen.activeDesktopId === event.toDesktopId) {
+              return { dirty: false, affectedScreens: [], isEcho: false };
+            }
             screen.activeDesktopId = event.toDesktopId;
-            const targetWs = this.getOrCreateWorkspace(event.outputId, event.toDesktopId);
             for (const win of this.windows.values()) {
               if (win.outputId === event.outputId && win.onAllDesktops) {
-                if (!targetWs.orderedSlotWindowIds.includes(win.id)) {
-                  targetWs.orderedSlotWindowIds.push(win.id);
-                }
+                this.removeWindowFromOutputWorkspaces(win.id, event.outputId);
+                this.addWindowToApplicableWorkspaces(win, event.outputId, event.toDesktopId);
               }
             }
             this.markScreenDirty(event.outputId, "ScreenDesktopChanged");
@@ -1552,12 +1824,23 @@ var ReconcilerModule = (() => {
         }
         case "ScreenTopologyChanged": {
           const seenIds = /* @__PURE__ */ new Set();
+          const affectedIds = /* @__PURE__ */ new Set();
           for (const s of event.screens) {
             seenIds.add(s.outputId);
+            const existing = this.screens.get(s.outputId);
+            const changed = !existing || existing.name !== (s.name || s.outputId) || !rectEqualsWithTolerance(existing.geometry, s.geometry, 0) || !rectEqualsWithTolerance(existing.usableArea, s.usableArea, 0) || existing.activeDesktopId !== (s.activeDesktopId || "1") || existing.activeActivityId !== s.activeActivityId;
             this.getOrCreateScreen(s);
+            if (changed) affectedIds.add(s.outputId);
+          }
+          for (const win of this.windows.values()) {
+            if (win.onAllDesktops && affectedIds.has(win.outputId)) {
+              this.removeWindowFromOutputWorkspaces(win.id, win.outputId);
+              this.addWindowToApplicableWorkspaces(win);
+            }
           }
           for (const existingId of this.screens.keys()) {
             if (!seenIds.has(existingId)) {
+              affectedIds.add(existingId);
               this.screens.delete(existingId);
               this.dirtyScreenIds.delete(existingId);
             }
@@ -1571,23 +1854,34 @@ var ReconcilerModule = (() => {
           if (remainingScreens.length > 0) {
             for (const win of this.windows.values()) {
               if (!this.screens.has(win.outputId)) {
+                const oldOutputId = win.outputId;
                 const newOutputId = resolveScreenAffinity({
                   explicitOutputId: void 0,
                   frameGeometry: win.frameGeometry,
                   previousOutputId: win.outputAffinity,
                   screens: remainingScreens
                 });
+                this.removeWindowFromOutputWorkspaces(win.id, oldOutputId);
                 win.outputId = newOutputId;
                 win.outputAffinity = newOutputId;
-                const targetWs = this.getOrCreateWorkspace(newOutputId, win.desktopId);
-                if (!targetWs.orderedSlotWindowIds.includes(win.id)) {
-                  targetWs.orderedSlotWindowIds.push(win.id);
-                }
+                this.addWindowToApplicableWorkspaces(win, newOutputId);
+                affectedIds.add(newOutputId);
               }
             }
           }
-          this.invalidateAllScreens("ScreenTopologyChanged");
-          return { dirty: true, affectedScreens: Array.from(this.screens.keys()), isEcho: false };
+          for (const [key, ws] of this.workspaces.entries()) {
+            if (!seenIds.has(ws.outputId)) this.workspaces.delete(key);
+          }
+          const liveAffectedIds = Array.from(affectedIds).filter((id) => this.screens.has(id));
+          for (const outputId of liveAffectedIds) {
+            this.markScreenDirty(outputId, "ScreenTopologyChanged");
+          }
+          if (affectedIds.size > 0) this.pendingReasons.add("ScreenTopologyChanged");
+          return {
+            dirty: affectedIds.size > 0,
+            affectedScreens: Array.from(affectedIds),
+            isEcho: false
+          };
         }
         case "ScreenLayoutChanged": {
           const screen = this.screens.get(event.outputId);
@@ -1642,10 +1936,23 @@ var ReconcilerModule = (() => {
           if (!win) return { dirty: false, affectedScreens: [], isEcho: false };
           const targetScreen = this.screens.get(event.outputId);
           const oldOutputId = win.outputId;
-          const oldDeskId = win.desktopId;
-          const newDeskId = event.desktopId || (targetScreen ? targetScreen.activeDesktopId : oldDeskId);
+          const isCrossOutput = oldOutputId !== event.outputId;
+          const targetDesktopId = win.onAllDesktops ? targetScreen?.activeDesktopId || win.desktopId || "1" : event.desktopId || win.desktopId || "1";
+          if (isCrossOutput) {
+            this.removeWindowFromOutputWorkspaces(event.windowId, oldOutputId);
+          }
+          const currentDesktops = win.desktopIds.length > 0 ? win.desktopIds : win.desktopId ? [win.desktopId] : ["1"];
+          const isExplicitNewDesktop = Boolean(!win.onAllDesktops && event.desktopId && !currentDesktops.includes(event.desktopId));
+          if (isExplicitNewDesktop) {
+            this.removeWindowFromOutputWorkspaces(event.windowId, event.outputId);
+            win.desktopId = event.desktopId;
+            win.desktopIds = [event.desktopId];
+          } else if (!win.onAllDesktops && event.desktopId) {
+            win.desktopId = event.desktopId;
+          } else if (win.onAllDesktops) {
+            this.removeWindowFromOutputWorkspaces(event.windowId, event.outputId);
+          }
           win.outputId = event.outputId;
-          win.desktopId = newDeskId;
           win.outputAffinity = event.outputId;
           win.isDragging = false;
           win.isManualFloating = false;
@@ -1653,26 +1960,18 @@ var ReconcilerModule = (() => {
           win.classification = "tiled";
           win.currentDesiredTiledGeometry = { ...event.targetRect };
           this.setSavedTiledGeometry(event.windowId, event.targetRect);
-          if (oldOutputId !== event.outputId || oldDeskId !== newDeskId) {
-            const oldWs = this.getWorkspace(oldOutputId, oldDeskId);
-            if (oldWs) {
-              const oIdx = oldWs.orderedSlotWindowIds.indexOf(event.windowId);
-              if (oIdx !== -1) oldWs.orderedSlotWindowIds.splice(oIdx, 1);
-            }
+          this.addWindowToApplicableWorkspaces(win, event.outputId, targetDesktopId);
+          const targetWs = this.getOrCreateWorkspace(event.outputId, targetDesktopId);
+          let curIdx = targetWs.orderedSlotWindowIds.indexOf(event.windowId);
+          while (curIdx !== -1) {
+            targetWs.orderedSlotWindowIds.splice(curIdx, 1);
+            curIdx = targetWs.orderedSlotWindowIds.indexOf(event.windowId);
           }
-          const targetWs = this.getOrCreateWorkspace(event.outputId, newDeskId);
-          const curIdx = targetWs.orderedSlotWindowIds.indexOf(event.windowId);
-          if (curIdx !== -1) targetWs.orderedSlotWindowIds.splice(curIdx, 1);
-          if (event.slotIndex === 0) {
-            targetWs.orderedSlotWindowIds.unshift(event.windowId);
-          } else if (event.slotIndex !== void 0 && event.slotIndex > 0) {
-            targetWs.orderedSlotWindowIds.splice(event.slotIndex, 0, event.windowId);
-          } else {
-            targetWs.orderedSlotWindowIds.push(event.windowId);
-          }
+          const boundedSlot = event.slotIndex !== void 0 && event.slotIndex >= 0 ? Math.min(event.slotIndex, targetWs.orderedSlotWindowIds.length) : targetWs.orderedSlotWindowIds.length;
+          targetWs.orderedSlotWindowIds.splice(boundedSlot, 0, event.windowId);
           this.markScreenDirty(event.outputId, "WindowSnapCommitted");
           const affected = [event.outputId];
-          if (oldOutputId && oldOutputId !== event.outputId) {
+          if (isCrossOutput && oldOutputId) {
             this.markScreenDirty(oldOutputId, "WindowSnapCommittedSource");
             affected.push(oldOutputId);
           }
@@ -1716,6 +2015,12 @@ var ReconcilerModule = (() => {
       });
     }
     /**
+     * Clears an in-flight command record if the programmatic geometry assignment failed or was rolled back.
+     */
+    clearRecordedCommand(windowId) {
+      this.inFlightEchoes.delete(windowId);
+    }
+    /**
      * Determines tileable windows for a screen according to scoped workspace slot persistence.
      */
     getTileableWindowsForScreen(screen) {
@@ -1726,6 +2031,8 @@ var ReconcilerModule = (() => {
         if (win.outputId !== screen.outputId) continue;
         const belongsToDesktop = this.config.perDesktopLayout === false || win.onAllDesktops || (win.desktopIds && win.desktopIds.length > 0 ? win.desktopIds.includes(desktopId) : win.desktopId === desktopId);
         if (!belongsToDesktop) continue;
+        const belongsToActivity = !screen.activeActivityId || win.activities.length === 0 || win.activities.includes(screen.activeActivityId);
+        if (!belongsToActivity) continue;
         if (!win.tileable) continue;
         if (win.isManualFloating) continue;
         if (this.config.ignoreMinimized && win.minimized) continue;
@@ -1851,7 +2158,6 @@ var ReconcilerModule = (() => {
             this.totalGeometryWrites++;
             win.lastRequestedGeometry = { ...desiredRect };
             win.lastAppliedTransactionEpoch = epoch;
-            this.recordCommand(win.id, desiredRect, epoch);
           }
         }
         screen.latestCommittedEpoch = epoch;
@@ -1875,9 +2181,9 @@ var ReconcilerModule = (() => {
     /**
      * Commits a window into a prospective snap target geometry and screen slot.
      * Produces exactly 1 geometry operation if the window moves or resizes,
-     * arms inFlightEchoes for suppression of the compositor echo,
      * or skips the write (0 operations) if the window is already at targetRect.
      * Unaffected screens produce 0 writes.
+     * Echo suppression is armed solely by the commit boundary when geometry is written.
      */
     applySnapCommit(windowId, outputId, targetRect, slotIndex) {
       this.ingestEvent({
@@ -1908,7 +2214,6 @@ var ReconcilerModule = (() => {
       this.totalGeometryWrites++;
       win.lastRequestedGeometry = { ...targetRect };
       win.lastAppliedTransactionEpoch = epoch;
-      this.recordCommand(win.id, targetRect, epoch);
       screen.latestCommittedEpoch = epoch;
       screen.dirtyReasons.clear();
       this.dirtyScreenIds.delete(outputId);
@@ -1994,10 +2299,6 @@ var ReconcilerModule = (() => {
       return Boolean(this.windows.get(windowId)?.isManualFloating);
     }
     setManualFloating(windowId, val) {
-      const win = this.windows.get(windowId);
-      if (win) {
-        win.isManualFloating = val;
-      }
       return this.ingestEvent({
         type: "WindowStateChanged",
         windowId,
@@ -2099,7 +2400,7 @@ var ReconcilerModule = (() => {
     zones.push({
       type: "half",
       id: "left-half",
-      title: "Left Half (Master)",
+      title: "Left Half (Primary)",
       badge: "\u229E Left Split",
       desc: "50% Primary Pane",
       slotIndex: 0,
@@ -2212,6 +2513,71 @@ var ReconcilerModule = (() => {
   }
 
   // apps/kwin-adapter/src/qml-reconciler-compat.ts
+  function stableObjectId(value, fallback = "") {
+    if (value === void 0 || value === null) return fallback;
+    if (typeof value === "string" || typeof value === "number") return String(value);
+    if (value.id !== void 0 && value.id !== null) return String(value.id);
+    if (value.name !== void 0 && value.name !== null) return String(value.name);
+    return fallback;
+  }
+  function finiteNumber(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+  function normalizeCommitGeometry(target, bounds) {
+    if (!target) return null;
+    const x = finiteNumber(target.x);
+    const y = finiteNumber(target.y);
+    const width = finiteNumber(target.width);
+    const height = finiteNumber(target.height);
+    if (x === null || y === null || width === null || height === null || width <= 0 || height <= 0) {
+      return null;
+    }
+    let normalized = {
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.max(1, Math.round(width)),
+      height: Math.max(1, Math.round(height))
+    };
+    if (![normalized.x, normalized.y, normalized.width, normalized.height].every(Number.isSafeInteger)) {
+      return null;
+    }
+    if (bounds) {
+      const boundX = finiteNumber(bounds.x);
+      const boundY = finiteNumber(bounds.y);
+      const boundWidth = finiteNumber(bounds.width);
+      const boundHeight = finiteNumber(bounds.height);
+      if (boundX === null || boundY === null || boundWidth === null || boundHeight === null || boundWidth <= 0 || boundHeight <= 0) {
+        return null;
+      }
+      const boundedWidth = Math.min(normalized.width, Math.round(boundWidth));
+      const boundedHeight = Math.min(normalized.height, Math.round(boundHeight));
+      const minX = Math.round(boundX);
+      const minY = Math.round(boundY);
+      const maxX = Math.round(boundX + boundWidth - boundedWidth);
+      const maxY = Math.round(boundY + boundHeight - boundedHeight);
+      normalized = {
+        x: Math.max(minX, Math.min(maxX, normalized.x)),
+        y: Math.max(minY, Math.min(maxY, normalized.y)),
+        width: boundedWidth,
+        height: boundedHeight
+      };
+    }
+    return normalized;
+  }
+  function evaluateCommitGeometry(win, targetRect, bounds) {
+    if (!win || win.deleted === true || win.managed === false || !win.frameGeometry || !targetRect) {
+      return { outcome: "rejected", normalized: null };
+    }
+    const normalized = normalizeCommitGeometry(targetRect, bounds);
+    if (!normalized) {
+      return { outcome: "rejected", normalized: null };
+    }
+    const current = win.frameGeometry;
+    if (current.x === normalized.x && current.y === normalized.y && current.width === normalized.width && current.height === normalized.height) {
+      return { outcome: "unchanged-valid", normalized };
+    }
+    return { outcome: "applied", normalized };
+  }
   function toNormalizedWindow(w, screen, usableArea) {
     if (!w) return { id: "unknown", managed: false, normalWindow: false };
     const wid = w.internalId ? String(w.internalId) : w.caption ? `${w.caption}_${w.resourceClass || ""}` : w.id || "unknown";
@@ -2224,11 +2590,11 @@ var ReconcilerModule = (() => {
       title: w.caption ? String(w.caption) : w.title ? String(w.title) : "",
       role: w.windowRole ? String(w.windowRole) : "",
       outputId: screen?.name ? String(screen.name) : w.output?.name ? String(w.output.name) : "default",
-      desktopId: w.desktops && w.desktops.length > 0 ? String(w.desktops[0]) : "1",
-      desktopIds: Array.isArray(w.desktops) ? w.desktops.map((d) => String(d)) : w.desktopId ? [String(w.desktopId)] : ["1"],
+      desktopId: w.desktops && w.desktops.length > 0 ? stableObjectId(w.desktops[0], "1") : stableObjectId(w.desktopId, "1"),
+      desktopIds: Array.isArray(w.desktops) ? w.desktops.map((d) => stableObjectId(d)).filter(Boolean) : w.desktopId ? [stableObjectId(w.desktopId)] : ["1"],
       onAllDesktops: Boolean(w.onAllDesktops),
-      activityId: w.activities && w.activities.length > 0 ? String(w.activities[0]) : void 0,
-      activities: Array.isArray(w.activities) ? w.activities.map((a) => String(a)) : [],
+      activityId: w.activities && w.activities.length > 0 ? stableObjectId(w.activities[0]) : void 0,
+      activities: Array.isArray(w.activities) ? w.activities.map((a) => stableObjectId(a)).filter(Boolean) : [],
       minimized: Boolean(w.minimized),
       fullScreen: Boolean(w.fullScreen),
       noBorder: Boolean(w.noBorder),
@@ -2269,7 +2635,7 @@ var ReconcilerModule = (() => {
       outputAffinity: w.outputAffinity ? String(w.outputAffinity) : void 0
     };
   }
-  function toNormalizedScreen(scr, usableArea) {
+  function toNormalizedScreen(scr, usableArea, activeDesktop, activeActivity) {
     const outputId = scr?.name ? String(scr.name) : "default";
     const geom = scr?.geometry ? {
       x: Number(scr.geometry.x || 0),
@@ -2287,7 +2653,9 @@ var ReconcilerModule = (() => {
       outputId,
       name: scr?.name ? String(scr.name) : outputId,
       geometry: geom,
-      usableArea: area
+      usableArea: area,
+      activeDesktopId: stableObjectId(activeDesktop, "1"),
+      activeActivityId: activeActivity === void 0 || activeActivity === null ? void 0 : stableObjectId(activeActivity)
     };
   }
   var activeCoordinator = null;
@@ -2307,6 +2675,8 @@ var ReconcilerModule = (() => {
     getOrCreateCoordinator,
     toNormalizedWindow,
     toNormalizedScreen,
+    normalizeCommitGeometry,
+    evaluateCommitGeometry,
     resolveScreenAffinity,
     resolveCursorTargetScreen,
     computeSnapZones,
