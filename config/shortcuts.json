@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "shortcuts": [
+    {"name": "Tessera: Toggle Zone Overlay", "sequence": "Ctrl+Shift+C", "label": "Toggle Zone Overlay (KZones-Style)"},
+    {"name": "Tessera: Next Layout", "sequence": "Ctrl+Space", "label": "Cycle to Next Layout"},
+    {"name": "Tessera: Previous Layout", "sequence": "Ctrl+Shift+Space", "label": "Cycle to Previous Layout"},
+    {"name": "Tessera: Toggle Tiling", "sequence": "Ctrl+Shift+T", "label": "Toggle Tiling Globally"},
+    {"name": "Tessera: Toggle Window Floating", "sequence": "Ctrl+Shift+F", "label": "Toggle Active Window Floating"},
+    {"name": "Tessera: Focus Left Window", "sequence": "Ctrl+Shift+A", "label": "Focus Left Window (WASD)"},
+    {"name": "Tessera: Focus Right Window", "sequence": "Ctrl+Shift+D", "label": "Focus Right Window (WASD)"},
+    {"name": "Tessera: Focus Up Window", "sequence": "Ctrl+Shift+W", "label": "Focus Up Window (WASD)"},
+    {"name": "Tessera: Focus Down Window", "sequence": "Ctrl+Shift+S", "label": "Focus Down Window (WASD)"},
+    {"name": "Tessera: Swap Left Window", "sequence": "Ctrl+Shift+Q", "label": "Swap Window Left (Counter-Clockwise)"},
+    {"name": "Tessera: Swap Right Window", "sequence": "Ctrl+Shift+E", "label": "Swap Window Right (Clockwise)"},
+    {"name": "Tessera: Focus Next Window", "sequence": "Ctrl+Shift+J", "label": "Focus Next Window (Vim)"},
+    {"name": "Tessera: Focus Previous Window", "sequence": "Ctrl+Shift+K", "label": "Focus Previous Window (Vim)"},
+    {"name": "Tessera: Swap Window Forward", "sequence": "Ctrl+Alt+J", "label": "Swap Window Forward (Vim)"},
+    {"name": "Tessera: Swap Window Backward", "sequence": "Ctrl+Alt+K", "label": "Swap Window Backward (Vim)"},
+    {"name": "Tessera: Increase Primary Ratio", "sequence": "Ctrl+Shift+L", "label": "Expand Primary Region Ratio"},
+    {"name": "Tessera: Decrease Primary Ratio", "sequence": "Ctrl+Shift+H", "label": "Shrink Primary Region Ratio"},
+    {"name": "Tessera: Increase Primary Count", "sequence": "Ctrl+Shift+I", "label": "Increase Primary Region Count"},
+    {"name": "Tessera: Decrease Primary Count", "sequence": "Ctrl+Shift+O", "label": "Decrease Primary Region Count"},
+    {"name": "Tessera: Retile Current Workspace", "sequence": "Ctrl+Shift+R", "label": "Force Retile Workspace"},
+    {"name": "Tessera: Move Window to Next Screen", "sequence": "Ctrl+Shift+Z", "label": "Move Window to Next Screen"},
+    {"name": "Tessera: Cycle Layout on Other Screen", "sequence": "Ctrl+Shift+X", "label": "Cycle Layout on Other Screen"},
+    {"name": "Tessera: Swap Screen Layouts", "sequence": "Ctrl+Alt+X", "label": "Swap Screen Layouts"}
+  ],
+  "legacyNames": [
+    "Tessera: Increase Master Ratio",
+    "Tessera: Decrease Master Ratio",
+    "Tessera: Increase Master Count",
+    "Tessera: Decrease Master Count",
+    "Tessera: Show Master HUD"
+  ]
+}

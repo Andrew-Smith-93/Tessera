@@ -1,7 +1,7 @@
 {
     "KPlugin": {
         "Name": "Tessera",
-        "Description": "Modern, GPU-optimized dynamic tiling window manager for KDE Plasma 6 with an intuitive visual configuration interface.",
+        "Description": "Dynamic tiling window manager script and visual settings interface for KDE Plasma 6.",
         "Icon": "preferences-desktop-virtual",
         "Authors": [
             {
