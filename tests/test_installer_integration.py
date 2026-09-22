@@ -11,6 +11,7 @@ import textwrap
 import unittest
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+REPO_IGNORE_PATTERNS = (".git", "node_modules", "target", "dist", "__pycache__")
 
 
 class SandboxHarness:
@@ -448,7 +449,7 @@ class TestInstallerIntegration(unittest.TestCase):
         the exact allowlist."""
         with tempfile.TemporaryDirectory(prefix="tessera-decoy-test-") as disp_tmp:
             disp_repo = os.path.join(disp_tmp, "repo")
-            shutil.copytree(REPO_ROOT, disp_repo, symlinks=True, ignore=shutil.ignore_patterns(".git"))
+            shutil.copytree(REPO_ROOT, disp_repo, symlinks=True, ignore=shutil.ignore_patterns(*REPO_IGNORE_PATTERNS))
 
             # Inject decoys into tessera-control
             os.makedirs(os.path.join(disp_repo, "tessera-control", "__pycache__"), exist_ok=True)
@@ -560,7 +561,7 @@ class TestInstallerIntegration(unittest.TestCase):
         disposable = tempfile.mkdtemp(prefix="disposable-tessera-")
         try:
             # Copy source repo to disposable
-            shutil.copytree(REPO_ROOT, os.path.join(disposable, "repo"), symlinks=True, ignore=shutil.ignore_patterns("node_modules", ".git"))
+            shutil.copytree(REPO_ROOT, os.path.join(disposable, "repo"), symlinks=True, ignore=shutil.ignore_patterns(*REPO_IGNORE_PATTERNS))
             disp_repo = os.path.join(disposable, "repo")
 
             res = self.sb.run_installer(cwd=disp_repo)
@@ -858,7 +859,7 @@ class TestInstallerIntegration(unittest.TestCase):
             with self.subTest(source_inventory_case=case_name):
                 with tempfile.TemporaryDirectory(prefix=f"tessera-src-preflight-{case_name}-") as disp_tmp:
                     disp_repo = os.path.join(disp_tmp, "repo")
-                    shutil.copytree(REPO_ROOT, disp_repo, symlinks=True, ignore=shutil.ignore_patterns("node_modules", ".git"))
+                    shutil.copytree(REPO_ROOT, disp_repo, symlinks=True, ignore=shutil.ignore_patterns(*REPO_IGNORE_PATTERNS))
                     mutate_fn(disp_repo)
 
                     self.sb._init_state()
@@ -910,7 +911,7 @@ class TestInstallerIntegration(unittest.TestCase):
             with self.subTest(catalog_case=case_name):
                 with tempfile.TemporaryDirectory(prefix=f"tessera-catalog-fail-{case_name}-") as disp_tmp:
                     disp_repo = os.path.join(disp_tmp, "repo")
-                    shutil.copytree(REPO_ROOT, disp_repo, symlinks=True, ignore=shutil.ignore_patterns("node_modules", ".git"))
+                    shutil.copytree(REPO_ROOT, disp_repo, symlinks=True, ignore=shutil.ignore_patterns(*REPO_IGNORE_PATTERNS))
 
                     cat_file = os.path.join(disp_repo, "config", "shortcuts.json")
                     with open(cat_file, "r", encoding="utf-8") as f:

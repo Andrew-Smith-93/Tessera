@@ -128,7 +128,7 @@ def _extract_zip_manifest(zip_path):
 
 def _create_disposable_source_copy(dest_dir, symlink_node_modules=True):
     for item in os.listdir(PROJECT_ROOT):
-        if item in [".git", "dist", "node_modules"]:
+        if item in [".git", "dist", "node_modules", "target", "__pycache__"]:
             continue
         src_path = os.path.join(PROJECT_ROOT, item)
         dst_path = os.path.join(dest_dir, item)

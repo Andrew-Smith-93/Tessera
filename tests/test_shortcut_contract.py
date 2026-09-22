@@ -9,7 +9,8 @@ CONTROL_DIR = os.path.join(REPO_ROOT, "tessera-control")
 if CONTROL_DIR not in sys.path:
     sys.path.insert(0, CONTROL_DIR)
 
-from tessera_settings import load_shortcut_catalog  # noqa: E402
+from config_contract import load_shortcut_catalog  # noqa: E402
+
 
 
 class TestShortcutContract(unittest.TestCase):
@@ -120,7 +121,44 @@ class TestShortcutContract(unittest.TestCase):
         self.assertEqual(table_rows, expected)
         self.assertIn("config/shortcuts.json` is the canonical catalog", readme)
 
+    def test_headless_import_and_load_without_pyqt_or_tessera_settings(self):
+        """Proves shortcut contract logic and catalog loading execute with PyQt5 blocked and without importing tessera_settings."""
+        saved_modules = {
+            k: sys.modules.get(k)
+            for k in list(sys.modules.keys())
+            if k.startswith("PyQt5") or k in ("tessera_settings", "config_contract")
+        }
+        try:
+            for k in list(saved_modules.keys()):
+                sys.modules.pop(k, None)
+
+            class BlockedImportFinder:
+                def find_spec(self, fullname, path, target=None):
+                    if fullname == "PyQt5" or fullname.startswith("PyQt5."):
+                        raise ModuleNotFoundError(f"PyQt5 blocked for headless test: {fullname}")
+                    return None
+
+            finder = BlockedImportFinder()
+            sys.meta_path.insert(0, finder)
+            try:
+                import importlib
+                mod = importlib.import_module("config_contract")
+                catalog = mod.load_shortcut_catalog()
+                self.assertIsInstance(catalog, list)
+                self.assertGreater(len(catalog), 0)
+                expected = [(item["label"], item["sequence"]) for item in self.document["shortcuts"]]
+                self.assertEqual(catalog, expected)
+                self.assertNotIn("tessera_settings", sys.modules)
+                self.assertFalse(any(k.startswith("PyQt5") for k in sys.modules))
+            finally:
+                sys.meta_path.remove(finder)
+        finally:
+            for k, v in saved_modules.items():
+                if v is not None:
+                    sys.modules[k] = v
+                else:
+                    sys.modules.pop(k, None)
+
 
 if __name__ == "__main__":
     unittest.main()
-

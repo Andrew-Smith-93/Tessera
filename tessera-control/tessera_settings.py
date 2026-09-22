@@ -11,52 +11,22 @@ import json
 import subprocess
 from typing import Any, Dict, Optional
 
-try:
-    from PyQt5.QtWidgets import (
-        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QLabel, QPushButton, QSlider, QSpinBox, QDoubleSpinBox, QCheckBox,
-        QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
-        QLineEdit, QMessageBox, QFrame, QScrollArea, QGroupBox, QGridLayout,
-        QDialog
-    )
-    from PyQt5.QtCore import Qt, QTimer
-    from PyQt5.QtGui import QFont, QColor
-    from ui_preview import LiveDesktopPreview
-    from window_picker import get_active_window_info
-except ImportError:
-    QApplication = None
-    QMainWindow = object
-    QWidget = object
-    QFrame = object
-    QDialog = object
-    Qt = None
-    QTimer = None
-    QFont = None
-    QColor = None
-    LiveDesktopPreview = None
-    get_active_window_info = None
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QPushButton, QSlider, QSpinBox, QDoubleSpinBox, QCheckBox,
+    QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
+    QLineEdit, QMessageBox, QFrame, QScrollArea, QGroupBox, QGridLayout,
+    QDialog
+)
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont, QColor
 
 from config_manager import ConfigManager
-from config_contract import canonical_workspace_scope_key
+from config_contract import canonical_workspace_scope_key, load_shortcut_catalog
 from presets import PRESETS
+from ui_preview import LiveDesktopPreview
+from window_picker import get_active_window_info
 
-
-def load_shortcut_catalog():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        os.path.join(base_dir, "shortcuts.json"),
-        os.path.join(base_dir, "..", "config", "shortcuts.json"),
-    ]
-    for path in candidates:
-        try:
-            with open(path, "r", encoding="utf-8") as shortcut_file:
-                document = json.load(shortcut_file)
-            shortcuts = document.get("shortcuts", [])
-            if isinstance(shortcuts, list):
-                return [(item["label"], item["sequence"]) for item in shortcuts]
-        except (OSError, KeyError, TypeError, json.JSONDecodeError):
-            continue
-    return []
 
 APP_STYLESHEET = """
 QMainWindow {

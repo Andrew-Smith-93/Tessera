@@ -712,11 +712,11 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "category": "TEST_ASSERTION_OR_FIXTURE",
         "total_occurrences": 5,
         "lines": {
-            "1eeea19856cd52ac7c55b07e5247923b8257618f165de475d41841caa5458254": {"occ": 1, "repeat": 1, "positions": [533]},
-            "35e289c92826b7fa9f7866d5a77834465452c87ec1a67544b25f7984fa56121f": {"occ": 1, "repeat": 1, "positions": [529]},
-            "4b753d791829cef7071471cb811b2d92bf362c49fda2d20a8b24f0ed33569062": {"occ": 1, "repeat": 1, "positions": [900]},
-            "a32314ac4378fd66ad57ed6b3d87df7fc384b6c6a7809e2c0f62b9d4d20ddb37": {"occ": 1, "repeat": 1, "positions": [887]},
-            "a5b487659d82472453e661f83a13fb2f2c38d89450617821109b6dacc411daf2": {"occ": 1, "repeat": 1, "positions": [899]},
+            "1eeea19856cd52ac7c55b07e5247923b8257618f165de475d41841caa5458254": {"occ": 1, "repeat": 1, "positions": [534]},
+            "35e289c92826b7fa9f7866d5a77834465452c87ec1a67544b25f7984fa56121f": {"occ": 1, "repeat": 1, "positions": [530]},
+            "4b753d791829cef7071471cb811b2d92bf362c49fda2d20a8b24f0ed33569062": {"occ": 1, "repeat": 1, "positions": [901]},
+            "a32314ac4378fd66ad57ed6b3d87df7fc384b6c6a7809e2c0f62b9d4d20ddb37": {"occ": 1, "repeat": 1, "positions": [888]},
+            "a5b487659d82472453e661f83a13fb2f2c38d89450617821109b6dacc411daf2": {"occ": 1, "repeat": 1, "positions": [900]},
         }
     },
     "tests/test_package_manifest.py": {
@@ -731,9 +731,9 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "category": "TEST_ASSERTION_OR_FIXTURE",
         "total_occurrences": 5,
         "lines": {
-            "446279d7865c2d49c02df98f724e61698f4a64912cfa69b0854f1c83e562092b": {"occ": 1, "repeat": 1, "positions": [28]},
-            "5e2ac1b2114621acd459b50fc8b61277a098d2cce81400df8749e69d21bb8f4a": {"occ": 2, "repeat": 1, "positions": [62]},
-            "e959a76b4646a0e2b3cb5d6cd929af784fc501f7271a948e9aff5e6a92f962ea": {"occ": 2, "repeat": 1, "positions": [63]},
+            "446279d7865c2d49c02df98f724e61698f4a64912cfa69b0854f1c83e562092b": {"occ": 1, "repeat": 1, "positions": [29]},
+            "5e2ac1b2114621acd459b50fc8b61277a098d2cce81400df8749e69d21bb8f4a": {"occ": 2, "repeat": 1, "positions": [63]},
+            "e959a76b4646a0e2b3cb5d6cd929af784fc501f7271a948e9aff5e6a92f962ea": {"occ": 2, "repeat": 1, "positions": [64]},
         }
     },
     "uninstall.sh": {

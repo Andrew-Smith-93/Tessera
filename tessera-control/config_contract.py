@@ -348,3 +348,25 @@ def normalize_and_validate_value(key: str, value: Any) -> Tuple[bool, Any, Optio
         return False, value, f"Validation error for '{key}': {e}"
 
     return True, value, None
+
+
+def load_shortcut_catalog(catalog_path: Optional[str] = None) -> List[Tuple[str, str]]:
+    """Loads and returns the shortcut catalog (label, sequence) pairs without GUI dependencies."""
+    if catalog_path:
+        candidates = [catalog_path]
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        candidates = [
+            os.path.join(base_dir, "shortcuts.json"),
+            os.path.join(base_dir, "..", "config", "shortcuts.json"),
+        ]
+    for path in candidates:
+        try:
+            with open(path, "r", encoding="utf-8") as shortcut_file:
+                document = json.load(shortcut_file)
+            shortcuts = document.get("shortcuts", [])
+            if isinstance(shortcuts, list):
+                return [(item["label"], item["sequence"]) for item in shortcuts]
+        except (OSError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+    return []
