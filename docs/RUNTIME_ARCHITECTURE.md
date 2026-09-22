@@ -84,7 +84,8 @@
   - `ReconcilerBridge.createCoordinator(config)`: Factory creating an isolated `RuntimeCoordinator`.
   - `ReconcilerBridge.getOrCreateCoordinator(config)`: Singleton accessor.
   - `ReconcilerBridge.toNormalizedWindow(w, screen, usableArea)`: Converts KWin window to serializable `NormalizedWindowInput`.
-  - `ReconcilerBridge.toNormalizedScreen(scr, usableArea)`: Converts KWin screen to serializable `NormalizedScreenInput`.
+  - `ReconcilerBridge.toNormalizedScreen(scr, usableArea, activeDesktop, activeActivity)`: Converts KWin screen and live scope objects to stable serializable IDs.
+  - `ReconcilerBridge.normalizeCommitGeometry(target, bounds)`: Rejects non-finite/non-positive targets and clamps valid rectangles to the selected output's usable area.
 - **Integrity Guarantee**: Enforced in CI and release workflows via `npm run verify:artifacts` (`git diff --exit-code HEAD -- contents/code/layouts.js contents/code/rules.js contents/code/reconciler.js`).
 
 ---
@@ -94,7 +95,7 @@
 Phase 2A introduces deterministic state retention and a coalesced transaction lifecycle:
 
 ### Retained State Ownership
-- **QML Layer (`contents/ui/main.qml`)**: Owns KWin signal connections, UI visual dialogs (snap overlay and master HUD), KWin object normalization into serializable data, invoking the coordinator, and applying planned `win.frameGeometry` mutations. QML retains zero window/screen object pointers in durable state.
+- **QML Layer (`contents/ui/main.qml`)**: Owns KWin signal connections, the snap overlay, KWin object normalization, coordinator invocation, and the single guarded `win.frameGeometry` commit sink. Transient drag references stay in QML; retained layout, classification, slot, and geometry memory lives only in the coordinator.
 - **TypeScript Coordinator Layer (`apps/kwin-adapter/src/runtime-coordinator.ts`)**: Owns normalized retained state, event reduction, dirty-scope calculation, transaction planning, geometry diffing, echo suppression, and diagnostics counters.
 
 ### Event-to-Transaction Lifecycle
@@ -125,17 +126,17 @@ Apply geometry writes to KWin windows (guarded by isArranging flag)
 ### Dirty-Scope Rules
 1. **Local Window Events**: An event for a window located on Output A (e.g. geometry change, maximize, border change) marks only Output A dirty. Output B is untouched and zero layout calculations are executed for it.
 2. **Output Migration**: Moving a window from Output A to Output B marks both Output A (vacated slot) and Output B (new occupant) dirty.
-3. **Global Configuration Changes**: Changes to inner/outer gaps, master ratios, or display topology invalidate all screens.
+3. **Global Configuration Changes**: Changes to inner/outer gaps, primary-region settings, workspace overrides, or display topology invalidate all screens.
 4. **No-Op Elimination**: If a dirty screen computation yields desired geometries that equal observed geometries (within 1px tolerance), zero writes are generated and no feedback loops occur.
 
 ### Geometry Echo Suppression
 - When a geometry write is applied, the target rectangle is recorded in `inFlightEchoes` tagged with the current transaction epoch and timestamp.
-- Incoming `frameGeometryChanged` events matching the recorded target (within 1px tolerance and 300ms window) are recognized as echoes, updating `lastObservedGeometry` without marking the screen dirty or scheduling a reconciliation pass.
+- Incoming `frameGeometryChanged` events matching the recorded target (within 1px tolerance and the default 500ms expiry window) are recognized as echoes, updating `lastObservedGeometry` without marking the screen dirty or scheduling a reconciliation pass.
 - Mismatched external geometry changes (e.g. user manually moving a window) are not suppressed and properly invalidate the screen.
 
 ### Single Runtime Authority & Elimination of Legacy Dual Authority (Phase 5D)
 - In Phase 5D, `retileLegacyFallback()` and all competing secondary order maps in `contents/ui/main.qml` (`desktopLayouts`, `screenTiledWindows`, `persistentScreenOrder`, `screenLayouts`, `screenMasterRatios`, `screenMasterCounts`) were **permanently deleted**.
-- `RuntimeCoordinator` is the single runtime authority for all layout calculation, event coalescing, workspace scoping (`${outputId}:${desktopId}`), and slot ordering.
+- `RuntimeCoordinator` is the single runtime authority for all layout calculation, event coalescing, collision-safe workspace scoping (`encodeURIComponent(outputId)//encodeURIComponent(desktopId)`), and slot ordering.
 - Visual overlays (`PlasmaCore.Dialog`) remain rendered in QML, but zone geometry calculation, corner quadrant slot mapping, and cursor hover matching are delegated to pure TypeScript modules (`computeSnapZones`, `matchSnapZoneHover`).
 
 ---
@@ -151,7 +152,7 @@ Phase 2B completes the convergence of runtime geometry memory, multi-screen affi
   - `isPreTiled`: Tracks whether a window was tiled prior to minimize, maximize, or manual float operations.
   - `outputAffinity`: Retains the screen output association for every window across desktop and screen transitions.
 - **QML Compatibility Layer**:
-  - Helper functions `getSavedTiledGeometry(wid)`, `setSavedTiledGeometry(wid, rect)`, `getPreMinimizeGeometry(wid)`, and `setPreMinimizeGeometry(wid, rect)` synchronize transparently with `RuntimeCoordinator` in reconciler mode while providing seamless fallback.
+  - Helper functions `getSavedTiledGeometry(wid)`, `setSavedTiledGeometry(wid, rect)`, `getPreMinimizeGeometry(wid)`, and `setPreMinimizeGeometry(wid, rect)` are thin coordinator delegates; no secondary QML fallback store exists.
 
 ### 7-Step Multi-Screen Affinity Precedence Hierarchy
 Implemented in [`apps/kwin-adapter/src/screen-affinity.ts`](../apps/kwin-adapter/src/screen-affinity.ts):
@@ -167,7 +168,7 @@ Implemented in [`apps/kwin-adapter/src/screen-affinity.ts`](../apps/kwin-adapter
 Implemented in [`apps/kwin-adapter/src/snap-zones.ts`](../apps/kwin-adapter/src/snap-zones.ts):
 - Pure computation of all 7 KZones-style snap targets and trigger boundaries:
   - Top Maximize Bar Card (Index 0)
-  - Left Half / Master Slot (Index 1)
+  - Left Half / Primary Slot (Index 1)
   - Right Half / Stack Slot (Index 2)
   - Top-Left Quarter (Index 3)
   - Bottom-Left Quarter (Index 4)
@@ -287,14 +288,14 @@ Future convergence will separate concerns across strict architectural layers:
 
 Any subsequent convergence or refactoring MUST preserve the following runtime invariants:
 
-1. **Cursor-Prioritized Multi-Screen Targeting**: Master count adjustments and layout switches target the monitor under the cursor (`Workspace.cursorPos`). Screen 0 changes never contaminate Screen 1.
+1. **Cursor-Prioritized Multi-Screen Targeting**: Primary-region count adjustments and layout switches target the monitor under the cursor (`Workspace.cursorPos`). Screen 0 changes never contaminate Screen 1.
 2. **50/50 2-Window Split**: When 2 windows are present, they must split 50/50 side-by-side.
-3. **0-Masters Balanced Square Grid**: Setting `masterCount: 0` must delegate to `solveBalancedGrid` (4 equal quarters for 4 windows, 5-pane center stack for 5 windows, symmetrical square partitions for $N \ge 6$).
+3. **Zero Primary-Region Balanced Grid**: Setting `primaryRegionCount: 0` delegates to `solveBalancedGrid`.
 4. **Maximized Window Slot Memory**: Maximized windows do not break background tiling. When unmaximized, they must return directly to their designated tile.
-5. **Minimized Window Slot Persistence**: Windows restored from minimize must preserve their slot index in `persistentScreenOrder` without reshuffling active windows.
+5. **Minimized Window Slot Persistence**: Windows restored from minimize preserve their coordinator-owned workspace slot without reshuffling active windows.
 6. **X11 Echo Suppression**: Programmatic frameGeometry assignments must suppress feedback loops to prevent compositor stutter and oscillation.
-7. **KZones-Style 60 FPS Overlay**: Live mouse-tracking preview cards with visual drop feedback.
-8. **Native DBus OSD & Master HUD**: Clean user feedback upon layout switching and master adjustments.
+7. **KZones-Style Overlay**: Live mouse-tracking preview cards use the configured 8-60ms polling interval.
+8. **Native DBus OSD**: Plasma OSD feedback accompanies layout and primary-region adjustments; no separate master HUD exists.
 
 ---
 
@@ -308,7 +309,7 @@ Phase 4 defines the authoritative, versioned cold-path IPC protocol connecting e
 - **Minor Version**: `0`
 - **Version Negotiation**: `system.hello` negotiates the mutually supported version range. Unsupported major versions return `UNSUPPORTED_MAJOR_VERSION`, and unsupported minor versions return `UNSUPPORTED_MINOR_VERSION`.
 - **Transport Framing**: Transport-independent streaming byte frames: `[4-byte big-endian length uint32][UTF-8 JSON payload]`.
-- **Maximum Frame Size**: 16 MB (`16,777,216` bytes). Frames declaring a larger length header are rejected immediately before allocation (`FRAME_TOO_LARGE`).
+- **Maximum Frame Size**: 1 MiB (`1,048,576` bytes). Frames declaring a larger length header are rejected immediately before allocation (`FRAME_TOO_LARGE`).
 - **Zero-Length & Malformed Frames**: Zero-length frames and invalid UTF-8/JSON syntax are rejected with typed `DECODE_ERROR`.
 - **Stream Finalization**: Trailing partial frames at stream termination are detected via `finalize()` and reported as `DECODE_ERROR`.
 
@@ -321,7 +322,7 @@ Phase 4 defines the authoritative, versioned cold-path IPC protocol connecting e
 - Stale mutations specifying an outdated `expectedRevision` are rejected with `REVISION_CONFLICT`.
 
 ### Security and Resource Limits
-- `MAX_FRAME_SIZE`: 16 MB (16,777,216 bytes)
+- `MAX_FRAME_SIZE`: 1 MiB (1,048,576 bytes)
 - `MAX_NESTING_DEPTH`: 32 levels
 - `MAX_STRING_LENGTH`: 65,536 characters
 - `MAX_ARRAY_LENGTH`: 10,000 items
@@ -357,7 +358,7 @@ When identity redaction is enabled (`redactIdentities = true`) or in default dia
 All client interactions begin with a mandatory handshake:
 - **Handshake Method**: `system.hello`
   - Parameters: `{ "clientName": string, "clientVersion": string, "minMajor"?: number, "maxMajor"?: number, "minMinor"?: number, "maxMinor"?: number, "requestedCapabilities"?: string[] }`
-  - Response: `{ "serverName": "tessera-runtime", "serverVersion": string, "negotiatedMajor": 1, "negotiatedMinor": 0, "capabilities": string[], "maxFrameSize": 16777216, "limits": object }`
+  - Response: `{ "serverName": "tessera-runtime", "serverVersion": string, "negotiatedMajor": 1, "negotiatedMinor": 0, "capabilities": string[], "maxFrameSize": 1048576, "limits": object }`
 - **V1 Capabilities**:
   - `state.inspect`: Read retained state snapshot, diagnostics, and capabilities.
   - `config.mutate`: Validate and apply configuration patches.
@@ -457,4 +458,3 @@ Phase 5 introduces the optional standalone daemon bootstrap (`apps/tessera-daemo
 ### Distribution Packaging Isolation
 - Release `.kwinscript` bundles contain only KWin declarative artifacts (`contents/` and `metadata.json`).
 - Rust sources (`apps/tessera-daemon`), build outputs (`target/`), and Cargo manifests are strictly excluded from packaging archives, verified in CI and python tests.
-

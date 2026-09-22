@@ -4,6 +4,8 @@
 
 This document provides the adversarial integrity audit for **Phase 5D Second Pass** on branch `fix/slot-runtime-settings-integrity-02`, examining the claims of the first-pass implementation (`refactor/slot-runtime-settings-foundation-01`, HEAD `d6210f6fc27a3b0c143a71fe2daba5cf8c3bfb60`).
 
+> **Independent verification correction:** The original second-pass report below is retained as the finding record, but its claimed closure was not sufficient. Branch `fix/phase-5d-independent-verification-03` independently reproduced the gaps and implemented the corrections summarized in Section 3. Automated evidence does not replace live KWin/KCM acceptance; that gate remains **NOT RUN** on this branch.
+
 Each first-pass claim and additional second-pass attack vector is audited with:
 1. First-Pass Claim
 2. Source Files & Evidence Inspected
@@ -128,3 +130,27 @@ Each first-pass claim and additional second-pass attack vector is audited with:
 - **First-Pass Claim**: Phase 5B acceptance documented.
 - **Evidence Inspected**: `docs/LIVE_KWIN_X11_ACCEPTANCE.md`.
 - **Audit Result**: Header added in Phase 5D clearly demarcates Phase 5B as historical baseline. Need a dedicated Phase 5D automated results checklist leaving all live desktop tests as NOT RUN for Omega.
+
+---
+
+## 3. Independent Verification Correction Closure
+
+| Area | Independently reproduced gap | Corrected state |
+| :--- | :--- | :--- |
+| Live object normalization | Desktop/activity objects were stringified as `[object Object]` | Stable `.id`/`.name` extraction is covered by executable adapter tests |
+| Active scope/topology | QML did not provide active desktop/activity or topology events | Screen normalization carries both IDs; topology and desktop-change events update retained state and remove retired scopes |
+| Runtime authority | QML still owned floating/pre-tiled/saved-geometry/classification maps | Those maps and direct rule authority are removed; coordinator delegates are the only retained source |
+| Geometry safety | The single sink accepted malformed/out-of-bounds rectangles | Pure finite/positive normalization, output clamping, destroyed/unmanaged guards, and identical-write skipping precede the only assignment |
+| Multi-desktop snap/output moves | Snap changed or removed only one scope membership | All source-output memberships are removed and every destination desktop membership is preserved |
+| Global workspace sentinel | `__global__` could collide with a real desktop ID | Internal NUL-prefixed sentinel is outside the KWin desktop-ID domain |
+| Workspace override persistence | The Control Center wrote an unknown `desktopLayouts` key; runtime did not consume the canonical field | UI writes versioned wildcard scopes to `workspaceLayoutsJson`; runtime applies exact/wildcard overrides and migrates safe first-pass maps |
+| Workspace JSON validation | Duplicate keys, unsafe scopes, unknown fields, wrong versions, and non-finite/coerced values were accepted | Bounded, versioned, canonical parsing rejects all of those cases and deterministically serializes valid data |
+| Configuration transactions | Alias changes evaded concurrency checks; explicit defaults could be overwritten; retile failure was reported as success | Fingerprints include aliases/empty values, presence governs migration, command failures are contained, and partial retile failure is explicit |
+| Shortcut drift | QML, installer, docs, and Control Center diverged | `config/shortcuts.json` is canonical; executable tests require exact QML and README agreement; installer/UI consume the catalog |
+| Installation safety | Replacement was destructive, HOME-specific, and lacked rollback/integration proof | XDG-aware staging, backup/rollback, dependency preflight, binding preservation, purge semantics, and sandboxed integration tests are present |
+| Reproducible packaging | Timestamp was hard-coded and ignored `SOURCE_DATE_EPOCH` | ZIP timestamps derive from validated UTC `SOURCE_DATE_EPOCH` and are asserted by the package test |
+| Public claims | README/docs claimed unverified GPU, Wayland, store, and HUD behavior | Claims are bounded to automated evidence and historical X11 acceptance; live KWin/KCM/Wayland remain explicit gates |
+
+### Required branch gates
+
+Before this correction branch is considered complete, it must pass type checking, all JavaScript/TypeScript tests, all Python tests, protocol freeze verification, generated-artifact verification, simulator verification (including required seeds), Rust formatting/check/clippy/tests, deterministic packaging, `git diff --check`, and exact-head CI. Live KWin script reloading, live KCM settings bindings, Wayland session compatibility, game window policy handling, and multi-monitor hotplug verification remain unexecuted in this automated phase and are explicit **NOT RUN** gates reserved for future manual testing. The final commit and CI run are recorded in the handoff rather than hard-coded into this source document.

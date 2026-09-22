@@ -1,5 +1,8 @@
 # Tessera Pre-Publication Safety, Privacy, Code-Quality, and Integrity Audit
 
+> [!NOTE]
+> **Historical Audit Snapshot**: This document records the pre-publication audit conducted during Phase 5C. It is a historical record of that checkpoint, not proof of current product state. Current authoritative architecture, audit findings, and verification gates are tracked in [PHASE_5D_SECOND_PASS_AUDIT.md](PHASE_5D_SECOND_PASS_AUDIT.md).
+
 ## 1. Audit Scope & Executive Summary
 
 This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/tiling-window-manager`) for a possible future transition from a private repository to a public open-source project under **Phase 5C**.

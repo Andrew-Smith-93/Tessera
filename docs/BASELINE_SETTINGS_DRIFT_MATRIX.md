@@ -2,6 +2,9 @@
 
 This document characterizes the baseline architecture flaws in Tessera's configuration and distribution systems prior to the Phase 5D refactoring.
 
+> [!NOTE]
+> **Historical Baseline Snapshot**: This document characterizes historical baseline settings drift prior to Phase 5D. It is a historical analysis, not proof of current configuration state. The current canonical contract uses `balanced-grid`, `primaryRegionRatio`, `primaryRegionCount`, `reconcileDebounceMs`, versioned `workspaceLayoutsJson`, and a supported `overlayPollingMs`. Current active authority and verification are tracked in [PHASE_5D_SECOND_PASS_AUDIT.md](PHASE_5D_SECOND_PASS_AUDIT.md).
+
 ---
 
 ## 1. Key Matrix Comparison

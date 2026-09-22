@@ -16,7 +16,7 @@ Phase 5D resolves the architectural deficiencies identified during Phase 5B and 
 In previous revisions, window order was tracked globally or per-screen using a mutable array that truncated when windows became fullscreen, minimized, or temporarily unmanaged.
 
 Phase 5D introduces **Workspace Scoped Slot Ordering**:
-- Every virtual workspace is defined by an output and virtual desktop scope: `"${outputId}:${desktopId}"`.
+- Every virtual workspace is defined by a collision-safe output and virtual desktop scope: `encodeURIComponent(outputId) + "//" + encodeURIComponent(desktopId)`.
 - `RuntimeCoordinator` maintains a dedicated `WorkspaceLayoutState` for each scope:
   ```typescript
   export interface WorkspaceLayoutState {
@@ -71,8 +71,8 @@ In Phase 5D:
 ### 4.1 Canonical Schema & Transactional Manager
 - **Schema (`config/canonical-config.json`)**: Declares canonical keys, types, defaults, and bounds.
 - **Migration**: Transparently reads legacy `~/.config/tesserarc` and migrates valid values into `~/.config/kwinrc` under `[Script-tessera]`.
-- **Atomic Writes**: Uses temporary files with atomic `os.replace` to prevent corrupted configs on sudden termination.
-- **Dirty Tracking & Rollback**: Edits are staged in a draft. If validation or KWin notification fails, writes are rolled back automatically.
+- **Verified transaction-like writes**: Changed keys are written with `kwriteconfig6`, read back, and compared to the validated draft before KWin is reconfigured.
+- **Dirty Tracking & Rollback**: Edits are staged in a draft. Write, readback, or KWin notification failures restore prior values and preserve previously absent keys as absent.
 - **Zero-Hydration Side Effects**: Eliminated timer-based autosave storms during UI loading.
 
 ### 4.2 Native KConfig UI (`contents/ui/config.ui`)
@@ -88,6 +88,7 @@ Rebuilt with standard Qt Designer UI XML containing native `kcfg_*` widgets mapp
 - `kcfg_perDesktopLayout` (QCheckBox)
 - `kcfg_showOsd` (QCheckBox)
 - `kcfg_reconcileDebounceMs` (QSpinBox)
+- `kcfg_overlayPollingMs` (QSpinBox)
 - `kcfg_gameWindowPolicy` (QComboBox)
 - `kcfg_floatFilter` (QLineEdit)
 
@@ -103,17 +104,19 @@ Rebuilt with standard Qt Designer UI XML containing native `kcfg_*` widgets mapp
 
 | Test Suite | Commands | Results |
 | :--- | :--- | :--- |
-| **Monorepo Unit & Integration** | `npm test` | 22 test files, 270 tests passed (100%) |
-| **Runtime Simulator Goldens** | `npm run sim:verify` | 25/25 fixtures matched with invariants satisfied |
-| **Protocol V1 Freeze Manifest** | `npm run verify:freeze` | 7/7 tests passed (byte-for-byte identical) |
-| **Artifact Sync Check** | `npm run verify:artifacts` | Zero diff against committed bundles |
-| **Python Test Suite** | `python3 -m unittest discover -s tests` | 33 tests passed (100%) |
-| **Package Build** | `./package.sh` | Deterministic reproducible `.kwinscript` bundle generated |
+| **Monorepo Unit & Integration** | `npm test` | Required branch gate |
+| **Runtime Simulator Goldens** | `npm run sim:verify` | Required branch gate; 25 fixtures expected |
+| **Protocol V1 Freeze Manifest** | `npm run verify:freeze` | Required branch gate; protocol bytes must remain unchanged |
+| **Artifact Sync Check** | `npm run verify:artifacts` | Required branch gate; generated bridges must be clean |
+| **Python Test Suite** | `python3 -m unittest discover -s tests` | Required branch gate |
+| **Package Build** | `./package.sh` | Required reproducibility gate using `SOURCE_DATE_EPOCH` |
+
+Exact independent-correction results are recorded in `PHASE_5D_SECOND_PASS_AUDIT.md`; this architecture document intentionally does not freeze mutable test counts.
 
 ---
 
 ## 6. Remaining Live Gates for Omega
 
-1. **Live Session Installation**: The rebuilt QML script, bundles, and KConfig UI have passed full simulated and automated suites. Installing them into the active running desktop via `kpackagetool6` or `install.sh` remains an operational live gate reserved for Omega.
+1. **Live Session Installation & Verification (NOT RUN)**: The rebuilt QML script, bundles, and KConfig UI have passed full simulated and automated suites. Live KWin script reloading, live KCM settings bindings, Wayland session compatibility, game window policy handling, and multi-monitor hotplug verification remain unexecuted in this automated phase and are explicit **NOT RUN** gates reserved for Omega.
 2. **Daemon Decoupling**: The Rust daemon remains strictly disconnected from KWin and is ready for Phase 6.
 3. **Repository Visibility**: Remains private until final pre-publication approval by Omega.

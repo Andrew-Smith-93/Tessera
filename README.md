@@ -1,46 +1,22 @@
 # 💠 Tessera (`K-Tessera`)
 
-> **The modern, GPU-optimized dynamic tiling window manager for KDE Plasma 6 with an intuitive, beautiful configuration control center.**
+> **A dynamic tiling KWin script for KDE Plasma 6 with native KConfig settings and an optional PyQt Control Center.**
 
 [![Platform: KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6.3+-3daee9.svg?logo=kde&logoColor=white)](https://kde.org/plasma-desktop/)
-[![Hardware: NVIDIA GPU Optimized](https://img.shields.io/badge/Hardware-NVIDIA_Optimized-76b900.svg?logo=nvidia&logoColor=white)](https://www.nvidia.com/)
-[![KDE Store: Pling / Discover](https://img.shields.io/badge/KDE_Store-Get_New_Scripts-1d99f3.svg?logo=kde&logoColor=white)](https://store.kde.org/)
-[![Arch AUR: kwin-script-tessera-git](https://img.shields.io/badge/Arch_AUR-kwin--script--tessera--git-1793d1.svg?logo=arch-linux&logoColor=white)](packaging/aur/PKGBUILD)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![CI: Passing](https://img.shields.io/badge/CI-Automated_Testing-success.svg)](.github/workflows/ci.yml)
 
 ---
 
-## 🛍️ Distribution & App Store Availability
+## 🛍️ Distribution
 
-Tessera is built for frictionless distribution across the entire Linux ecosystem:
-
-1. **KDE Plasma Built-in Store ("Get New Scripts...")**:
-   - Available directly inside your desktop: **System Settings** → **Window Management** → **KWin Scripts** → **"Get New Scripts..."**.
-   - Search for **Tessera** and click **Install**.
-   - See [docs/KDE_STORE_PUBLISHING.md](docs/KDE_STORE_PUBLISHING.md) for maintainer upload instructions.
-2. **Arch Linux (AUR)**:
-   ```bash
-   yay -S kwin-script-tessera-git
-   ```
-3. **Official `.kwinscript` Bundle**:
-   - Download the latest standalone bundle from [GitHub Releases](https://github.com/Andrew-Smith-93/tiling-window-manager/releases).
-   - Install via terminal:
-     ```bash
-     kpackagetool6 --type KWin/Script --install tessera-v1.0.1.kwinscript
-     ```
+The repository builds a deterministic `.kwinscript` bundle with `./package.sh` and provides a source installer with `./install.sh`. Store publication, AUR availability, and release upload are separate maintainer actions and are not claimed by this repository state. See [docs/KDE_STORE_PUBLISHING.md](docs/KDE_STORE_PUBLISHING.md) for the bounded publication procedure.
 
 ---
 
 ## 🌟 Why Tessera?
 
-Most tiling window managers for Linux make huge sacrifices:
-- **Standalone WMs (Hyprland, Sway)** discard the entire KDE Plasma desktop (taskbars, system tray, KRunner, notification center, display settings), require Wayland, and have historically suffered on NVIDIA GPUs (especially Pascal / Turing cards like GTX 1070/1080 with proprietary 550 drivers) with explicit sync stutter, flickering, and video glitches.
-- **Legacy KWin Scripts (Bismuth, Krohnkite)** were abandoned or broke completely during the Plasma 6 transition.
-- **Polonium** is rigid, prone to multi-monitor geometry lockups, and has **virtually no intuitive configuration interface**—forcing users to wrestle with raw JSON or cryptic numbers.
-- **Plasma 6 Built-in Quick Tile (`Meta+T`)** is strictly static snapping; it cannot dynamically auto-tile newly spawned windows, balance trees, or manage per-workspace layouts.
-
-**Tessera solves all of this.** It is a native KWin 6 dynamic tiling engine with dedicated NVIDIA geometry buffering, accompanied by a sleek, modern **Control Center** with live graphical previews, interactive gap sliders, and one-click window rule creation.
+Tessera keeps Plasma as the desktop environment while adding automatic, workspace-aware tiling. Its retained coordinator coalesces KWin events, suppresses geometry echoes, and avoids redundant writes. The optional Control Center adds previews, gap controls, presets, and rule editing.
 
 ```
 ┌─────────────────────────────────┬───────────────────────────────┐
@@ -60,7 +36,7 @@ Most tiling window managers for Linux make huge sacrifices:
 
 ## ✨ Features
 
-- 🏎️ **NVIDIA GPU-Optimized Pipeline**: Hardware geometry debouncing eliminates X11/Wayland repaint storms, visual tearing, and resize stutters on NVIDIA proprietary drivers.
+- 🏎️ **Coalesced Geometry Pipeline**: Configurable event debouncing and echo suppression reduce redundant geometry work.
 - 📐 **Dynamic Tiling Layouts**:
   - **Balanced Grid**: Optimal square tiles with equitable distribution across all windows.
   - **Primary + Stack**: Prominent primary work area on the left with vertical stack of secondary windows.
@@ -75,8 +51,8 @@ Most tiling window managers for Linux make huge sacrifices:
 - 🎨 **1-Click Presets**:
   - *Hyprland Aesthetic*: BSP Dwindle with modern 8px/12px gaps.
   - *i3 / Sway Classic*: Compact 4px gaps and 50% split ratio.
-  - *macOS Amethyst*: 55% master ratio with 10px/14px gaps.
-  - *Ultrawide Productivity*: 65% primary pane with dual masters for 21:9 & 32:9 displays.
+  - *macOS Amethyst*: 55% primary ratio with 10px/14px gaps.
+  - *Ultrawide Productivity*: 65% primary pane with two primary-region windows for 21:9 & 32:9 displays.
   - *Zero Gap Hacker*: 0px gaps for maximum terminal screen estate.
 - 🔔 **Native Plasma 6 OSD**: Clean HUD toasts displayed via KDE Plasma's native `org.kde.osdService` whenever layouts or modes change.
 
@@ -84,10 +60,14 @@ Most tiling window managers for Linux make huge sacrifices:
 
 ## 🚀 Quick Start & Installation
 
-### Prerequisites
-- KDE Plasma 6.0+ (Tested on Plasma 6.3.6)
-- Python 3 with PyQt5 (pre-installed on most Debian/Ubuntu/Arch/Fedora KDE systems)
-- KWin 6 (`kwin_x11` or `kwin_wayland`)
+### Prerequisites & Verification Scope
+- KDE Plasma 6.0+ and KWin 6
+- Python 3 with PyQt5 for the source-installed Control Center
+
+**Verification & Acceptance Scope**:
+- **Automated Evidence**: Unit, contract, integration, and simulator suites verify tiling algorithms, geometry reconciliation, config transactions, installer idempotency/purge, and reproducible packaging.
+- **Historical Phase 5B Evidence**: Past live desktop testing on KDE Plasma 6.3.6 under X11 is preserved as historical baseline evidence in `docs/LIVE_KWIN_X11_ACCEPTANCE.md`.
+- **Live Gates (NOT RUN in Current Phase)**: Live KWin script reloading, live KCM settings bindings, Wayland session compatibility, game window policy handling, and multi-monitor hotplug verification remain unexecuted in this automated phase and require dedicated manual live desktop sessions.
 
 ### Installation
 
@@ -101,8 +81,8 @@ cd tiling-window-manager
 
 The installer will:
 1. Register and deploy the KWin 6 declarative script.
-2. Enable Tessera in `~/.config/kwinrc`.
-3. Install the `tessera-settings` CLI executable into `~/.local/bin/`.
+2. Enable Tessera in the active KDE configuration.
+3. Install the `tessera-settings` CLI executable under `${XDG_BIN_HOME:-$HOME/.local/bin}`.
 4. Install the desktop entry into your KDE Application Launcher (`Applications -> Settings -> Tessera Control Center`).
 5. Trigger KWin to immediately reload.
 
@@ -112,25 +92,33 @@ The installer will:
 
 All shortcuts integrate directly into KDE Plasma's Global Shortcuts system and can be customized in **KDE System Settings → Shortcuts → KWin**.
 
-| Action | Shortcut |
+| Action ID | Default sequence |
 | :--- | :--- |
-| **Toggle Tiling Globally** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> |
-| **Cycle Next Layout** | <kbd>Ctrl</kbd> + <kbd>Space</kbd> |
-| **Cycle Previous Layout** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> |
-| **Toggle Active Window Floating** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> |
-| **Toggle Visual Snap Overlay** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> |
-| **Directional Focus (WASD)** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>W</kbd>/<kbd>A</kbd>/<kbd>S</kbd>/<kbd>D</kbd> |
-| **Directional Swap (Q/E)** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> / <kbd>E</kbd> |
-| **Focus Next / Previous Window** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>J</kbd> / <kbd>K</kbd> |
-| **Swap Window Forward / Backward** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>J</kbd> / <kbd>K</kbd> |
-| **Adjust Primary Ratio (+/- 5%)** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd> / <kbd>H</kbd> |
-| **Adjust Primary Region Count (+/- 1)** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd> / <kbd>O</kbd> |
-| **Move Window to Next Screen** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> |
-| **Cycle Layout on Other Screen** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd> |
-| **Swap Screen Layouts** | <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>X</kbd> |
-| **Force Retile Current Workspace** | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> |
+| Tessera: Toggle Zone Overlay | Ctrl+Shift+C |
+| Tessera: Next Layout | Ctrl+Space |
+| Tessera: Previous Layout | Ctrl+Shift+Space |
+| Tessera: Toggle Tiling | Ctrl+Shift+T |
+| Tessera: Toggle Window Floating | Ctrl+Shift+F |
+| Tessera: Focus Left Window | Ctrl+Shift+A |
+| Tessera: Focus Right Window | Ctrl+Shift+D |
+| Tessera: Focus Up Window | Ctrl+Shift+W |
+| Tessera: Focus Down Window | Ctrl+Shift+S |
+| Tessera: Swap Left Window | Ctrl+Shift+Q |
+| Tessera: Swap Right Window | Ctrl+Shift+E |
+| Tessera: Focus Next Window | Ctrl+Shift+J |
+| Tessera: Focus Previous Window | Ctrl+Shift+K |
+| Tessera: Swap Window Forward | Ctrl+Alt+J |
+| Tessera: Swap Window Backward | Ctrl+Alt+K |
+| Tessera: Increase Primary Ratio | Ctrl+Shift+L |
+| Tessera: Decrease Primary Ratio | Ctrl+Shift+H |
+| Tessera: Increase Primary Count | Ctrl+Shift+I |
+| Tessera: Decrease Primary Count | Ctrl+Shift+O |
+| Tessera: Retile Current Workspace | Ctrl+Shift+R |
+| Tessera: Move Window to Next Screen | Ctrl+Shift+Z |
+| Tessera: Cycle Layout on Other Screen | Ctrl+Shift+X |
+| Tessera: Swap Screen Layouts | Ctrl+Alt+X |
 
-*(Note: All default shortcuts are ergonomically optimized around Ctrl and Shift to prevent conflict with KDE Plasma's default Meta shortcuts).*
+`config/shortcuts.json` is the canonical catalog. Installation preserves every existing user binding, including an explicitly empty binding.
 
 ---
 
@@ -156,12 +144,9 @@ Slide the **Inner Gap** and **Outer Gap** sliders and watch the real-time mock d
 
 ---
 
-## ⚡ NVIDIA Troubleshooting & Tips
+## ⚡ Performance controls
 
-If you are running NVIDIA proprietary drivers (e.g. 550.x) on X11 or Wayland:
-1. **GPU Redraw Debounce**: Located in the *NVIDIA & Performance* tab of the Control Center. Set between `50ms` and `80ms`. This batches geometry changes so the X11 server does not get flooded during rapid window creation.
-2. **Smooth Geometry Commit**: For NVIDIA X11, keeping "Smooth Animated Geometry" disabled provides instant, tear-free window resizing without latency.
-3. **Compositor Fullscreen Bypass**: Tessera automatically ignores fullscreen games (Steam, Lutris, Heroic), allowing the NVIDIA driver to unredirect games for maximum FPS and minimal input lag.
+The Control Center exposes reconciliation debounce and snap-overlay polling intervals. These are general scheduling controls; no GPU-vendor-specific performance guarantee is claimed. Fullscreen windows are excluded from active tiling while their slot membership is retained.
 
 ---
 
