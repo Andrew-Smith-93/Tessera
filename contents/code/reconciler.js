@@ -3,7 +3,21 @@ var ReconcilerModule = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __getOwnPropSymbols = Object.getOwnPropertySymbols;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __propIsEnum = Object.prototype.propertyIsEnumerable;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __spreadValues = (a, b) => {
+    for (var prop in b || (b = {}))
+      if (__hasOwnProp.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
+    if (__getOwnPropSymbols)
+      for (var prop of __getOwnPropSymbols(b)) {
+        if (__propIsEnum.call(b, prop))
+          __defNormalProp(a, prop, b[prop]);
+      }
+    return a;
+  };
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -17,24 +31,34 @@ var ReconcilerModule = (() => {
     return to;
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
   // apps/kwin-adapter/src/qml-reconciler-compat.ts
   var qml_reconciler_compat_exports = {};
   __export(qml_reconciler_compat_exports, {
     ReconcilerBridge: () => ReconcilerBridge,
+    RuleEngine: () => RuleEngine,
+    RuntimeCoordinator: () => RuntimeCoordinator,
     computeSnapZones: () => computeSnapZones,
     createCoordinator: () => createCoordinator,
     evaluateCommitGeometry: () => evaluateCommitGeometry,
+    getLastRuleValidationErrors: () => getLastRuleValidationErrors,
+    getLastValidCustomRules: () => getLastValidCustomRules,
     getOrCreateCoordinator: () => getOrCreateCoordinator,
+    hasPriorValidCustomRules: () => hasPriorValidCustomRules,
     matchSnapZoneHover: () => matchSnapZoneHover,
     normalizeCommitGeometry: () => normalizeCommitGeometry,
     pointToRectDistance: () => pointToRectDistance,
+    recordCustomRules: () => recordCustomRules,
     rectContainsPoint: () => rectContainsPoint,
     rectIntersectionArea: () => rectIntersectionArea,
+    resetRuleEngineState: () => resetRuleEngineState,
     resolveCursorTargetScreen: () => resolveCursorTargetScreen,
+    resolveRegionTransition: () => resolveRegionTransition,
     resolveScreenAffinity: () => resolveScreenAffinity,
     toNormalizedScreen: () => toNormalizedScreen,
-    toNormalizedWindow: () => toNormalizedWindow
+    toNormalizedWindow: () => toNormalizedWindow,
+    validateCustomRules: () => validateCustomRules
   });
 
   // packages/layout-core/src/geometry.ts
@@ -234,10 +258,10 @@ var ReconcilerModule = (() => {
     const result = /* @__PURE__ */ new Map();
     const count = windows.length;
     if (count === 0) return result;
-    const ratio = options?.primaryRegionRatio !== void 0 ? options.primaryRegionRatio : options?.masterRatio !== void 0 ? options.masterRatio : 0.5;
+    const ratio = (options == null ? void 0 : options.primaryRegionRatio) !== void 0 ? options.primaryRegionRatio : (options == null ? void 0 : options.masterRatio) !== void 0 ? options.masterRatio : 0.5;
     const regionCount = Math.max(
       0,
-      options?.primaryRegionCount !== void 0 ? options.primaryRegionCount : options?.masterCount !== void 0 ? options.masterCount : 1
+      (options == null ? void 0 : options.primaryRegionCount) !== void 0 ? options.primaryRegionCount : (options == null ? void 0 : options.masterCount) !== void 0 ? options.masterCount : 1
     );
     if (count === 1) {
       result.set(windows[0], applyGaps(area, gaps, true, true, true, true));
@@ -364,6 +388,105 @@ var ReconcilerModule = (() => {
   }
 
   // packages/rules-engine/src/rules.ts
+  var VALID_MATCH_TYPES = ["class", "title", "role", "app"];
+  var VALID_RULE_ACTIONS = ["tile", "float", "monocle", "tiled", "floating", "ignored"];
+  function validateCustomRules(input) {
+    if (input === void 0 || input === null) {
+      return { valid: true, rules: [], errors: [] };
+    }
+    let rawRules = input;
+    if (typeof input === "string") {
+      const trimmed = input.trim();
+      if (trimmed === "" || trimmed === "[]") {
+        return { valid: true, rules: [], errors: [] };
+      }
+      try {
+        rawRules = JSON.parse(trimmed);
+      } catch (e) {
+        return {
+          valid: false,
+          rules: [],
+          errors: [`Malformed JSON syntax: ${(e == null ? void 0 : e.message) || String(e)}`]
+        };
+      }
+    }
+    if (!Array.isArray(rawRules)) {
+      return {
+        valid: false,
+        rules: [],
+        errors: ["Custom rules must be an array of rule objects"]
+      };
+    }
+    const errors = [];
+    const validRules = [];
+    for (let i = 0; i < rawRules.length; i++) {
+      const item = rawRules[i];
+      const prefix = `Rule #${i + 1}`;
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        errors.push(`${prefix}: must be a non-null object`);
+        continue;
+      }
+      const rec = item;
+      if (typeof rec.pattern !== "string" || rec.pattern.trim().length === 0) {
+        errors.push(`${prefix}: 'pattern' must be a non-empty string`);
+        continue;
+      }
+      const rawMatchType = typeof rec.matchType === "string" ? rec.matchType.toLowerCase() : "";
+      if (!VALID_MATCH_TYPES.includes(rawMatchType)) {
+        errors.push(
+          `${prefix}: 'matchType' must be one of: ${VALID_MATCH_TYPES.join(", ")} (got ${JSON.stringify(rec.matchType)})`
+        );
+        continue;
+      }
+      const rawAction = typeof rec.action === "string" ? rec.action.toLowerCase() : "";
+      if (!VALID_RULE_ACTIONS.includes(rawAction)) {
+        errors.push(
+          `${prefix}: 'action' must be one of: ${VALID_RULE_ACTIONS.join(", ")} (got ${JSON.stringify(rec.action)})`
+        );
+        continue;
+      }
+      let isRegex = false;
+      if ("isRegex" in rec && rec.isRegex !== void 0) {
+        if (typeof rec.isRegex !== "boolean") {
+          errors.push(`${prefix}: 'isRegex' must be a boolean`);
+          continue;
+        }
+        isRegex = rec.isRegex;
+        if (isRegex) {
+          try {
+            new RegExp(rec.pattern, "i");
+          } catch (e) {
+            errors.push(`${prefix}: invalid regular expression '${rec.pattern}': ${(e == null ? void 0 : e.message) || String(e)}`);
+            continue;
+          }
+        }
+      }
+      const validated = {
+        pattern: rec.pattern,
+        matchType: rawMatchType,
+        action: rawAction
+      };
+      if (isRegex) {
+        validated.isRegex = true;
+      }
+      if (typeof rec.id === "string" && rec.id) {
+        validated.id = rec.id;
+      }
+      validRules.push(validated);
+    }
+    if (errors.length > 0) {
+      return {
+        valid: false,
+        rules: [],
+        errors
+      };
+    }
+    return {
+      valid: true,
+      rules: validRules,
+      errors: []
+    };
+  }
   function normalizeAction(action) {
     const a = (action || "").toLowerCase().trim();
     if (a === "tile" || a === "tiled") return "tiled";
@@ -398,12 +521,13 @@ var ReconcilerModule = (() => {
     return { isGame: false };
   }
   function isFullscreenLike(input) {
+    var _a, _b;
     if (input.fullScreen === true) return false;
     if (input.noBorder !== true) return false;
-    const maxMode = input.maximizeMode ?? 0;
+    const maxMode = (_a = input.maximizeMode) != null ? _a : 0;
     if (maxMode !== 0) return false;
     const frame = input.frameGeometry;
-    const out = input.outputGeometry ?? input.outputUsableArea;
+    const out = (_b = input.outputGeometry) != null ? _b : input.outputUsableArea;
     if (!frame || !out) return false;
     const frameArea = frame.width * frame.height;
     const outArea = out.width * out.height;
@@ -417,30 +541,41 @@ var ReconcilerModule = (() => {
     const withinTolerance = xDiff <= 5 && yDiff <= 5 && wDiff <= 5 && hDiff <= 5;
     return coversAlmostAll || withinTolerance;
   }
-  var WindowRuleEngine = class _WindowRuleEngine {
-    userFilterTokens = [];
-    customRules = [];
-    gameWindowPolicy = "floating";
-    customGamePatterns = [];
-    /**
-     * Only Tessera Control Center itself floats by default so user can configure the system.
-     */
-    static DEFAULT_FLOAT_PATTERNS = Object.freeze([
-      "tessera",
-      "tessera-settings",
-      "tessera_settings.py"
-    ]);
+  var WindowRuleEngine = class {
     constructor(options = {}) {
+      __publicField(this, "userFilterTokens", []);
+      __publicField(this, "customRules", []);
+      __publicField(this, "gameWindowPolicy", "floating");
+      __publicField(this, "customGamePatterns", []);
       this.updateOptions(options);
     }
     updateOptions(options) {
       if (options.userFilterString !== void 0) {
         this.userFilterTokens = options.userFilterString.split(",").map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0);
       } else if (options.userFilterPatterns !== void 0) {
-        this.userFilterTokens = options.userFilterPatterns.flatMap((p) => p.split(",")).map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0);
+        const tokens = [];
+        for (const p of options.userFilterPatterns) {
+          if (typeof p === "string") {
+            const parts = p.split(",");
+            for (const part of parts) {
+              const trimmed = part.trim().toLowerCase();
+              if (trimmed.length > 0) {
+                tokens.push(trimmed);
+              }
+            }
+          }
+        }
+        this.userFilterTokens = tokens;
       }
       if (options.customRules !== void 0) {
-        this.customRules = [...options.customRules];
+        if (Array.isArray(options.customRules)) {
+          this.customRules = options.customRules.filter(
+            (r) => Boolean(r && typeof r === "object" && typeof r.pattern === "string" && r.pattern.trim().length > 0)
+          );
+        } else {
+          const validation = validateCustomRules(options.customRules);
+          this.customRules = validation.valid ? validation.rules : [];
+        }
       }
       if (options.gameWindowPolicy !== void 0) {
         this.gameWindowPolicy = options.gameWindowPolicy;
@@ -508,6 +643,9 @@ var ReconcilerModule = (() => {
       const title = (input.caption || input.title || "").toLowerCase();
       const role = (input.windowRole || input.role || "").toLowerCase();
       for (const rule of this.customRules) {
+        if (!rule || typeof rule !== "object" || typeof rule.pattern !== "string" || !rule.pattern) {
+          continue;
+        }
         let target = "";
         switch (rule.matchType) {
           case "class":
@@ -522,17 +660,20 @@ var ReconcilerModule = (() => {
           case "role":
             target = role;
             break;
+          default:
+            continue;
         }
         let matched = false;
+        const patLower = rule.pattern.toLowerCase();
         if (rule.isRegex) {
           try {
             const re = new RegExp(rule.pattern, "i");
             matched = re.test(target);
-          } catch {
-            matched = target.includes(rule.pattern.toLowerCase());
+          } catch (e) {
+            matched = target.includes(patLower);
           }
         } else {
-          matched = target.includes(rule.pattern.toLowerCase());
+          matched = target.includes(patLower);
         }
         if (matched) {
           const normalized = normalizeAction(rule.action);
@@ -571,16 +712,6 @@ var ReconcilerModule = (() => {
           matchedPattern: gameCheck.matchedPattern
         };
       }
-      for (const pat of _WindowRuleEngine.DEFAULT_FLOAT_PATTERNS) {
-        if (rClass.includes(pat) || rName.includes(pat) || appId.includes(pat) || title.includes(pat)) {
-          return {
-            classification: "floating",
-            reason: `Matched default float pattern (${pat})`,
-            source: "default-rule",
-            matchedPattern: pat
-          };
-        }
-      }
       return {
         classification: "tiled",
         reason: "Default tiling fallback",
@@ -588,9 +719,16 @@ var ReconcilerModule = (() => {
       };
     }
   };
+  /**
+   * Default float patterns (retained as an empty frozen array for backward compatibility).
+   * Standalone Control Center is retired; implicit floating exceptions are removed.
+   */
+  __publicField(WindowRuleEngine, "DEFAULT_FLOAT_PATTERNS", Object.freeze([]));
   var WindowClassificationTracker = class {
-    classifications = /* @__PURE__ */ new Map();
-    tileability = /* @__PURE__ */ new Map();
+    constructor() {
+      __publicField(this, "classifications", /* @__PURE__ */ new Map());
+      __publicField(this, "tileability", /* @__PURE__ */ new Map());
+    }
     evaluate(windowId, result) {
       const prevClassification = this.classifications.get(windowId);
       const prevTileable = this.tileability.get(windowId);
@@ -624,6 +762,7 @@ var ReconcilerModule = (() => {
 
   // apps/kwin-adapter/src/qml-rules-compat.ts
   function toWindowRuleInput(w, options) {
+    var _a;
     if (!w) return { managed: false };
     return {
       windowId: w.internalId ? String(w.internalId) : w.windowId || "",
@@ -649,13 +788,13 @@ var ReconcilerModule = (() => {
         width: Number(w.frameGeometry.width || 0),
         height: Number(w.frameGeometry.height || 0)
       } : void 0,
-      outputGeometry: options?.outputGeometry || (w.output?.geometry ? {
+      outputGeometry: (options == null ? void 0 : options.outputGeometry) || (((_a = w.output) == null ? void 0 : _a.geometry) ? {
         x: Number(w.output.geometry.x || 0),
         y: Number(w.output.geometry.y || 0),
         width: Number(w.output.geometry.width || 0),
         height: Number(w.output.geometry.height || 0)
       } : void 0),
-      outputUsableArea: options?.outputUsableArea,
+      outputUsableArea: options == null ? void 0 : options.outputUsableArea,
       desktopWindow: Boolean(w.desktopWindow),
       dock: Boolean(w.dock),
       splash: Boolean(w.splash),
@@ -666,40 +805,69 @@ var ReconcilerModule = (() => {
       specialWindow: Boolean(w.specialWindow)
     };
   }
-  function parseCustomRules(rules) {
-    if (!rules) return [];
-    if (Array.isArray(rules)) return rules;
-    if (typeof rules === "string") {
-      try {
-        const parsed = JSON.parse(rules);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  }
   var cachedEngine = null;
   var cachedSignature = "";
+  var lastValidCustomRules = [];
+  var lastRuleValidationErrors = [];
+  var hasPriorValidCustomRulesState = false;
   var tracker = new WindowClassificationTracker();
-  function computeConfigSignature(options) {
-    if (!options) return "default";
-    const customRulesStr = typeof options.customRules === "string" ? options.customRules : JSON.stringify(options.customRules || []);
-    const filterStr = options.userFilterString || (options.userFilterPatterns ? options.userFilterPatterns.join(",") : "");
-    const policyStr = options.gameWindowPolicy || "floating";
-    const gamePatsStr = options.customGamePatterns ? options.customGamePatterns.join(",") : "";
-    return `${policyStr}|${filterStr}|${customRulesStr}|${gamePatsStr}`;
+  function getLastRuleValidationErrors() {
+    return [...lastRuleValidationErrors];
+  }
+  function getLastValidCustomRules() {
+    return [...lastValidCustomRules];
+  }
+  function hasPriorValidCustomRules() {
+    return hasPriorValidCustomRulesState && lastValidCustomRules.length > 0;
+  }
+  function recordCustomRules(customRules) {
+    const valResult = validateCustomRules(customRules);
+    if (valResult.valid) {
+      lastValidCustomRules = valResult.rules;
+      if (valResult.rules.length > 0) {
+        hasPriorValidCustomRulesState = true;
+      } else {
+        hasPriorValidCustomRulesState = false;
+      }
+      lastRuleValidationErrors = [];
+    } else {
+      lastRuleValidationErrors = valResult.errors;
+    }
+    return valResult;
+  }
+  function resetRuleEngineState() {
+    cachedEngine = null;
+    cachedSignature = "";
+    lastValidCustomRules = [];
+    lastRuleValidationErrors = [];
+    hasPriorValidCustomRulesState = false;
   }
   function getOrCreateRuleEngine(options) {
-    const sig = computeConfigSignature(options);
+    if (options && options.customRules !== void 0) {
+      const valResult = validateCustomRules(options.customRules);
+      if (valResult.valid) {
+        lastValidCustomRules = valResult.rules;
+        if (valResult.rules.length > 0) {
+          hasPriorValidCustomRulesState = true;
+        }
+        lastRuleValidationErrors = [];
+      } else {
+        lastRuleValidationErrors = valResult.errors;
+      }
+    }
+    const effectiveRules = lastValidCustomRules;
+    const filterStr = (options == null ? void 0 : options.userFilterString) || ((options == null ? void 0 : options.userFilterPatterns) ? options.userFilterPatterns.join(",") : "");
+    const policyStr = (options == null ? void 0 : options.gameWindowPolicy) || "floating";
+    const gamePatsStr = (options == null ? void 0 : options.customGamePatterns) ? options.customGamePatterns.join(",") : "";
+    const rulesSig = JSON.stringify(effectiveRules);
+    const sig = `${policyStr}|${filterStr}|${rulesSig}|${gamePatsStr}`;
     if (!cachedEngine || cachedSignature !== sig) {
-      const parsedRules = parseCustomRules(options?.customRules);
-      const filterPatterns = options?.userFilterPatterns || (options?.userFilterString ? [options.userFilterString] : []);
+      const filterPatterns = (options == null ? void 0 : options.userFilterPatterns) || ((options == null ? void 0 : options.userFilterString) ? [options.userFilterString] : []);
       cachedEngine = new WindowRuleEngine({
-        customRules: parsedRules,
+        customRules: effectiveRules,
         userFilterPatterns: filterPatterns,
-        gameWindowPolicy: options?.gameWindowPolicy || "floating",
-        customGamePatterns: options?.customGamePatterns
+        gameWindowPolicy: (options == null ? void 0 : options.gameWindowPolicy) || "floating",
+        customGamePatterns: options == null ? void 0 : options.customGamePatterns
       });
       cachedSignature = sig;
     }
@@ -715,11 +883,11 @@ var ReconcilerModule = (() => {
       const input = toWindowRuleInput(w, options);
       const engine = getOrCreateRuleEngine(options);
       const result = engine.classify(input);
-      const wid = input.windowId || (w?.internalId ? String(w.internalId) : "unknown");
+      const wid = input.windowId || ((w == null ? void 0 : w.internalId) ? String(w.internalId) : "unknown");
       return tracker.evaluate(wid, result);
     },
     forget(w) {
-      const wid = typeof w === "string" ? w : w?.internalId ? String(w.internalId) : w?.windowId || "";
+      const wid = typeof w === "string" ? w : (w == null ? void 0 : w.internalId) ? String(w.internalId) : (w == null ? void 0 : w.windowId) || "";
       if (wid) {
         tracker.forget(wid);
       }
@@ -736,6 +904,24 @@ var ReconcilerModule = (() => {
       const result = this.classify(w);
       return result.classification === "ignored";
     },
+    validateRules(rules) {
+      return validateCustomRules(rules);
+    },
+    getLastValidationErrors() {
+      return getLastRuleValidationErrors();
+    },
+    getLastValidRules() {
+      return getLastValidCustomRules();
+    },
+    hasPriorValidRules() {
+      return hasPriorValidCustomRules();
+    },
+    recordCustomRules(rules) {
+      return recordCustomRules(rules);
+    },
+    resetState() {
+      resetRuleEngineState();
+    },
     defaultFloatPatterns: WindowRuleEngine.DEFAULT_FLOAT_PATTERNS,
     getCachedSignature() {
       return cachedSignature;
@@ -747,7 +933,6 @@ var ReconcilerModule = (() => {
     },
     tracker
   };
-  globalThis.RuleEngine = RuleEngine;
 
   // apps/kwin-adapter/src/screen-affinity.ts
   function pointToRectDistance(px, py, r) {
@@ -902,21 +1087,393 @@ var ReconcilerModule = (() => {
     return candidates[0] || screens[0];
   }
 
+  // apps/kwin-adapter/src/snap-zones.ts
+  function computeSnapZones(area, gapOuter, gapInner) {
+    const go = gapOuter;
+    const gi = gapInner;
+    const uw = area.width - go * 2;
+    const uh = area.height - go * 2;
+    const hw = Math.floor((uw - gi) / 2);
+    const hh = Math.floor((uh - gi) / 2);
+    const totalColW = Math.max(0, uw - 2 * gi), baseW = Math.floor(totalColW / 3), rem = totalColW % 3;
+    const colW0 = baseW + (rem === 2 ? 1 : 0);
+    const colW1 = baseW + (rem === 1 ? 1 : 0);
+    const colW2 = baseW + (rem === 2 ? 1 : 0);
+    const cx0 = area.x + go;
+    const cx1 = cx0 + colW0 + gi;
+    const cx2 = cx1 + colW1 + gi;
+    const zones = [];
+    const barW = Math.min(800, Math.floor(uw * 0.6));
+    const barX = area.x + Math.floor((area.width - barW) / 2);
+    zones.push({
+      type: "maximize",
+      id: "maximize",
+      title: "Full Screen / Maximize",
+      badge: "\u{1F5D6} Maximize",
+      desc: "Full Working Area",
+      slotIndex: -1,
+      rect: { x: barX, y: area.y + 10, width: barW, height: 56 },
+      targetRect: { x: area.x + go, y: area.y + go, width: uw, height: uh },
+      triggerX: barX - 10,
+      triggerY: area.y,
+      triggerW: barW + 20,
+      triggerH: 66
+    });
+    zones.push({
+      type: "half",
+      id: "left-half",
+      title: "Left Half (Primary)",
+      badge: "\u229E Left Split",
+      desc: "50% Primary Pane",
+      slotIndex: 0,
+      rect: { x: area.x + go, y: area.y + go + 70, width: hw, height: uh - 70 },
+      targetRect: { x: area.x + go, y: area.y + go, width: hw, height: uh },
+      triggerX: area.x + Math.floor(area.width * 0.16),
+      triggerY: area.y + 80,
+      triggerW: Math.floor(area.width * 0.18),
+      triggerH: area.height - 80
+    });
+    zones.push({
+      type: "half",
+      id: "right-half",
+      title: "Right Half (Stack)",
+      badge: "\u25A5 Right Split",
+      desc: "50% Secondary Pane",
+      slotIndex: 1,
+      rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: uh - 70 },
+      targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: uh },
+      triggerX: area.x + Math.floor(area.width * 0.66),
+      triggerY: area.y + 80,
+      triggerW: Math.floor(area.width * 0.18),
+      triggerH: area.height - 80
+    });
+    zones.push({
+      type: "quarter",
+      id: "top-left",
+      title: "Top-Left Quarter",
+      badge: "\u25E4 Top-Left",
+      desc: "25% Quadrant",
+      slotIndex: 0,
+      rect: { x: area.x + go, y: area.y + go + 70, width: hw, height: Math.max(60, hh - 70) },
+      targetRect: { x: area.x + go, y: area.y + go, width: hw, height: hh },
+      triggerX: area.x,
+      triggerY: area.y,
+      triggerW: Math.floor(area.width * 0.22),
+      triggerH: Math.floor(area.height * 0.32)
+    });
+    zones.push({
+      type: "quarter",
+      id: "bottom-left",
+      title: "Bottom-Left Quarter",
+      badge: "\u25E3 Bottom-Left",
+      desc: "25% Quadrant",
+      slotIndex: 3,
+      rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
+      targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
+      triggerX: area.x,
+      triggerY: area.y + Math.floor(area.height * 0.68),
+      triggerW: Math.floor(area.width * 0.22),
+      triggerH: Math.floor(area.height * 0.32)
+    });
+    zones.push({
+      type: "quarter",
+      id: "top-right",
+      title: "Top-Right Quarter",
+      badge: "\u25E5 Top-Right",
+      desc: "25% Quadrant",
+      slotIndex: 1,
+      rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: Math.max(60, hh - 70) },
+      targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: hh },
+      triggerX: area.x + Math.floor(area.width * 0.78),
+      triggerY: area.y,
+      triggerW: Math.floor(area.width * 0.22),
+      triggerH: Math.floor(area.height * 0.32)
+    });
+    zones.push({
+      type: "quarter",
+      id: "bottom-right",
+      title: "Bottom-Right Quarter",
+      badge: "\u25E2 Bottom-Right",
+      desc: "25% Quadrant",
+      slotIndex: 2,
+      rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
+      targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
+      triggerX: area.x + Math.floor(area.width * 0.78),
+      triggerY: area.y + Math.floor(area.height * 0.68),
+      triggerW: Math.floor(area.width * 0.22),
+      triggerH: Math.floor(area.height * 0.32)
+    });
+    zones.push({
+      type: "pillar",
+      id: "left-pillar",
+      title: "Left Pillar",
+      badge: "\u258E Left Pillar",
+      desc: "1/3 Left Column",
+      slotIndex: 0,
+      rect: { x: cx0, y: area.y + go + 70, width: colW0, height: uh - 70 },
+      targetRect: { x: cx0, y: area.y + go, width: colW0, height: uh },
+      triggerX: area.x,
+      triggerY: area.y + Math.floor(area.height * 0.32),
+      triggerW: Math.floor(area.width * 0.16),
+      triggerH: Math.floor(area.height * 0.36)
+    });
+    zones.push({
+      type: "pillar",
+      id: "center-pillar",
+      title: "Center Pillar",
+      badge: "\u258D Center Pillar",
+      desc: "1/3 Center Column (Full)",
+      slotIndex: 1,
+      rect: { x: cx1, y: area.y + go + 70, width: colW1, height: uh - 70 },
+      targetRect: { x: cx1, y: area.y + go, width: colW1, height: uh },
+      triggerX: cx1,
+      triggerY: area.y + Math.floor(area.height * 0.35),
+      triggerW: colW1,
+      triggerH: Math.floor(area.height * 0.3)
+    });
+    zones.push({
+      type: "pillar",
+      id: "center-top",
+      title: "Center Top",
+      badge: "\u2B12 Center Top",
+      desc: "1/3 Center Column (Top)",
+      slotIndex: 1,
+      rect: { x: cx1, y: area.y + go + 70, width: colW1, height: Math.max(60, hh - 70) },
+      targetRect: { x: cx1, y: area.y + go, width: colW1, height: hh },
+      triggerX: cx1,
+      triggerY: area.y + 66,
+      triggerW: colW1,
+      triggerH: Math.floor(area.height * 0.28)
+    });
+    zones.push({
+      type: "pillar",
+      id: "center-bottom",
+      title: "Center Bottom",
+      badge: "\u2B13 Center Bottom",
+      desc: "1/3 Center Column (Bottom)",
+      slotIndex: 2,
+      rect: { x: cx1, y: area.y + go + hh + gi, width: colW1, height: uh - hh - gi },
+      targetRect: { x: cx1, y: area.y + go + hh + gi, width: colW1, height: uh - hh - gi },
+      triggerX: cx1,
+      triggerY: area.y + Math.floor(area.height * 0.65),
+      triggerW: colW1,
+      triggerH: Math.floor(area.height * 0.35)
+    });
+    zones.push({
+      type: "pillar",
+      id: "right-pillar",
+      title: "Right Pillar",
+      badge: "\u2595 Right Pillar",
+      desc: "1/3 Right Column",
+      slotIndex: 2,
+      rect: { x: cx2, y: area.y + go + 70, width: colW2, height: uh - 70 },
+      targetRect: { x: cx2, y: area.y + go, width: colW2, height: uh },
+      triggerX: area.x + Math.floor(area.width * 0.84),
+      triggerY: area.y + Math.floor(area.height * 0.32),
+      triggerW: Math.floor(area.width * 0.16),
+      triggerH: Math.floor(area.height * 0.36)
+    });
+    return zones;
+  }
+  function matchSnapZoneHover(zones, cursorPos) {
+    if (!cursorPos || zones.length === 0) return -1;
+    for (let i = 3; i <= 6 && i < zones.length; i++) {
+      const qz = zones[i];
+      if (cursorPos.x >= qz.triggerX && cursorPos.x < qz.triggerX + qz.triggerW && cursorPos.y >= qz.triggerY && cursorPos.y < qz.triggerY + qz.triggerH) {
+        return i;
+      }
+    }
+    if (zones.length > 0) {
+      const mz = zones[0];
+      if (cursorPos.x >= mz.triggerX && cursorPos.x < mz.triggerX + mz.triggerW && cursorPos.y >= mz.triggerY && cursorPos.y < mz.triggerY + mz.triggerH) {
+        return 0;
+      }
+    }
+    if (zones.length >= 11) {
+      const ct = zones[9];
+      if (cursorPos.x >= ct.triggerX && cursorPos.x < ct.triggerX + ct.triggerW && cursorPos.y >= ct.triggerY && cursorPos.y < ct.triggerY + ct.triggerH) {
+        return 9;
+      }
+      const cb = zones[10];
+      if (cursorPos.x >= cb.triggerX && cursorPos.x < cb.triggerX + cb.triggerW && cursorPos.y >= cb.triggerY && cursorPos.y < cb.triggerY + cb.triggerH) {
+        return 10;
+      }
+      const cp = zones[8];
+      if (cursorPos.x >= cp.triggerX && cursorPos.x < cp.triggerX + cp.triggerW && cursorPos.y >= cp.triggerY && cursorPos.y < cp.triggerY + cp.triggerH) {
+        return 8;
+      }
+    }
+    if (zones.length > 1) {
+      const lz = zones[1];
+      if (cursorPos.x >= lz.triggerX && cursorPos.x < lz.triggerX + lz.triggerW && cursorPos.y >= lz.triggerY && cursorPos.y < lz.triggerY + lz.triggerH) {
+        return 1;
+      }
+    }
+    if (zones.length > 2) {
+      const rz = zones[2];
+      if (cursorPos.x >= rz.triggerX && cursorPos.x < rz.triggerX + rz.triggerW && cursorPos.y >= rz.triggerY && cursorPos.y < rz.triggerY + rz.triggerH) {
+        return 2;
+      }
+    }
+    if (zones.length > 7) {
+      const lp = zones[7];
+      if (cursorPos.x >= lp.triggerX && cursorPos.x < lp.triggerX + lp.triggerW && cursorPos.y >= lp.triggerY && cursorPos.y < lp.triggerY + lp.triggerH) {
+        return 7;
+      }
+    }
+    if (zones.length > 11) {
+      const rp = zones[11];
+      if (cursorPos.x >= rp.triggerX && cursorPos.x < rp.triggerX + rp.triggerW && cursorPos.y >= rp.triggerY && cursorPos.y < rp.triggerY + rp.triggerH) {
+        return 11;
+      }
+    }
+    return -1;
+  }
+  function resolveRegionTransition(currentRegion, direction) {
+    switch (direction) {
+      case "left": {
+        switch (currentRegion) {
+          case "right-half":
+            return "left-half";
+          case "top-right":
+            return "top-left";
+          case "bottom-right":
+            return "bottom-left";
+          case "right-pillar":
+            return "center-pillar";
+          case "center-pillar":
+            return "left-pillar";
+          case "center-top":
+            return "top-left";
+          case "center-bottom":
+            return "bottom-left";
+          // Left boundary edge repeated: remain at current left position
+          case "left-half":
+            return "left-half";
+          case "left-pillar":
+            return "left-pillar";
+          case "top-left":
+            return "top-left";
+          case "bottom-left":
+            return "bottom-left";
+          default:
+            return "left-half";
+        }
+      }
+      case "right": {
+        switch (currentRegion) {
+          case "left-half":
+            return "right-half";
+          case "top-left":
+            return "top-right";
+          case "bottom-left":
+            return "bottom-right";
+          case "left-pillar":
+            return "center-pillar";
+          case "center-pillar":
+            return "right-pillar";
+          case "center-top":
+            return "top-right";
+          case "center-bottom":
+            return "bottom-right";
+          // Right boundary edge repeated: remain at current right position
+          case "right-half":
+            return "right-half";
+          case "right-pillar":
+            return "right-pillar";
+          case "top-right":
+            return "top-right";
+          case "bottom-right":
+            return "bottom-right";
+          default:
+            return "right-half";
+        }
+      }
+      case "up": {
+        switch (currentRegion) {
+          // Vertical transitions within respective column:
+          case "bottom-left":
+            return "top-left";
+          case "bottom-right":
+            return "top-right";
+          case "center-bottom":
+            return "center-top";
+          case "center-pillar":
+            return "center-top";
+          // center-full accesses center-top
+          case "left-half":
+            return "top-left";
+          case "right-half":
+            return "top-right";
+          case "left-pillar":
+            return "top-left";
+          case "right-pillar":
+            return "top-right";
+          // Top boundary edge repeated: NEVER jump columns horizontally
+          case "top-left":
+            return "top-left";
+          case "top-right":
+            return "top-right";
+          case "center-top":
+            return "center-top";
+          case "maximize":
+            return "maximize";
+          default:
+            return "top-left";
+        }
+      }
+      case "down": {
+        switch (currentRegion) {
+          // Vertical transitions within respective column:
+          case "top-left":
+            return "bottom-left";
+          case "top-right":
+            return "bottom-right";
+          case "center-top":
+            return "center-bottom";
+          case "center-pillar":
+            return "center-bottom";
+          // center-full accesses center-bottom
+          case "left-half":
+            return "bottom-left";
+          case "right-half":
+            return "bottom-right";
+          case "left-pillar":
+            return "bottom-left";
+          case "right-pillar":
+            return "bottom-right";
+          // Bottom boundary edge repeated: NEVER jump columns horizontally
+          case "bottom-left":
+            return "bottom-left";
+          case "bottom-right":
+            return "bottom-right";
+          case "center-bottom":
+            return "center-bottom";
+          case "maximize":
+            return "maximize";
+          default:
+            return "bottom-left";
+        }
+      }
+    }
+  }
+
   // apps/kwin-adapter/src/trace-recorder.ts
   var TraceRecorder = class {
-    enabled;
-    maxCapacity;
-    recordTitles;
-    redactAppIds;
-    redactResourceClass;
-    sequence = 0;
-    buffer = [];
     constructor(options) {
-      this.enabled = Boolean(options?.enabled);
-      this.maxCapacity = Math.max(1, options?.maxCapacity ?? 1e3);
-      this.recordTitles = Boolean(options?.recordTitles);
-      this.redactAppIds = Boolean(options?.redactAppIds);
-      this.redactResourceClass = Boolean(options?.redactResourceClass);
+      __publicField(this, "enabled");
+      __publicField(this, "maxCapacity");
+      __publicField(this, "recordTitles");
+      __publicField(this, "redactAppIds");
+      __publicField(this, "redactResourceClass");
+      __publicField(this, "sequence", 0);
+      __publicField(this, "buffer", []);
+      var _a;
+      this.enabled = Boolean(options == null ? void 0 : options.enabled);
+      this.maxCapacity = Math.max(1, (_a = options == null ? void 0 : options.maxCapacity) != null ? _a : 1e3);
+      this.recordTitles = Boolean(options == null ? void 0 : options.recordTitles);
+      this.redactAppIds = Boolean(options == null ? void 0 : options.redactAppIds);
+      this.redactResourceClass = Boolean(options == null ? void 0 : options.redactResourceClass);
     }
     isEnabled() {
       return this.enabled;
@@ -944,7 +1501,7 @@ var ReconcilerModule = (() => {
       }
     }
     sanitizeWindowInput(win) {
-      const copy = { ...win };
+      const copy = __spreadValues({}, win);
       if (!this.recordTitles) {
         delete copy.title;
       }
@@ -964,7 +1521,7 @@ var ReconcilerModule = (() => {
         };
       }
       if (event.type === "WindowStateChanged") {
-        const updates = { ...event.updates };
+        const updates = __spreadValues({}, event.updates);
         if (!this.recordTitles) {
           delete updates.title;
         }
@@ -1009,69 +1566,126 @@ var ReconcilerModule = (() => {
     "floating"
   ]);
   var UNSAFE_SCOPE_PARTS = /* @__PURE__ */ new Set(["__proto__", "prototype", "constructor"]);
+  function resolveSafeActiveLayout(_layout) {
+    return "balanced-grid";
+  }
   var RuntimeCoordinator = class {
-    windows = /* @__PURE__ */ new Map();
-    screens = /* @__PURE__ */ new Map();
-    workspaces = /* @__PURE__ */ new Map();
-    inFlightEchoes = /* @__PURE__ */ new Map();
-    dirtyScreenIds = /* @__PURE__ */ new Set();
-    pendingReasons = /* @__PURE__ */ new Set();
-    workspaceLayoutOverrides = /* @__PURE__ */ new Map();
-    clock;
-    traceRecorder;
-    config;
-    currentEpoch = 0;
-    // Diagnostics counters
-    totalNormalizedEvents = 0;
-    totalReconciliationTransactions = 0;
-    totalLayoutComputations = 0;
-    totalGeometryWrites = 0;
-    skippedIdenticalWrites = 0;
-    suppressedGeometryEchoes = 0;
-    lastTransactionReasons = [];
-    lastAffectedScreenIds = [];
-    workspaceLayoutConfigError = null;
     constructor(initialConfig, clock = new SystemClock(), traceRecorder = new TraceRecorder()) {
+      __publicField(this, "windows", /* @__PURE__ */ new Map());
+      __publicField(this, "screens", /* @__PURE__ */ new Map());
+      __publicField(this, "workspaces", /* @__PURE__ */ new Map());
+      __publicField(this, "inFlightEchoes", /* @__PURE__ */ new Map());
+      __publicField(this, "dirtyScreenIds", /* @__PURE__ */ new Set());
+      __publicField(this, "pendingReasons", /* @__PURE__ */ new Set());
+      __publicField(this, "workspaceLayoutOverrides", /* @__PURE__ */ new Map());
+      __publicField(this, "clock");
+      __publicField(this, "traceRecorder");
+      __publicField(this, "config");
+      __publicField(this, "currentEpoch", 0);
+      // Diagnostics counters
+      __publicField(this, "totalNormalizedEvents", 0);
+      __publicField(this, "totalReconciliationTransactions", 0);
+      __publicField(this, "totalLayoutComputations", 0);
+      __publicField(this, "totalGeometryWrites", 0);
+      __publicField(this, "skippedIdenticalWrites", 0);
+      __publicField(this, "suppressedGeometryEchoes", 0);
+      __publicField(this, "lastTransactionReasons", []);
+      __publicField(this, "lastAffectedScreenIds", []);
+      __publicField(this, "workspaceLayoutConfigError", null);
+      __publicField(this, "lastCustomRuleErrors", []);
+      __publicField(this, "lastValidCustomRules", []);
+      __publicField(this, "hasPriorValidRules", false);
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
       this.clock = clock;
       this.traceRecorder = traceRecorder;
-      const effRatio = initialConfig?.primaryRegionRatio !== void 0 ? initialConfig.primaryRegionRatio : initialConfig?.masterRatio ?? 0.5;
-      const effCount = initialConfig?.primaryRegionCount !== void 0 ? initialConfig.primaryRegionCount : initialConfig?.masterCount ?? 1;
+      const effRatio = (initialConfig == null ? void 0 : initialConfig.primaryRegionRatio) !== void 0 ? initialConfig.primaryRegionRatio : (_a = initialConfig == null ? void 0 : initialConfig.masterRatio) != null ? _a : 0.5;
+      const effCount = (initialConfig == null ? void 0 : initialConfig.primaryRegionCount) !== void 0 ? initialConfig.primaryRegionCount : (_b = initialConfig == null ? void 0 : initialConfig.masterCount) != null ? _b : 1;
       this.config = {
-        enableTiling: initialConfig?.enableTiling ?? true,
-        defaultLayout: initialConfig?.defaultLayout ?? "balanced-grid",
-        gapInner: initialConfig?.gapInner ?? 8,
-        gapOuter: initialConfig?.gapOuter ?? 10,
+        enableTiling: (_c = initialConfig == null ? void 0 : initialConfig.enableTiling) != null ? _c : true,
+        defaultLayout: resolveSafeActiveLayout(initialConfig == null ? void 0 : initialConfig.defaultLayout),
+        gapInner: (_d = initialConfig == null ? void 0 : initialConfig.gapInner) != null ? _d : 8,
+        gapOuter: (_e = initialConfig == null ? void 0 : initialConfig.gapOuter) != null ? _e : 10,
         primaryRegionRatio: effRatio,
         primaryRegionCount: effCount,
         masterRatio: effRatio,
         masterCount: effCount,
-        perDesktopLayout: initialConfig?.perDesktopLayout ?? true,
-        ignoreMinimized: initialConfig?.ignoreMinimized ?? true,
-        gameWindowPolicy: initialConfig?.gameWindowPolicy ?? "floating",
-        floatFilter: initialConfig?.floatFilter ?? "tessera,tessera-settings,tessera_settings.py",
-        customRules: initialConfig?.customRules ?? "[]",
-        workspaceLayoutsJson: initialConfig?.workspaceLayoutsJson ?? '{"version":1,"scopes":{}}',
-        customGamePatterns: initialConfig?.customGamePatterns ?? [],
-        geometryTolerancePx: initialConfig?.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX,
-        echoExpiryMs: initialConfig?.echoExpiryMs ?? DEFAULT_ECHO_EXPIRY_MS
+        perDesktopLayout: (_f = initialConfig == null ? void 0 : initialConfig.perDesktopLayout) != null ? _f : true,
+        ignoreMinimized: (_g = initialConfig == null ? void 0 : initialConfig.ignoreMinimized) != null ? _g : true,
+        gameWindowPolicy: (_h = initialConfig == null ? void 0 : initialConfig.gameWindowPolicy) != null ? _h : "floating",
+        floatFilter: (_i = initialConfig == null ? void 0 : initialConfig.floatFilter) != null ? _i : "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1",
+        customRules: (_j = initialConfig == null ? void 0 : initialConfig.customRules) != null ? _j : "[]",
+        workspaceLayoutsJson: (_k = initialConfig == null ? void 0 : initialConfig.workspaceLayoutsJson) != null ? _k : '{"version":1,"scopes":{}}',
+        customGamePatterns: (_l = initialConfig == null ? void 0 : initialConfig.customGamePatterns) != null ? _l : [],
+        geometryTolerancePx: (_m = initialConfig == null ? void 0 : initialConfig.geometryTolerancePx) != null ? _m : DEFAULT_GEOMETRY_TOLERANCE_PX,
+        echoExpiryMs: (_n = initialConfig == null ? void 0 : initialConfig.echoExpiryMs) != null ? _n : DEFAULT_ECHO_EXPIRY_MS
       };
-      this.loadWorkspaceLayoutsJson(initialConfig?.workspaceLayoutsJson);
+      if ((initialConfig == null ? void 0 : initialConfig.customRules) !== void 0) {
+        const val = validateCustomRules(initialConfig.customRules);
+        if (val.valid) {
+          this.lastValidCustomRules = [...val.rules];
+          this.hasPriorValidRules = val.rules.length > 0;
+          this.lastCustomRuleErrors = [];
+          recordCustomRules(val.rules);
+        } else {
+          this.lastCustomRuleErrors = [...val.errors];
+          this.lastValidCustomRules = [];
+          this.hasPriorValidRules = false;
+        }
+      }
+      this.loadWorkspaceLayoutsJson(initialConfig == null ? void 0 : initialConfig.workspaceLayoutsJson);
     }
     getConfig() {
-      return { ...this.config };
+      return __spreadValues({}, this.config);
+    }
+    getLastCustomRuleErrors() {
+      return [...this.lastCustomRuleErrors];
+    }
+    validateCustomRules(rules) {
+      return validateCustomRules(rules);
+    }
+    getLastValidCustomRules() {
+      return [...this.lastValidCustomRules];
+    }
+    hasPriorValidCustomRules() {
+      return this.hasPriorValidRules && this.lastValidCustomRules.length > 0;
+    }
+    resetRuleEngineState() {
+      resetRuleEngineState();
+      this.lastCustomRuleErrors = [];
+      this.lastValidCustomRules = [];
+      this.hasPriorValidRules = false;
     }
     updateConfig(updates) {
       const previousPerDesktopLayout = this.config.perDesktopLayout;
       const effRatio = updates.primaryRegionRatio !== void 0 ? updates.primaryRegionRatio : updates.masterRatio !== void 0 ? updates.masterRatio : this.config.masterRatio;
       const effCount = updates.primaryRegionCount !== void 0 ? updates.primaryRegionCount : updates.masterCount !== void 0 ? updates.masterCount : this.config.masterCount;
-      this.config = {
-        ...this.config,
-        ...updates,
-        primaryRegionRatio: effRatio,
-        primaryRegionCount: effCount,
-        masterRatio: effRatio,
-        masterCount: effCount
-      };
+      if (updates.customRules !== void 0) {
+        const val = validateCustomRules(updates.customRules);
+        if (val.valid) {
+          this.lastValidCustomRules = [...val.rules];
+          if (val.rules.length > 0) {
+            this.hasPriorValidRules = true;
+          } else if (updates.customRules === "[]" || Array.isArray(updates.customRules) && updates.customRules.length === 0) {
+            this.hasPriorValidRules = false;
+          }
+          this.lastCustomRuleErrors = [];
+          recordCustomRules(val.rules);
+        } else {
+          this.lastCustomRuleErrors = [...val.errors];
+        }
+      }
+      this.config = Object.assign(
+        {},
+        this.config,
+        updates,
+        {
+          defaultLayout: updates.defaultLayout !== void 0 ? resolveSafeActiveLayout(updates.defaultLayout) : this.config.defaultLayout,
+          primaryRegionRatio: effRatio,
+          primaryRegionCount: effCount,
+          masterRatio: effRatio,
+          masterCount: effCount
+        }
+      );
       if (previousPerDesktopLayout !== this.config.perDesktopLayout) {
         this.rebuildWorkspaceMemberships();
       }
@@ -1102,6 +1716,7 @@ var ReconcilerModule = (() => {
       return Array.from(this.screens.values());
     }
     getOrCreateWorkspace(outputId, desktopId = "1") {
+      var _a, _b, _c, _d;
       const effDeskId = this.getEffectiveDesktopId(desktopId);
       const key = getWorkspaceScopeKey(outputId, effDeskId);
       let ws = this.workspaces.get(key);
@@ -1111,9 +1726,9 @@ var ReconcilerModule = (() => {
           scopeKey: key,
           outputId,
           desktopId: effDeskId,
-          activeLayout: override?.layout || this.config.defaultLayout,
-          primaryRegionCount: override?.primaryCount ?? this.config.primaryRegionCount ?? this.config.masterCount,
-          primaryRegionRatio: override?.ratio ?? this.config.primaryRegionRatio ?? this.config.masterRatio,
+          activeLayout: resolveSafeActiveLayout((override == null ? void 0 : override.layout) || this.config.defaultLayout),
+          primaryRegionCount: (_b = (_a = override == null ? void 0 : override.primaryCount) != null ? _a : this.config.primaryRegionCount) != null ? _b : this.config.masterCount,
+          primaryRegionRatio: (_d = (_c = override == null ? void 0 : override.ratio) != null ? _c : this.config.primaryRegionRatio) != null ? _d : this.config.masterRatio,
           gaps: { inner: this.config.gapInner, outer: this.config.gapOuter },
           orderedSlotWindowIds: []
         };
@@ -1333,11 +1948,12 @@ var ReconcilerModule = (() => {
       if (offset !== serialized.length) throw new Error("trailing JSON content");
     }
     applyWorkspaceLayoutOverrides() {
+      var _a, _b, _c, _d;
       for (const ws of this.workspaces.values()) {
         const override = this.workspaceLayoutOverrides.get(ws.scopeKey) || this.workspaceLayoutOverrides.get(getWorkspaceScopeKey("*", ws.desktopId));
-        ws.activeLayout = override?.layout || this.config.defaultLayout;
-        ws.primaryRegionCount = override?.primaryCount ?? this.config.primaryRegionCount ?? this.config.masterCount;
-        ws.primaryRegionRatio = override?.ratio ?? this.config.primaryRegionRatio ?? this.config.masterRatio;
+        ws.activeLayout = resolveSafeActiveLayout((override == null ? void 0 : override.layout) || this.config.defaultLayout);
+        ws.primaryRegionCount = (_b = (_a = override == null ? void 0 : override.primaryCount) != null ? _a : this.config.primaryRegionCount) != null ? _b : this.config.masterCount;
+        ws.primaryRegionRatio = (_d = (_c = override == null ? void 0 : override.ratio) != null ? _c : this.config.primaryRegionRatio) != null ? _d : this.config.masterRatio;
       }
     }
     getWorkspace(outputId, desktopId = "1") {
@@ -1353,15 +1969,15 @@ var ReconcilerModule = (() => {
         const newScreen = {
           outputId: input.outputId,
           name: input.name || input.outputId,
-          geometry: { ...input.geometry },
-          usableArea: { ...input.usableArea },
+          geometry: __spreadValues({}, input.geometry),
+          usableArea: __spreadValues({}, input.usableArea),
           activeDesktopId,
           activeActivityId: input.activeActivityId,
           get activeLayout() {
             return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).activeLayout;
           },
           set activeLayout(l) {
-            self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).activeLayout = l;
+            self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).activeLayout = resolveSafeActiveLayout(l);
           },
           get masterCount() {
             return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionCount;
@@ -1413,8 +2029,8 @@ var ReconcilerModule = (() => {
         screen = newScreen;
       } else {
         if (input.name) screen.name = input.name;
-        screen.geometry = { ...input.geometry };
-        screen.usableArea = { ...input.usableArea };
+        screen.geometry = __spreadValues({}, input.geometry);
+        screen.usableArea = __spreadValues({}, input.usableArea);
         if (input.activeDesktopId) screen.activeDesktopId = input.activeDesktopId;
         screen.activeActivityId = input.activeActivityId;
       }
@@ -1452,7 +2068,7 @@ var ReconcilerModule = (() => {
         targets = [GLOBAL_DESKTOP_SCOPE];
       } else if (win.onAllDesktops) {
         const screen = this.screens.get(outputId);
-        targets = [activeDesktopId || screen?.activeDesktopId || win.desktopId || "1"];
+        targets = [activeDesktopId || (screen == null ? void 0 : screen.activeDesktopId) || win.desktopId || "1"];
       } else {
         targets = [...new Set(desktopIds)];
       }
@@ -1472,6 +2088,7 @@ var ReconcilerModule = (() => {
       }
     }
     classifyWindow(input, screen) {
+      var _a;
       const ruleInput = {
         windowId: input.id,
         resourceClass: input.resourceClass,
@@ -1488,11 +2105,11 @@ var ReconcilerModule = (() => {
         transient: Boolean(input.transient),
         fullScreen: Boolean(input.fullScreen),
         noBorder: Boolean(input.noBorder),
-        maximizeMode: input.maximizeMode ?? 0,
+        maximizeMode: (_a = input.maximizeMode) != null ? _a : 0,
         minimized: Boolean(input.minimized),
         frameGeometry: input.frameGeometry,
-        outputGeometry: input.outputGeometry || screen?.geometry,
-        outputUsableArea: input.outputUsableArea || screen?.usableArea,
+        outputGeometry: input.outputGeometry || (screen == null ? void 0 : screen.geometry),
+        outputUsableArea: input.outputUsableArea || (screen == null ? void 0 : screen.usableArea),
         desktopWindow: Boolean(input.desktopWindow),
         dock: Boolean(input.dock),
         splash: Boolean(input.splash),
@@ -1505,7 +2122,7 @@ var ReconcilerModule = (() => {
       const engine = getOrCreateRuleEngine({
         gameWindowPolicy: this.config.gameWindowPolicy,
         userFilterString: this.config.floatFilter,
-        customRules: this.config.customRules,
+        customRules: this.lastValidCustomRules,
         customGamePatterns: this.config.customGamePatterns
       });
       return engine.classify(ruleInput);
@@ -1514,6 +2131,7 @@ var ReconcilerModule = (() => {
      * Primary event ingestion entrypoint. Normalizes and updates state.
      */
     ingestEvent(event) {
+      var _a, _b;
       this.totalNormalizedEvents++;
       this.traceRecorder.recordEvent(event, this.clock.now());
       switch (event.type) {
@@ -1559,16 +2177,18 @@ var ReconcilerModule = (() => {
             minimized: Boolean(winInput.minimized),
             fullScreen: Boolean(winInput.fullScreen),
             noBorder: Boolean(winInput.noBorder),
-            maximizeMode: winInput.maximizeMode ?? 0,
-            frameGeometry: { ...geom },
+            maximizeMode: (_a = winInput.maximizeMode) != null ? _a : 0,
+            frameGeometry: __spreadValues({}, geom),
             outputGeometry: winInput.outputGeometry,
             classification: classification.classification,
             tileable,
             isManualFloating: Boolean(winInput.isManualFloating),
             isDragging: Boolean(winInput.isDragging),
-            lastObservedGeometry: { ...geom },
+            lastObservedGeometry: __spreadValues({}, geom),
             lastRequestedGeometry: null,
             lastAppliedTransactionEpoch: 0,
+            unachievableAttempts: 0,
+            lastAttemptObservedGeometry: null,
             currentDesiredTiledGeometry: null,
             preMinimizeGeometry: null,
             isPreTiled: Boolean(winInput.isPreTiled),
@@ -1611,8 +2231,8 @@ var ReconcilerModule = (() => {
           if (!win) {
             return { dirty: false, affectedScreens: [], isEcho: false };
           }
-          win.lastObservedGeometry = { ...event.geometry };
-          win.frameGeometry = { ...event.geometry };
+          win.lastObservedGeometry = __spreadValues({}, event.geometry);
+          win.frameGeometry = __spreadValues({}, event.geometry);
           const screen = this.screens.get(win.outputId);
           const prevTileable = win.tileable;
           const prevClass = win.classification;
@@ -1625,12 +2245,15 @@ var ReconcilerModule = (() => {
             fullScreen: win.fullScreen,
             minimized: win.minimized,
             frameGeometry: event.geometry,
-            outputGeometry: screen?.geometry,
-            outputUsableArea: screen?.usableArea
+            outputGeometry: screen == null ? void 0 : screen.geometry,
+            outputUsableArea: screen == null ? void 0 : screen.usableArea
           }, screen);
           win.classification = newClassResult.classification;
           win.tileable = newClassResult.classification === "tiled";
           if (prevTileable !== win.tileable || prevClass !== win.classification) {
+            win.lastRequestedGeometry = null;
+            win.unachievableAttempts = 0;
+            win.lastAttemptObservedGeometry = null;
             this.markScreenDirty(win.outputId, "TileabilityChanged");
             return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
           }
@@ -1654,12 +2277,12 @@ var ReconcilerModule = (() => {
           if (event.updates.title !== void 0) win.title = event.updates.title;
           if (event.updates.role !== void 0) win.role = event.updates.role;
           if (event.updates.frameGeometry !== void 0) {
-            win.frameGeometry = { ...event.updates.frameGeometry };
-            win.lastObservedGeometry = { ...event.updates.frameGeometry };
+            win.frameGeometry = __spreadValues({}, event.updates.frameGeometry);
+            win.lastObservedGeometry = __spreadValues({}, event.updates.frameGeometry);
           }
           if (event.updates.minimized !== void 0) {
             if (event.updates.minimized && !win.minimized) {
-              win.preMinimizeGeometry = { ...win.frameGeometry };
+              win.preMinimizeGeometry = __spreadValues({}, win.frameGeometry);
             }
             win.minimized = event.updates.minimized;
           }
@@ -1719,13 +2342,16 @@ var ReconcilerModule = (() => {
             fullScreen: win.fullScreen,
             minimized: win.minimized,
             frameGeometry: win.frameGeometry,
-            outputGeometry: screen?.geometry,
-            outputUsableArea: screen?.usableArea
+            outputGeometry: screen == null ? void 0 : screen.geometry,
+            outputUsableArea: screen == null ? void 0 : screen.usableArea
           }, screen);
           win.classification = newClassResult.classification;
           win.tileable = newClassResult.classification === "tiled";
           const layoutAffectingStateChanged = prevTileable !== win.tileable || prevClass !== win.classification || prevManualFloating !== win.isManualFloating || prevMinimized !== win.minimized || prevFullScreen !== win.fullScreen || prevMaximizeMode !== win.maximizeMode || membershipChanged;
           if (layoutAffectingStateChanged) {
+            win.lastRequestedGeometry = null;
+            win.unachievableAttempts = 0;
+            win.lastAttemptObservedGeometry = null;
             const reason = win.fullScreen ? "WindowFullscreenEntered" : !win.fullScreen && prevClass === "fullscreen" ? "WindowFullscreenExited" : "WindowStateChanged";
             this.markScreenDirty(win.outputId, reason);
             return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
@@ -1779,7 +2405,7 @@ var ReconcilerModule = (() => {
           if (newDesks.length > 0) {
             win.desktopId = newDesks[0];
           }
-          const activeDesktopId = this.screens.get(win.outputId)?.activeDesktopId || win.desktopId;
+          const activeDesktopId = ((_b = this.screens.get(win.outputId)) == null ? void 0 : _b.activeDesktopId) || win.desktopId;
           for (const ws of this.workspaces.values()) {
             if (ws.outputId !== win.outputId) continue;
             const inMembership = this.config.perDesktopLayout === false ? ws.desktopId === GLOBAL_DESKTOP_SCOPE : newSticky ? ws.desktopId === activeDesktopId : newDesks.includes(ws.desktopId);
@@ -1887,13 +2513,13 @@ var ReconcilerModule = (() => {
           const screen = this.screens.get(event.outputId);
           const deskId = event.desktopId || (screen ? screen.activeDesktopId : "1");
           const ws = this.getOrCreateWorkspace(event.outputId, deskId);
-          ws.activeLayout = event.layout;
+          ws.activeLayout = resolveSafeActiveLayout(event.layout);
           this.markScreenDirty(event.outputId, "ScreenLayoutChanged");
           return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
         }
         case "WorkspaceLayoutChanged": {
           const ws = this.getOrCreateWorkspace(event.outputId, event.desktopId);
-          ws.activeLayout = event.layout;
+          ws.activeLayout = resolveSafeActiveLayout(event.layout);
           this.markScreenDirty(event.outputId, "WorkspaceLayoutChanged");
           return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
         }
@@ -1917,13 +2543,13 @@ var ReconcilerModule = (() => {
           const screen = this.screens.get(event.outputId);
           const deskId = event.desktopId || (screen ? screen.activeDesktopId : "1");
           const ws = this.getOrCreateWorkspace(event.outputId, deskId);
-          ws.gaps = { ...event.gaps };
+          ws.gaps = __spreadValues({}, event.gaps);
           this.markScreenDirty(event.outputId, "ScreenGapsChanged");
           return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
         }
         case "WorkspaceGapsChanged": {
           const ws = this.getOrCreateWorkspace(event.outputId, event.desktopId);
-          ws.gaps = { ...event.gaps };
+          ws.gaps = __spreadValues({}, event.gaps);
           this.markScreenDirty(event.outputId, "WorkspaceGapsChanged");
           return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
         }
@@ -1937,7 +2563,7 @@ var ReconcilerModule = (() => {
           const targetScreen = this.screens.get(event.outputId);
           const oldOutputId = win.outputId;
           const isCrossOutput = oldOutputId !== event.outputId;
-          const targetDesktopId = win.onAllDesktops ? targetScreen?.activeDesktopId || win.desktopId || "1" : event.desktopId || win.desktopId || "1";
+          const targetDesktopId = win.onAllDesktops ? (targetScreen == null ? void 0 : targetScreen.activeDesktopId) || win.desktopId || "1" : event.desktopId || win.desktopId || "1";
           if (isCrossOutput) {
             this.removeWindowFromOutputWorkspaces(event.windowId, oldOutputId);
           }
@@ -1958,7 +2584,11 @@ var ReconcilerModule = (() => {
           win.isManualFloating = false;
           win.tileable = true;
           win.classification = "tiled";
-          win.currentDesiredTiledGeometry = { ...event.targetRect };
+          win.snapRegion = event.snapRegion;
+          win.currentDesiredTiledGeometry = __spreadValues({}, event.targetRect);
+          win.customTiledGeometry = null;
+          win.isExplicitSnap = true;
+          win.snapEpoch = this.totalNormalizedEvents;
           this.setSavedTiledGeometry(event.windowId, event.targetRect);
           this.addWindowToApplicableWorkspaces(win, event.outputId, targetDesktopId);
           const targetWs = this.getOrCreateWorkspace(event.outputId, targetDesktopId);
@@ -1983,22 +2613,25 @@ var ReconcilerModule = (() => {
      * Geometry echo detection and suppression.
      */
     checkAndHandleEcho(windowId, newGeometry, timestamp = this.clock.now()) {
+      var _a, _b;
       const entry = this.inFlightEchoes.get(windowId);
       if (!entry) return { isEcho: false };
       const elapsed = timestamp - entry.timestamp;
-      const maxAge = this.config.echoExpiryMs ?? DEFAULT_ECHO_EXPIRY_MS;
+      const maxAge = (_a = this.config.echoExpiryMs) != null ? _a : DEFAULT_ECHO_EXPIRY_MS;
       if (elapsed > maxAge) {
         this.inFlightEchoes.delete(windowId);
         return { isEcho: false };
       }
-      const tolerance = this.config.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX;
-      if (rectEqualsWithTolerance(entry.target, newGeometry, tolerance)) {
+      const tolerance = (_b = this.config.geometryTolerancePx) != null ? _b : DEFAULT_GEOMETRY_TOLERANCE_PX;
+      const exactMatch = rectEqualsWithTolerance(entry.target, newGeometry, tolerance);
+      const clampedMatch = Math.abs(newGeometry.x - entry.target.x) <= tolerance && Math.abs(newGeometry.y - entry.target.y) <= tolerance && Math.abs(newGeometry.width - entry.target.width) <= 32 && Math.abs(newGeometry.height - entry.target.height) <= 32;
+      if (exactMatch || clampedMatch) {
         this.inFlightEchoes.delete(windowId);
         this.suppressedGeometryEchoes++;
         const win = this.windows.get(windowId);
         if (win) {
-          win.lastObservedGeometry = { ...newGeometry };
-          win.frameGeometry = { ...newGeometry };
+          win.lastObservedGeometry = __spreadValues({}, newGeometry);
+          win.frameGeometry = __spreadValues({}, newGeometry);
         }
         return { isEcho: true };
       }
@@ -2009,7 +2642,7 @@ var ReconcilerModule = (() => {
      */
     recordCommand(windowId, target, epoch) {
       this.inFlightEchoes.set(windowId, {
-        target: { ...target },
+        target: __spreadValues({}, target),
         epoch,
         timestamp: this.clock.now()
       });
@@ -2019,6 +2652,18 @@ var ReconcilerModule = (() => {
      */
     clearRecordedCommand(windowId) {
       this.inFlightEchoes.delete(windowId);
+    }
+    /**
+     * Checks whether an in-flight command is currently recorded for the window.
+     */
+    hasRecordedCommand(windowId) {
+      return this.inFlightEchoes.has(windowId);
+    }
+    /**
+     * Retrieves an in-flight command record if present.
+     */
+    getRecordedCommand(windowId) {
+      return this.inFlightEchoes.get(windowId);
     }
     /**
      * Determines tileable windows for a screen according to scoped workspace slot persistence.
@@ -2058,10 +2703,534 @@ var ReconcilerModule = (() => {
       screen.orderedWindowIds = ordered.map((w) => w.id);
       return ordered;
     }
+    resolveRegionOccupancy(_screen, tileableWindows, area, gaps) {
+      const solution = /* @__PURE__ */ new Map();
+      const zones = computeSnapZones(area, gaps.outer, gaps.inner);
+      const zoneMap = /* @__PURE__ */ new Map();
+      for (const z of zones) {
+        zoneMap.set(z.id, z.targetRect);
+      }
+      const leftPillar = zoneMap.get("left-pillar");
+      const rightPillar = zoneMap.get("right-pillar");
+      const hh = Math.floor((area.height - gaps.outer * 2 - gaps.inner) / 2);
+      if (leftPillar) {
+        const topH = hh;
+        const botY = leftPillar.y + topH + gaps.inner;
+        zoneMap.set("left-pillar-top", {
+          x: leftPillar.x,
+          y: leftPillar.y,
+          width: leftPillar.width,
+          height: topH
+        });
+        zoneMap.set("left-pillar-bottom", {
+          x: leftPillar.x,
+          y: botY,
+          width: leftPillar.width,
+          height: Math.max(30, leftPillar.y + leftPillar.height - botY)
+        });
+      }
+      if (rightPillar) {
+        const topH = hh;
+        const botY = rightPillar.y + topH + gaps.inner;
+        zoneMap.set("right-pillar-top", {
+          x: rightPillar.x,
+          y: rightPillar.y,
+          width: rightPillar.width,
+          height: topH
+        });
+        zoneMap.set("right-pillar-bottom", {
+          x: rightPillar.x,
+          y: botY,
+          width: rightPillar.width,
+          height: Math.max(30, rightPillar.y + rightPillar.height - botY)
+        });
+      }
+      const validateCustomGeometry = (customRect) => {
+        if (!customRect || customRect.width <= 0 || customRect.height <= 0) {
+          return null;
+        }
+        if (customRect.x + customRect.width <= area.x || customRect.x >= area.x + area.width || customRect.y + customRect.height <= area.y || customRect.y >= area.y + area.height) {
+          return null;
+        }
+        const minW = Math.min(60, area.width);
+        const minH = Math.min(40, area.height);
+        const x = Math.max(area.x, Math.min(area.x + area.width - minW, customRect.x));
+        const y = Math.max(area.y, Math.min(area.y + area.height - minH, customRect.y));
+        const maxW = area.x + area.width - x;
+        const maxH = area.y + area.height - y;
+        const width = Math.max(minW, Math.min(maxW, customRect.width));
+        const height = Math.max(minH, Math.min(maxH, customRect.height));
+        return { x, y, width, height };
+      };
+      const candidates = [];
+      const hasRightSnap = tileableWindows.some((w) => Boolean(w.snapRegion && (w.snapRegion.includes("right") || w.snapRegion.includes("pillar-2"))));
+      const hasLeftSnap = tileableWindows.some((w) => Boolean(w.snapRegion && (w.snapRegion.includes("left") || w.snapRegion.includes("pillar-0"))));
+      for (const win of tileableWindows) {
+        if (win.customTiledGeometry) {
+          const validated = validateCustomGeometry(win.customTiledGeometry);
+          if (!validated) {
+            win.customTiledGeometry = null;
+          } else {
+            win.customTiledGeometry = validated;
+            candidates.push({
+              win,
+              region: win.snapRegion || "custom",
+              customRect: validated,
+              priority: 2,
+              snapEpoch: win.snapEpoch || 0
+            });
+            continue;
+          }
+        }
+        if (win.snapRegion && zoneMap.has(win.snapRegion)) {
+          candidates.push({
+            win,
+            region: win.snapRegion,
+            priority: win.isExplicitSnap ? 1 : 0.5,
+            snapEpoch: win.snapEpoch || 0
+          });
+          continue;
+        }
+        const geom = win.currentDesiredTiledGeometry || win.frameGeometry;
+        let inferred = "left-half";
+        if (geom && geom.width > 50 && geom.height > 50) {
+          const cx = geom.x + geom.width / 2;
+          const cy = geom.y + geom.height / 2;
+          const isTall = geom.height >= area.height * 0.7;
+          const isFullWidth = geom.width >= area.width * 0.8;
+          if (isFullWidth) {
+            inferred = hasRightSnap ? "left-half" : hasLeftSnap ? "right-half" : "left-half";
+          } else if (isTall) {
+            if (cx < area.x + area.width * 0.33) {
+              inferred = "left-pillar";
+            } else if (cx > area.x + area.width * 0.66) {
+              inferred = "right-pillar";
+            } else if (geom.width < area.width * 0.4) {
+              inferred = "center-pillar";
+            } else if (cx < area.x + area.width * 0.5) {
+              inferred = "left-half";
+            } else {
+              inferred = "right-half";
+            }
+          } else {
+            if (cx < area.x + area.width * 0.5) {
+              inferred = cy < area.y + area.height * 0.5 ? "top-left" : "bottom-left";
+            } else {
+              inferred = cy < area.y + area.height * 0.5 ? "top-right" : "bottom-right";
+            }
+          }
+        } else {
+          const occupiedRegions = new Set(candidates.map((c) => c.region));
+          if (!occupiedRegions.has("left-half") && !occupiedRegions.has("top-left") && !occupiedRegions.has("bottom-left")) {
+            inferred = "left-half";
+          } else if (!occupiedRegions.has("right-half") && !occupiedRegions.has("top-right") && !occupiedRegions.has("bottom-right")) {
+            inferred = "right-half";
+          } else if (!occupiedRegions.has("top-right")) {
+            inferred = "top-right";
+          } else if (!occupiedRegions.has("bottom-right")) {
+            inferred = "bottom-right";
+          }
+        }
+        win.snapRegion = inferred;
+        candidates.push({
+          win,
+          region: inferred,
+          priority: 0,
+          snapEpoch: 0
+        });
+      }
+      const rectsOverlap = (r1, r2) => {
+        const xOverlap = Math.max(0, Math.min(r1.x + r1.width, r2.x + r2.width) - Math.max(r1.x, r2.x));
+        const yOverlap = Math.max(0, Math.min(r1.y + r1.height, r2.y + r2.height) - Math.max(r1.y, r2.y));
+        return xOverlap * yOverlap > 100;
+      };
+      candidates.sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return (b.snapEpoch || 0) - (a.snapEpoch || 0);
+      });
+      const getRegionPreferences = (region) => {
+        switch (region) {
+          case "left-half":
+            return [
+              "left-half",
+              "left-pillar",
+              "top-left",
+              "bottom-left",
+              "right-half",
+              "right-pillar",
+              "top-right",
+              "bottom-right",
+              "center-pillar",
+              "center-top",
+              "center-bottom"
+            ];
+          case "right-half":
+            return [
+              "right-half",
+              "right-pillar",
+              "top-right",
+              "bottom-right",
+              "left-half",
+              "left-pillar",
+              "top-left",
+              "bottom-left",
+              "center-pillar",
+              "center-top",
+              "center-bottom"
+            ];
+          case "top-left":
+            return [
+              "top-left",
+              "left-pillar-top",
+              "bottom-left",
+              "left-pillar-bottom",
+              "left-pillar",
+              "left-half",
+              "center-bottom",
+              "right-pillar",
+              "right-half",
+              "top-right",
+              "bottom-right",
+              "right-pillar-top",
+              "right-pillar-bottom",
+              "center-pillar",
+              "center-top"
+            ];
+          case "bottom-left":
+            return [
+              "bottom-left",
+              "left-pillar-bottom",
+              "top-left",
+              "left-pillar-top",
+              "left-pillar",
+              "left-half",
+              "center-top",
+              "right-pillar",
+              "right-half",
+              "bottom-right",
+              "top-right",
+              "right-pillar-bottom",
+              "right-pillar-top",
+              "center-pillar",
+              "center-bottom"
+            ];
+          case "top-right":
+            return [
+              "top-right",
+              "right-pillar-top",
+              "bottom-right",
+              "right-pillar-bottom",
+              "right-pillar",
+              "right-half",
+              "center-bottom",
+              "left-pillar",
+              "left-half",
+              "top-left",
+              "bottom-left",
+              "left-pillar-top",
+              "left-pillar-bottom",
+              "center-pillar",
+              "center-top"
+            ];
+          case "bottom-right":
+            return [
+              "bottom-right",
+              "right-pillar-bottom",
+              "top-right",
+              "right-pillar-top",
+              "right-pillar",
+              "right-half",
+              "center-top",
+              "left-pillar",
+              "left-half",
+              "bottom-left",
+              "top-left",
+              "left-pillar-bottom",
+              "left-pillar-top",
+              "center-pillar",
+              "center-bottom"
+            ];
+          case "left-pillar":
+            return [
+              "left-pillar",
+              "center-pillar",
+              "right-pillar",
+              "center-top",
+              "center-bottom",
+              "left-half",
+              "right-half",
+              "top-left",
+              "bottom-left",
+              "top-right",
+              "bottom-right"
+            ];
+          case "right-pillar":
+            return [
+              "right-pillar",
+              "center-pillar",
+              "left-pillar",
+              "center-top",
+              "center-bottom",
+              "right-half",
+              "left-half",
+              "top-right",
+              "bottom-right",
+              "top-left",
+              "bottom-left"
+            ];
+          case "center-pillar":
+            return [
+              "center-pillar",
+              "center-top",
+              "center-bottom",
+              "left-pillar",
+              "right-pillar",
+              "left-half",
+              "right-half",
+              "top-left",
+              "bottom-left",
+              "top-right",
+              "bottom-right"
+            ];
+          case "center-top":
+            return [
+              "center-top",
+              "center-bottom",
+              "left-pillar-top",
+              "right-pillar-top",
+              "left-pillar",
+              "right-pillar",
+              "top-left",
+              "top-right",
+              "left-pillar-bottom",
+              "right-pillar-bottom",
+              "center-pillar",
+              "left-half",
+              "right-half",
+              "bottom-left",
+              "bottom-right"
+            ];
+          case "center-bottom":
+            return [
+              "center-bottom",
+              "center-top",
+              "left-pillar-bottom",
+              "right-pillar-bottom",
+              "left-pillar",
+              "right-pillar",
+              "bottom-left",
+              "bottom-right",
+              "left-pillar-top",
+              "right-pillar-top",
+              "center-pillar",
+              "left-half",
+              "right-half",
+              "top-left",
+              "top-right"
+            ];
+          default:
+            return [region];
+        }
+      };
+      const accepted = [];
+      const adaptPeersForCenter = (centerRegion) => {
+        for (let i = 1; i < accepted.length; i++) {
+          const a = accepted[i];
+          if (centerRegion === "center-top" || centerRegion === "center-pillar") {
+            if (a.region === "top-left") a.region = "left-pillar-top";
+            if (a.region === "top-right") a.region = "right-pillar-top";
+            if (a.region === "left-half") a.region = "left-pillar";
+            if (a.region === "right-half") a.region = "right-pillar";
+          }
+          if (centerRegion === "center-bottom" || centerRegion === "center-pillar") {
+            if (a.region === "bottom-left") a.region = "left-pillar-bottom";
+            if (a.region === "bottom-right") a.region = "right-pillar-bottom";
+            if (a.region === "left-half") a.region = "left-pillar";
+            if (a.region === "right-half") a.region = "right-pillar";
+          }
+        }
+      };
+      for (const cand of candidates) {
+        if (accepted.length === 0) {
+          accepted.push(cand);
+          if (!cand.win.isExplicitSnap) {
+            cand.win.snapRegion = cand.region;
+          }
+          continue;
+        }
+        if (cand.customRect) {
+          const collidesWithAccepted = accepted.some((a) => {
+            const aRect = a.customRect || zoneMap.get(a.region) || area;
+            return rectsOverlap(cand.customRect, aRect);
+          });
+          if (!collidesWithAccepted) {
+            accepted.push(cand);
+            continue;
+          }
+          cand.customRect = void 0;
+          cand.win.customTiledGeometry = null;
+        }
+        if (cand.region === "center-pillar") {
+          const existingFull = accepted.find((a) => a.region === "center-pillar");
+          if (existingFull) {
+            existingFull.region = "center-top";
+            cand.region = "center-bottom";
+            adaptPeersForCenter("center-top");
+            adaptPeersForCenter("center-bottom");
+            accepted.push(cand);
+            continue;
+          }
+          const existingTop = accepted.find((a) => a.region === "center-top");
+          const existingBottom = accepted.find((a) => a.region === "center-bottom");
+          if (existingTop && !existingBottom) {
+            const rRect = zoneMap.get("center-bottom");
+            if (rRect && !accepted.some((a) => rectsOverlap(rRect, a.customRect || zoneMap.get(a.region) || area))) {
+              cand.region = "center-bottom";
+              adaptPeersForCenter("center-bottom");
+              accepted.push(cand);
+              continue;
+            }
+          }
+          if (existingBottom && !existingTop) {
+            const rRect = zoneMap.get("center-top");
+            if (rRect && !accepted.some((a) => rectsOverlap(rRect, a.customRect || zoneMap.get(a.region) || area))) {
+              cand.region = "center-top";
+              adaptPeersForCenter("center-top");
+              accepted.push(cand);
+              continue;
+            }
+          }
+        } else if (cand.region === "center-top") {
+          const existingFull = accepted.find((a) => a.region === "center-pillar");
+          if (existingFull) {
+            existingFull.region = "center-bottom";
+            cand.region = "center-top";
+            adaptPeersForCenter("center-top");
+            adaptPeersForCenter("center-bottom");
+            accepted.push(cand);
+            continue;
+          }
+        } else if (cand.region === "center-bottom") {
+          const existingFull = accepted.find((a) => a.region === "center-pillar");
+          if (existingFull) {
+            existingFull.region = "center-top";
+            cand.region = "center-bottom";
+            adaptPeersForCenter("center-top");
+            adaptPeersForCenter("center-bottom");
+            accepted.push(cand);
+            continue;
+          }
+        }
+        const prefs = getRegionPreferences(cand.region);
+        let chosen = null;
+        for (const r of prefs) {
+          const rRect = zoneMap.get(r);
+          if (!rRect) continue;
+          const isOccupied = accepted.some((a) => a.region === r);
+          if (isOccupied) continue;
+          const collidesWithAny = accepted.some((a) => {
+            const aRect = a.customRect || zoneMap.get(a.region) || area;
+            return rectsOverlap(rRect, aRect);
+          });
+          if (!collidesWithAny) {
+            chosen = r;
+            break;
+          }
+        }
+        if (!chosen) {
+          for (const r of prefs) {
+            const rRect = zoneMap.get(r);
+            if (!rRect) continue;
+            if (accepted.length > 1) {
+              const newest = accepted[0];
+              const newestRect = newest.customRect || zoneMap.get(newest.region) || area;
+              if (r === newest.region || rectsOverlap(rRect, newestRect)) {
+                continue;
+              }
+            }
+            const collidesWithOther = accepted.some((a) => {
+              if (a.region === r) return false;
+              const aRect = a.customRect || zoneMap.get(a.region) || area;
+              return rectsOverlap(rRect, aRect);
+            });
+            if (!collidesWithOther) {
+              chosen = r;
+              break;
+            }
+          }
+        }
+        if (!chosen && accepted.length > 1) {
+          const newest = accepted[0];
+          const newestRect = newest.customRect || zoneMap.get(newest.region) || area;
+          for (let i = 1; i < accepted.length; i++) {
+            const older = accepted[i];
+            const olderRect = older.customRect || zoneMap.get(older.region) || area;
+            if (!rectsOverlap(olderRect, newestRect) && older.region !== newest.region) {
+              chosen = older.region;
+              break;
+            }
+          }
+        }
+        if (!chosen) {
+          if (accepted.length > 1) {
+            chosen = accepted[accepted.length - 1].region;
+          } else {
+            chosen = accepted[0].region;
+          }
+        }
+        cand.region = chosen;
+        if (chosen && chosen.startsWith("center")) {
+          adaptPeersForCenter(chosen);
+        }
+        if (!cand.win.isExplicitSnap) {
+          cand.win.snapRegion = chosen;
+        }
+        accepted.push(cand);
+      }
+      const finalGroups = /* @__PURE__ */ new Map();
+      for (const cand of candidates) {
+        if (!finalGroups.has(cand.region)) finalGroups.set(cand.region, []);
+        finalGroups.get(cand.region).push(cand);
+      }
+      for (const [region, cands] of finalGroups.entries()) {
+        if (cands.length === 1) {
+          const cand = cands[0];
+          if (cand.customRect) {
+            solution.set(cand.win.id, cand.customRect);
+          } else if (zoneMap.has(region)) {
+            solution.set(cand.win.id, zoneMap.get(region));
+          }
+        } else {
+          const baseRect = zoneMap.get(region) || area;
+          const count = cands.length;
+          const totalGaps = (count - 1) * gaps.inner;
+          const availableH = Math.max(0, baseRect.height - totalGaps);
+          const minH = Math.min(30, Math.floor(baseRect.height / count));
+          const rawSliceH = Math.floor(availableH / count);
+          const sliceH = Math.max(minH, rawSliceH);
+          for (let i = 0; i < count; i++) {
+            const cand = cands[i];
+            let y = baseRect.y + i * (sliceH + gaps.inner);
+            if (y + sliceH > baseRect.y + baseRect.height) {
+              y = Math.max(baseRect.y, baseRect.y + baseRect.height - sliceH);
+            }
+            const h = i === count - 1 ? Math.max(minH, baseRect.y + baseRect.height - y) : sliceH;
+            solution.set(cand.win.id, {
+              x: Math.max(area.x, baseRect.x),
+              y: Math.max(area.y, y),
+              width: Math.max(40, baseRect.width),
+              height: Math.max(minH, h)
+            });
+          }
+        }
+      }
+      return solution;
+    }
     /**
      * Executes a coalesced reconciliation pass for dirty screens.
      */
     reconcile(forceScreenId) {
+      var _a, _b;
       if (!this.config.enableTiling) {
         this.dirtyScreenIds.clear();
         this.pendingReasons.clear();
@@ -2086,7 +3255,7 @@ var ReconcilerModule = (() => {
       const affectedScreenIds = screensToReconcile.map((s) => s.outputId);
       const operations = [];
       let skippedWrites = 0;
-      const tolerance = this.config.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX;
+      const tolerance = (_a = this.config.geometryTolerancePx) != null ? _a : DEFAULT_GEOMETRY_TOLERANCE_PX;
       for (const screen of screensToReconcile) {
         if (screen.activeLayout === "floating") {
           screen.dirtyReasons.clear();
@@ -2104,59 +3273,81 @@ var ReconcilerModule = (() => {
         this.totalLayoutComputations++;
         const ids = tileableWindows.map((w) => w.id);
         let solution = /* @__PURE__ */ new Map();
-        switch (screen.activeLayout) {
-          case "primary-stack":
-          case "master-stack":
-            solution = solvePrimaryStack(area, ids, screen.gaps, {
-              primaryRegionRatio: screen.primaryRegionRatio,
-              primaryRegionCount: screen.primaryRegionCount,
-              masterRatio: screen.masterRatio,
-              masterCount: screen.masterCount
-            });
-            break;
-          case "balanced-grid":
-          case "grid":
-            solution = solveBalancedGrid(area, ids, screen.gaps);
-            break;
-          case "binary-split":
-          case "bsp": {
-            let root = null;
-            for (const wid of ids) {
-              root = insertWindow(root, wid);
+        const hasRegionWindows = tileableWindows.some((w) => Boolean(w.snapRegion) || Boolean(w.customTiledGeometry));
+        if (hasRegionWindows) {
+          solution = this.resolveRegionOccupancy(screen, tileableWindows, area, screen.gaps);
+        } else {
+          switch (screen.activeLayout) {
+            case "primary-stack":
+            case "master-stack":
+              solution = solvePrimaryStack(area, ids, screen.gaps, {
+                primaryRegionRatio: screen.primaryRegionRatio,
+                primaryRegionCount: screen.primaryRegionCount,
+                masterRatio: screen.masterRatio,
+                masterCount: screen.masterCount
+              });
+              break;
+            case "balanced-grid":
+            case "grid":
+              solution = solveBalancedGrid(area, ids, screen.gaps);
+              break;
+            case "binary-split":
+            case "bsp": {
+              let root = null;
+              for (const wid of ids) {
+                root = insertWindow(root, wid);
+              }
+              solution = solveTree(root, area, screen.gaps);
+              break;
             }
-            solution = solveTree(root, area, screen.gaps);
-            break;
+            case "columns":
+              solution = solveLayout("columns", area, ids, screen.gaps);
+              break;
+            case "rows":
+              solution = solveLayout("rows", area, ids, screen.gaps);
+              break;
+            case "monocle":
+              solution = solveLayout("monocle", area, ids, screen.gaps);
+              break;
+            default:
+              solution = solveBalancedGrid(area, ids, screen.gaps);
+              break;
           }
-          case "columns":
-            solution = solveLayout("columns", area, ids, screen.gaps);
-            break;
-          case "rows":
-            solution = solveLayout("rows", area, ids, screen.gaps);
-            break;
-          case "monocle":
-            solution = solveLayout("monocle", area, ids, screen.gaps);
-            break;
-          default:
-            solution = solveBalancedGrid(area, ids, screen.gaps);
-            break;
         }
         for (const win of tileableWindows) {
           if (win.isDragging) continue;
           const desiredRect = solution.get(win.id);
           if (!desiredRect) continue;
-          win.currentDesiredTiledGeometry = { ...desiredRect };
+          win.currentDesiredTiledGeometry = __spreadValues({}, desiredRect);
           const observedRect = win.lastObservedGeometry;
-          if (rectEqualsWithTolerance(desiredRect, observedRect, tolerance)) {
+          const exactMatch = rectEqualsWithTolerance(desiredRect, observedRect, tolerance);
+          const targetAlreadyRequested = Boolean(win.lastRequestedGeometry) && rectEqualsWithTolerance(desiredRect, win.lastRequestedGeometry, tolerance);
+          const originMatches = Math.abs(desiredRect.x - observedRect.x) <= tolerance && Math.abs(desiredRect.y - observedRect.y) <= tolerance;
+          const smallClampedSettle = targetAlreadyRequested && originMatches && Math.abs(desiredRect.width - observedRect.width) <= 32 && Math.abs(desiredRect.height - observedRect.height) <= 32;
+          const responseIsStable = Boolean(win.lastAttemptObservedGeometry) && rectEqualsWithTolerance(observedRect, win.lastAttemptObservedGeometry, tolerance);
+          const maxRetries = originMatches ? 1 : 2;
+          const stableUnachieved = targetAlreadyRequested && responseIsStable && ((_b = win.unachievableAttempts) != null ? _b : 0) >= maxRetries;
+          if (exactMatch || smallClampedSettle || stableUnachieved) {
+            if (exactMatch) {
+              win.unachievableAttempts = 0;
+              win.lastAttemptObservedGeometry = null;
+            }
             skippedWrites++;
             this.skippedIdenticalWrites++;
           } else {
             operations.push({
               windowId: win.id,
-              targetRect: { ...desiredRect },
-              previousRect: { ...observedRect }
+              targetRect: __spreadValues({}, desiredRect),
+              previousRect: __spreadValues({}, observedRect)
             });
             this.totalGeometryWrites++;
-            win.lastRequestedGeometry = { ...desiredRect };
+            if (targetAlreadyRequested && responseIsStable) {
+              win.unachievableAttempts = (win.unachievableAttempts || 0) + 1;
+            } else {
+              win.unachievableAttempts = 1;
+            }
+            win.lastAttemptObservedGeometry = __spreadValues({}, observedRect);
+            win.lastRequestedGeometry = __spreadValues({}, desiredRect);
             win.lastAppliedTransactionEpoch = epoch;
           }
         }
@@ -2186,6 +3377,7 @@ var ReconcilerModule = (() => {
      * Echo suppression is armed solely by the commit boundary when geometry is written.
      */
     applySnapCommit(windowId, outputId, targetRect, slotIndex) {
+      var _a;
       this.ingestEvent({
         type: "WindowSnapCommitted",
         windowId,
@@ -2197,7 +3389,7 @@ var ReconcilerModule = (() => {
       if (!win) return null;
       const screen = this.screens.get(outputId);
       if (!screen) return null;
-      const tolerance = this.config.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX;
+      const tolerance = (_a = this.config.geometryTolerancePx) != null ? _a : DEFAULT_GEOMETRY_TOLERANCE_PX;
       const observedRect = win.lastObservedGeometry;
       if (rectEqualsWithTolerance(targetRect, observedRect, tolerance) || win.lastRequestedGeometry && rectEqualsWithTolerance(targetRect, win.lastRequestedGeometry, tolerance)) {
         this.skippedIdenticalWrites++;
@@ -2208,11 +3400,11 @@ var ReconcilerModule = (() => {
       const epoch = ++this.currentEpoch;
       const op = {
         windowId: win.id,
-        targetRect: { ...targetRect },
-        previousRect: { ...observedRect }
+        targetRect: __spreadValues({}, targetRect),
+        previousRect: __spreadValues({}, observedRect)
       };
       this.totalGeometryWrites++;
-      win.lastRequestedGeometry = { ...targetRect };
+      win.lastRequestedGeometry = __spreadValues({}, targetRect);
       win.lastAppliedTransactionEpoch = epoch;
       screen.latestCommittedEpoch = epoch;
       screen.dirtyReasons.clear();
@@ -2231,26 +3423,42 @@ var ReconcilerModule = (() => {
     }
     getSavedTiledGeometry(windowId) {
       const win = this.windows.get(windowId);
-      return win?.currentDesiredTiledGeometry ? { ...win.currentDesiredTiledGeometry } : null;
+      return (win == null ? void 0 : win.currentDesiredTiledGeometry) ? __spreadValues({}, win.currentDesiredTiledGeometry) : null;
     }
     setSavedTiledGeometry(windowId, rect) {
       const win = this.windows.get(windowId);
       if (win) {
-        win.currentDesiredTiledGeometry = rect ? { ...rect } : null;
+        win.currentDesiredTiledGeometry = rect ? __spreadValues({}, rect) : null;
+      }
+    }
+    getCustomTiledGeometry(windowId) {
+      const win = this.windows.get(windowId);
+      return (win == null ? void 0 : win.customTiledGeometry) ? __spreadValues({}, win.customTiledGeometry) : null;
+    }
+    setCustomTiledGeometry(windowId, rect) {
+      const win = this.windows.get(windowId);
+      if (win) {
+        win.customTiledGeometry = rect ? __spreadValues({}, rect) : null;
+        if (rect) {
+          win.currentDesiredTiledGeometry = __spreadValues({}, rect);
+          this.setSavedTiledGeometry(windowId, rect);
+          this.markScreenDirty(win.outputId, "CustomGeometrySet");
+        }
       }
     }
     getPreMinimizeGeometry(windowId) {
       const win = this.windows.get(windowId);
-      return win?.preMinimizeGeometry ? { ...win.preMinimizeGeometry } : null;
+      return (win == null ? void 0 : win.preMinimizeGeometry) ? __spreadValues({}, win.preMinimizeGeometry) : null;
     }
     setPreMinimizeGeometry(windowId, rect) {
       const win = this.windows.get(windowId);
       if (win) {
-        win.preMinimizeGeometry = rect ? { ...rect } : null;
+        win.preMinimizeGeometry = rect ? __spreadValues({}, rect) : null;
       }
     }
     isPreTiled(windowId) {
-      return Boolean(this.windows.get(windowId)?.isPreTiled);
+      var _a;
+      return Boolean((_a = this.windows.get(windowId)) == null ? void 0 : _a.isPreTiled);
     }
     setPreTiled(windowId, val) {
       const win = this.windows.get(windowId);
@@ -2260,7 +3468,7 @@ var ReconcilerModule = (() => {
     }
     getOutputAffinity(windowId) {
       const win = this.windows.get(windowId);
-      return win?.outputAffinity || win?.outputId;
+      return (win == null ? void 0 : win.outputAffinity) || (win == null ? void 0 : win.outputId);
     }
     setOutputAffinity(windowId, outputId) {
       const win = this.windows.get(windowId);
@@ -2271,15 +3479,18 @@ var ReconcilerModule = (() => {
     handleMinimize(windowId, isMinimized, currentGeom) {
       const win = this.windows.get(windowId);
       if (win && isMinimized) {
-        win.preMinimizeGeometry = currentGeom ? { ...currentGeom } : { ...win.frameGeometry };
+        win.preMinimizeGeometry = currentGeom ? __spreadValues({}, currentGeom) : __spreadValues({}, win.frameGeometry);
+      }
+      const updates = {
+        minimized: isMinimized
+      };
+      if (currentGeom) {
+        updates.frameGeometry = currentGeom;
       }
       return this.ingestEvent({
         type: "WindowStateChanged",
         windowId,
-        updates: {
-          minimized: isMinimized,
-          ...currentGeom ? { frameGeometry: currentGeom } : {}
-        }
+        updates
       });
     }
     handleTopologyChange(screens) {
@@ -2296,7 +3507,8 @@ var ReconcilerModule = (() => {
       return this.traceRecorder;
     }
     isManualFloating(windowId) {
-      return Boolean(this.windows.get(windowId)?.isManualFloating);
+      var _a;
+      return Boolean((_a = this.windows.get(windowId)) == null ? void 0 : _a.isManualFloating);
     }
     setManualFloating(windowId, val) {
       return this.ingestEvent({
@@ -2372,146 +3584,6 @@ var ReconcilerModule = (() => {
     }
   };
 
-  // apps/kwin-adapter/src/snap-zones.ts
-  function computeSnapZones(area, gapOuter, gapInner) {
-    const go = gapOuter;
-    const gi = gapInner;
-    const uw = area.width - go * 2;
-    const uh = area.height - go * 2;
-    const hw = Math.floor((uw - gi) / 2);
-    const hh = Math.floor((uh - gi) / 2);
-    const zones = [];
-    const barW = Math.min(800, Math.floor(uw * 0.6));
-    const barX = area.x + Math.floor((area.width - barW) / 2);
-    zones.push({
-      type: "maximize",
-      id: "maximize",
-      title: "Full Screen / Maximize",
-      badge: "\u{1F5D6} Maximize",
-      desc: "Full Working Area",
-      slotIndex: -1,
-      rect: { x: barX, y: area.y + 10, width: barW, height: 56 },
-      targetRect: { x: area.x + go, y: area.y + go, width: uw, height: uh },
-      triggerX: barX - 10,
-      triggerY: area.y,
-      triggerW: barW + 20,
-      triggerH: 66
-    });
-    zones.push({
-      type: "half",
-      id: "left-half",
-      title: "Left Half (Primary)",
-      badge: "\u229E Left Split",
-      desc: "50% Primary Pane",
-      slotIndex: 0,
-      rect: { x: area.x + go, y: area.y + go + 70, width: hw, height: uh - 70 },
-      targetRect: { x: area.x + go, y: area.y + go, width: hw, height: uh },
-      triggerX: area.x,
-      triggerY: area.y + 80,
-      triggerW: Math.floor(area.width / 2),
-      triggerH: area.height - 80
-    });
-    zones.push({
-      type: "half",
-      id: "right-half",
-      title: "Right Half (Stack)",
-      badge: "\u25A5 Right Split",
-      desc: "50% Secondary Pane",
-      slotIndex: 1,
-      rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: uh - 70 },
-      targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: uh },
-      triggerX: area.x + Math.floor(area.width / 2),
-      triggerY: area.y + 80,
-      triggerW: Math.floor(area.width / 2),
-      triggerH: area.height - 80
-    });
-    zones.push({
-      type: "quarter",
-      id: "top-left",
-      title: "Top-Left Quarter",
-      badge: "\u25E4 Top-Left",
-      desc: "25% Quadrant",
-      slotIndex: 0,
-      rect: { x: area.x + go, y: area.y + go + 70, width: hw, height: Math.max(60, hh - 70) },
-      targetRect: { x: area.x + go, y: area.y + go, width: hw, height: hh },
-      triggerX: area.x,
-      triggerY: area.y,
-      triggerW: Math.floor(area.width * 0.22),
-      triggerH: Math.floor(area.height * 0.32)
-    });
-    zones.push({
-      type: "quarter",
-      id: "bottom-left",
-      title: "Bottom-Left Quarter",
-      badge: "\u25E3 Bottom-Left",
-      desc: "25% Quadrant",
-      slotIndex: 3,
-      rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
-      targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
-      triggerX: area.x,
-      triggerY: area.y + Math.floor(area.height * 0.68),
-      triggerW: Math.floor(area.width * 0.22),
-      triggerH: Math.floor(area.height * 0.32)
-    });
-    zones.push({
-      type: "quarter",
-      id: "top-right",
-      title: "Top-Right Quarter",
-      badge: "\u25E5 Top-Right",
-      desc: "25% Quadrant",
-      slotIndex: 1,
-      rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: Math.max(60, hh - 70) },
-      targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: hh },
-      triggerX: area.x + Math.floor(area.width * 0.78),
-      triggerY: area.y,
-      triggerW: Math.floor(area.width * 0.22),
-      triggerH: Math.floor(area.height * 0.32)
-    });
-    zones.push({
-      type: "quarter",
-      id: "bottom-right",
-      title: "Bottom-Right Quarter",
-      badge: "\u25E2 Bottom-Right",
-      desc: "25% Quadrant",
-      slotIndex: 2,
-      rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
-      targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
-      triggerX: area.x + Math.floor(area.width * 0.78),
-      triggerY: area.y + Math.floor(area.height * 0.68),
-      triggerW: Math.floor(area.width * 0.22),
-      triggerH: Math.floor(area.height * 0.32)
-    });
-    return zones;
-  }
-  function matchSnapZoneHover(zones, cursorPos) {
-    if (!cursorPos || zones.length === 0) return -1;
-    for (let i = 3; i < zones.length; i++) {
-      const qz = zones[i];
-      if (cursorPos.x >= qz.triggerX && cursorPos.x < qz.triggerX + qz.triggerW && cursorPos.y >= qz.triggerY && cursorPos.y < qz.triggerY + qz.triggerH) {
-        return i;
-      }
-    }
-    if (zones.length > 0) {
-      const mz = zones[0];
-      if (cursorPos.x >= mz.triggerX && cursorPos.x < mz.triggerX + mz.triggerW && cursorPos.y >= mz.triggerY && cursorPos.y < mz.triggerY + mz.triggerH) {
-        return 0;
-      }
-    }
-    if (zones.length > 1) {
-      const lz = zones[1];
-      if (cursorPos.x >= lz.triggerX && cursorPos.x < lz.triggerX + lz.triggerW && cursorPos.y >= lz.triggerY && cursorPos.y < lz.triggerY + lz.triggerH) {
-        return 1;
-      }
-    }
-    if (zones.length > 2) {
-      const rz = zones[2];
-      if (cursorPos.x >= rz.triggerX && cursorPos.x < rz.triggerX + rz.triggerW && cursorPos.y >= rz.triggerY && cursorPos.y < rz.triggerY + rz.triggerH) {
-        return 2;
-      }
-    }
-    return -1;
-  }
-
   // apps/kwin-adapter/src/qml-reconciler-compat.ts
   function stableObjectId(value, fallback = "") {
     if (value === void 0 || value === null) return fallback;
@@ -2579,7 +3651,8 @@ var ReconcilerModule = (() => {
     return { outcome: "applied", normalized };
   }
   function toNormalizedWindow(w, screen, usableArea) {
-    if (!w) return { id: "unknown", managed: false, normalWindow: false };
+    var _a;
+    if (!w || w.deleted === true) return { id: "unknown", managed: false, normalWindow: false };
     const wid = w.internalId ? String(w.internalId) : w.caption ? `${w.caption}_${w.resourceClass || ""}` : w.id || "unknown";
     return {
       id: wid,
@@ -2589,7 +3662,7 @@ var ReconcilerModule = (() => {
       desktopFileName: w.desktopFileName ? String(w.desktopFileName) : "",
       title: w.caption ? String(w.caption) : w.title ? String(w.title) : "",
       role: w.windowRole ? String(w.windowRole) : "",
-      outputId: screen?.name ? String(screen.name) : w.output?.name ? String(w.output.name) : "default",
+      outputId: (screen == null ? void 0 : screen.name) ? String(screen.name) : ((_a = w.output) == null ? void 0 : _a.name) ? String(w.output.name) : "default",
       desktopId: w.desktops && w.desktops.length > 0 ? stableObjectId(w.desktops[0], "1") : stableObjectId(w.desktopId, "1"),
       desktopIds: Array.isArray(w.desktops) ? w.desktops.map((d) => stableObjectId(d)).filter(Boolean) : w.desktopId ? [stableObjectId(w.desktopId)] : ["1"],
       onAllDesktops: Boolean(w.onAllDesktops),
@@ -2605,7 +3678,7 @@ var ReconcilerModule = (() => {
         width: Number(w.frameGeometry.width || 0),
         height: Number(w.frameGeometry.height || 0)
       } : void 0,
-      outputGeometry: screen?.geometry ? {
+      outputGeometry: (screen == null ? void 0 : screen.geometry) ? {
         x: Number(screen.geometry.x || 0),
         y: Number(screen.geometry.y || 0),
         width: Number(screen.geometry.width || 0),
@@ -2636,8 +3709,8 @@ var ReconcilerModule = (() => {
     };
   }
   function toNormalizedScreen(scr, usableArea, activeDesktop, activeActivity) {
-    const outputId = scr?.name ? String(scr.name) : "default";
-    const geom = scr?.geometry ? {
+    const outputId = (scr == null ? void 0 : scr.name) ? String(scr.name) : "default";
+    const geom = (scr == null ? void 0 : scr.geometry) ? {
       x: Number(scr.geometry.x || 0),
       y: Number(scr.geometry.y || 0),
       width: Number(scr.geometry.width || 0),
@@ -2651,7 +3724,7 @@ var ReconcilerModule = (() => {
     } : geom;
     return {
       outputId,
-      name: scr?.name ? String(scr.name) : outputId,
+      name: (scr == null ? void 0 : scr.name) ? String(scr.name) : outputId,
       geometry: geom,
       usableArea: area,
       activeDesktopId: stableObjectId(activeDesktop, "1"),
@@ -2684,10 +3757,9 @@ var ReconcilerModule = (() => {
     pointToRectDistance,
     rectIntersectionArea,
     rectContainsPoint,
+    resolveRegionTransition,
     RuntimeCoordinator
   };
-  globalThis.ReconcilerModule = ReconcilerBridge;
-  globalThis.RuntimeCoordinator = RuntimeCoordinator;
   return __toCommonJS(qml_reconciler_compat_exports);
 })();
 var ReconcilerBridge = ReconcilerModule.ReconcilerBridge;

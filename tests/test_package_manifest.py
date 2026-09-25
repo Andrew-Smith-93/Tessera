@@ -33,6 +33,7 @@ REMOVED_LEGACY_FILES = [
 ]
 
 REQUIRED_ACTIVE_FILES = [
+    os.path.join(PROJECT_ROOT, "LICENSE"),
     os.path.join(CONTENTS_DIR, "ui", "main.qml"),
     os.path.join(CONTENTS_DIR, "code", "layouts.js"),
     os.path.join(CONTENTS_DIR, "code", "rules.js"),
@@ -41,8 +42,9 @@ REQUIRED_ACTIVE_FILES = [
     os.path.join(CONTENTS_DIR, "config", "main.xml"),
 ]
 
-EXPECTED_11_ALLOWLIST = [
+EXPECTED_12_ALLOWLIST = [
     "metadata.json",
+    "LICENSE",
     "contents/",
     "contents/code/",
     "contents/code/layouts.js",
@@ -91,6 +93,7 @@ def _snapshot_directory(path):
 def _snapshot_source_inputs():
     targets = [
         METADATA_PATH,
+        os.path.join(PROJECT_ROOT, "LICENSE"),
         os.path.join(CONTENTS_DIR, "code", "layouts.js"),
         os.path.join(CONTENTS_DIR, "code", "reconciler.js"),
         os.path.join(CONTENTS_DIR, "code", "rules.js"),
@@ -217,9 +220,42 @@ class TestPackageManifest(unittest.TestCase):
             self.assertEqual(hash1, hash2, f"Archive hashes differed: {hash1} vs {hash2}")
             self.assertEqual(manifest1, manifest2, "Full ZipInfo manifests differed across independent builds")
 
-            # Validate exact 11-entry allowlist and order
+            # Validate exact 12-entry allowlist and order
             entry_names1 = [m[0] for m in manifest1]
-            self.assertEqual(entry_names1, EXPECTED_11_ALLOWLIST, f"Entries differed from allowlist: {entry_names1}")
+            self.assertEqual(entry_names1, EXPECTED_12_ALLOWLIST, f"Entries differed from allowlist: {entry_names1}")
+
+            # Assert archived LICENSE bytes equal source and contain unmodified full GPLv3 text
+            with open(os.path.join(PROJECT_ROOT, "LICENSE"), "rb") as fp:
+                source_license_bytes = fp.read()
+
+            OFFICIAL_GPL3_SHA256 = "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+            self.assertEqual(
+                hashlib.sha256(source_license_bytes).hexdigest(),
+                OFFICIAL_GPL3_SHA256,
+                "Source LICENSE does not match official GNU GPLv3 SHA-256 digest"
+            )
+
+            for pkg in (out_pkg1, out_pkg2):
+                with zipfile.ZipFile(pkg, "r") as z:
+                    archived_license_bytes = z.read("LICENSE")
+                self.assertEqual(
+                    archived_license_bytes,
+                    source_license_bytes,
+                    f"Archived LICENSE in {pkg} did not match source LICENSE byte-for-byte"
+                )
+                self.assertEqual(
+                    hashlib.sha256(archived_license_bytes).hexdigest(),
+                    OFFICIAL_GPL3_SHA256,
+                    f"Archived LICENSE in {pkg} did not match official GNU GPLv3 SHA-256 digest"
+                )
+                self.assertIn(b"GNU GENERAL PUBLIC LICENSE", archived_license_bytes)
+                self.assertIn(b"Version 3, 29 June 2007", archived_license_bytes)
+                self.assertIn(b"TERMS AND CONDITIONS", archived_license_bytes)
+                self.assertIn(b"17. Interpretation of Sections 15 and 16.", archived_license_bytes)
+                self.assertIn(b"END OF TERMS AND CONDITIONS", archived_license_bytes)
+                self.assertNotIn(b"[Full text of the GNU General Public License v3:", archived_license_bytes)
+                self.assertGreaterEqual(len(archived_license_bytes), 30000)
+                self.assertGreaterEqual(len(archived_license_bytes.splitlines()), 600)
 
             # Validate modes and attributes
             for filename, is_dir, crc, file_size, comp_size, date_time, comp_type, flags, ext_attr, create_sys, extra, comment in manifest1:
@@ -246,7 +282,7 @@ class TestPackageManifest(unittest.TestCase):
                 unzip_z1 = subprocess.run(["unzip", "-Z1", pkg], capture_output=True, text=True)
                 self.assertEqual(unzip_z1.returncode, 0, f"unzip -Z1 failed on {pkg}:\n{unzip_z1.stderr}")
                 lines = [line.strip() for line in unzip_z1.stdout.strip().splitlines() if line.strip()]
-                self.assertEqual(lines, EXPECTED_11_ALLOWLIST, f"unzip -Z1 output mismatch for {pkg}")
+                self.assertEqual(lines, EXPECTED_12_ALLOWLIST, f"unzip -Z1 output mismatch for {pkg}")
 
     def test_repository_non_mutation(self):
         """
@@ -439,7 +475,7 @@ class TestPackageManifest(unittest.TestCase):
         """
         Verifies that representative decoys (pyc, cache, log, local config, nested js, source ZIP)
         injected under contents in a disposable source copy are completely ignored,
-        and the resulting archive contains exactly and only the 11 allowlisted entries.
+        and the resulting archive contains exactly and only the 12 allowlisted entries.
         """
         with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as out:
             _create_disposable_source_copy(src, symlink_node_modules=True)
@@ -472,7 +508,21 @@ class TestPackageManifest(unittest.TestCase):
 
             manifest = _extract_zip_manifest(pkg_path)
             entry_names = [m[0] for m in manifest]
-            self.assertEqual(entry_names, EXPECTED_11_ALLOWLIST, f"Decoys leaked into archive: {entry_names}")
+            self.assertEqual(entry_names, EXPECTED_12_ALLOWLIST, f"Decoys leaked into archive: {entry_names}")
+
+            # Assert archived LICENSE bytes equal source LICENSE in decoy test as well
+            with open(os.path.join(src, "LICENSE"), "rb") as fp:
+                source_license_bytes = fp.read()
+            with zipfile.ZipFile(pkg_path, "r") as z:
+                archived_license_bytes = z.read("LICENSE")
+            self.assertEqual(archived_license_bytes, source_license_bytes)
+            self.assertEqual(
+                hashlib.sha256(archived_license_bytes).hexdigest(),
+                "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+                f"Archived LICENSE in {pkg_path} did not match official GNU GPLv3 SHA-256 digest"
+            )
+            self.assertIn(b"GNU GENERAL PUBLIC LICENSE", archived_license_bytes)
+            self.assertGreaterEqual(len(archived_license_bytes), 30000)
 
             # Verify archive integrity with unzip -t
             unzip_t = subprocess.run(["unzip", "-t", pkg_path], capture_output=True, text=True)
@@ -488,7 +538,7 @@ class TestPackageManifest(unittest.TestCase):
         self.assertIn("rollback_install", content)
         self.assertIn("XDG_DATA_HOME", content)
         self.assertIn("XDG_BIN_HOME", content)
-        self.assertIn("import PyQt5", content)
+        self.assertNotIn("import PyQt5", content)
         self.assertIn("config/shortcuts.json", content)
         self.assertIn("--default \"$MISSING_VALUE\"", content)
         self.assertNotIn("Increase Master Ratio\"]", content)
@@ -523,6 +573,66 @@ class TestPackageManifest(unittest.TestCase):
 
         self.assertNotIn("rust-toolchain", ci_content, "CI must not include Rust toolchain setup action")
         self.assertNotIn("cargo ", ci_content, "CI must not include cargo commands")
+
+    def test_packaged_bridges_contain_no_unlowered_class_fields(self):
+        """Verifies that all three generated QML bridges in contents/code/ contain
+        zero unlowered class fields (PropertyDeclaration), object spread (SpreadAssignment),
+        or post-ES2016 syntax, and that esbuild targets es2016 for KWin QML ECMAScript 7 compatibility."""
+        esbuild_cfg = os.path.join(PROJECT_ROOT, "apps", "kwin-adapter", "esbuild.config.mjs")
+        with open(esbuild_cfg, "r", encoding="utf-8") as f:
+            cfg_content = f.read()
+        self.assertNotIn('target: "es2022"', cfg_content)
+        self.assertNotIn('target: "es2020"', cfg_content)
+        self.assertEqual(cfg_content.count('target: "es2016"'), 3)
+
+        node_check_script = """
+const ts = require("typescript");
+const fs = require("fs");
+const path = require("path");
+
+const files = process.argv.slice(1);
+let failed = false;
+
+for (const file of files) {
+  const content = fs.readFileSync(file, "utf8");
+  const sourceFile = ts.createSourceFile(path.basename(file), content, ts.ScriptTarget.Latest, true);
+  let propDecls = 0;
+  let privIds = 0;
+  let staticBlocks = 0;
+  let spreadAssignments = 0;
+  let optionalChaining = 0;
+  let nullishCoalescing = 0;
+
+  function visit(node) {
+    if (ts.isPropertyDeclaration(node)) propDecls++;
+    if (ts.isPrivateIdentifier(node)) privIds++;
+    if (ts.isClassStaticBlockDeclaration(node)) staticBlocks++;
+    if (ts.isSpreadAssignment(node)) spreadAssignments++;
+    if (node.questionDotToken) optionalChaining++;
+    if (ts.isBinaryExpression(node) && node.operatorToken && node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) nullishCoalescing++;
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+
+  if (propDecls > 0 || privIds > 0 || staticBlocks > 0 || spreadAssignments > 0 || optionalChaining > 0 || nullishCoalescing > 0) {
+    console.error(`${file}: found ${propDecls} property declarations, ${privIds} private identifiers, ${staticBlocks} static blocks, ${spreadAssignments} spread assignments, ${optionalChaining} optional chains, ${nullishCoalescing} nullish coalescing`);
+    failed = true;
+  }
+}
+process.exit(failed ? 1 : 0);
+"""
+        bridge_paths = [
+            os.path.join(CONTENTS_DIR, "code", "layouts.js"),
+            os.path.join(CONTENTS_DIR, "code", "rules.js"),
+            os.path.join(CONTENTS_DIR, "code", "reconciler.js"),
+        ]
+        res = subprocess.run(
+            ["node", "-e", node_check_script, "--", *bridge_paths],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True
+        )
+        self.assertEqual(res.returncode, 0, f"Unlowered class fields detected in bridge files:\n{res.stderr}\n{res.stdout}")
 
 if __name__ == "__main__":
     unittest.main()

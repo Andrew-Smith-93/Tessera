@@ -1,5 +1,5 @@
 {
-  "digest": "f1a922a57da08bf23cd7edc4df048799e73816aec5ce3d001bef4185048436b0",
+  "digest": "b535f8f6e92d607cc5dcb12a0e4668a278b8774fd02ea46fcdcef1ffe1351c68",
   "fixtureName": "01-single-screen-three-windows",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -71,13 +71,13 @@
         "classification": "tiled",
         "desiredGeometry": {
           "height": 1060,
-          "width": 946,
+          "width": 626,
           "x": 10,
           "y": 10
         },
         "frameGeometry": {
           "height": 1060,
-          "width": 946,
+          "width": 626,
           "x": 10,
           "y": 10
         },
@@ -96,15 +96,15 @@
       {
         "classification": "tiled",
         "desiredGeometry": {
-          "height": 526,
-          "width": 946,
-          "x": 964,
+          "height": 1060,
+          "width": 632,
+          "x": 644,
           "y": 10
         },
         "frameGeometry": {
-          "height": 526,
-          "width": 946,
-          "x": 964,
+          "height": 1060,
+          "width": 632,
+          "x": 644,
           "y": 10
         },
         "fullScreen": false,
@@ -122,16 +122,16 @@
       {
         "classification": "tiled",
         "desiredGeometry": {
-          "height": 526,
-          "width": 946,
-          "x": 964,
-          "y": 544
+          "height": 1060,
+          "width": 626,
+          "x": 1284,
+          "y": 10
         },
         "frameGeometry": {
-          "height": 526,
-          "width": 946,
-          "x": 964,
-          "y": 544
+          "height": 1060,
+          "width": 626,
+          "x": 1284,
+          "y": 10
         },
         "fullScreen": false,
         "id": "win-3",
@@ -163,7 +163,7 @@
             },
             "targetRect": {
               "height": 1060,
-              "width": 946,
+              "width": 626,
               "x": 10,
               "y": 10
             },
@@ -177,9 +177,9 @@
               "y": 100
             },
             "targetRect": {
-              "height": 526,
-              "width": 946,
-              "x": 964,
+              "height": 1060,
+              "width": 632,
+              "x": 644,
               "y": 10
             },
             "windowId": "win-2"
@@ -192,10 +192,10 @@
               "y": 100
             },
             "targetRect": {
-              "height": 526,
-              "width": 946,
-              "x": 964,
-              "y": 544
+              "height": 1060,
+              "width": 626,
+              "x": 1284,
+              "y": 10
             },
             "windowId": "win-3"
           }

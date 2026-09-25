@@ -1,5 +1,5 @@
 {
-  "digest": "75a604e5777651a554f5ae4217e459eebb6430c91a9e4231d81c04804d3104c0",
+  "digest": "01951acfca38814cd2d5705f2dde65390528a68761a1d59934dc570cfc4a518d",
   "fixtureName": "17-screen-geometry-change",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

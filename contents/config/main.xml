@@ -41,6 +41,12 @@
         <entry name="overlayPollingMs" type="Int">
             <default>16</default>
         </entry>
+        <entry name="enableAnimations" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="animationDurationMs" type="Int">
+            <default>180</default>
+        </entry>
         <entry name="ignoreMinimized" type="Bool">
             <default>true</default>
         </entry>
@@ -48,7 +54,7 @@
             <default>floating</default>
         </entry>
         <entry name="floatFilter" type="String">
-            <default>krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1,Steam,steam_app,steamwebhelper</default>
+            <default>krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1</default>
         </entry>
         <entry name="customRulesJson" type="String">
             <default>[]</default>

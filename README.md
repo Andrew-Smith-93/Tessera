@@ -1,152 +1,261 @@
 # 💠 Tessera (`K-Tessera`)
 
-> **A dynamic tiling KWin script for KDE Plasma 6 with native KConfig settings and an optional PyQt Control Center.**
+> **A native dynamic tiling window manager script for KDE Plasma 6.**
 
-[![Platform: KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6.3+-3daee9.svg?logo=kde&logoColor=white)](https://kde.org/plasma-desktop/)
+[![Platform: KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6.0+-3daee9.svg?logo=kde&logoColor=white)](https://kde.org/plasma-desktop/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![CI: Passing](https://img.shields.io/badge/CI-Automated_Testing-success.svg)](.github/workflows/ci.yml)
+[![CI](https://github.com/Andrew-Smith-93/tiling-window-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/Andrew-Smith-93/tiling-window-manager/actions/workflows/ci.yml)
+
+> [!IMPORTANT]
+> **Pre-Release Candidate Branch (`fix/phase-5d-independent-verification-03`)**:
+> Tessera is currently undergoing pre-release architectural hardening and independent verification.
+> - **Automated Verification**: Monorepo TypeScript suites (448/448 passed across 29 suites locally on current worktree; committed `c8483b5` verified at 430/430 by exact-SHA CI run 35830555211; fresh CI required after commit), Python unit/contract/sandbox tests (82 fast tests passed locally across 8 modules; 25 installer integration tests partitioned across 3 shards: 9, 8, 8; total 107 tests across 9 modules passed locally on current worktree; committed `c8483b5` verified by exact-SHA CI run 35830555211; fresh CI required after commit), protocol freeze checks, and golden simulation traces (25/25 matching) pass cleanly. Detailed evidence stratification is audited in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
+> - **Live Desktop Boundary**: The 7-file candidate was loaded live in KWin with clean QML root initialization without SEGV or coordinator errors (`isScriptLoaded: true`, KWin PID stable). In a bounded live drag test using a disposable plain xterm window, drag committed left-half and top-left quadrant snap without the previous repeated-write feedback loop, and pre-existing window geometries remained untouched. Direct capture confirmed visible snap cards/pillar during drag before overlay was toggled off. These bounded observations do not constitute full runtime behavior acceptance: interactive snap-region multi-window occupancy, animation cubic interpolation & cancellation, KCM GUI bidirectional settings sync, Wayland session compatibility, physical display hotplug, and Steam/Wine game policy enforcement remain strictly **NOT RUN** or **NOT PROVEN**. Principal governance and decision gates are tracked in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
 
 ---
 
-## 🛍️ Distribution
+## 🌟 What is Tessera?
 
-The repository builds a deterministic `.kwinscript` bundle with `./package.sh` and provides a source installer with `./install.sh`. Store publication, AUR availability, and release upload are separate maintainer actions and are not claimed by this repository state. See [docs/KDE_STORE_PUBLISHING.md](docs/KDE_STORE_PUBLISHING.md) for the bounded publication procedure.
+Tessera brings keyboard-driven dynamic tiling to KDE Plasma 6 without replacing your desktop environment, display manager, or compositor.
 
----
-
-## 🌟 Why Tessera?
-
-Tessera keeps Plasma as the desktop environment while adding automatic, workspace-aware tiling. Its retained coordinator coalesces KWin events, suppresses geometry echoes, and avoids redundant writes. The optional Control Center adds previews, gap controls, presets, and rule editing.
+Built as a **pure KWin declarative script**, Tessera executes directly within KWin's process, operates alongside native KDE Plasma panels and widgets, and is configured entirely through standard **KDE System Settings**. It is centered on an intuitive **Quadrant and Three-Pillar Workflow** designed for both traditional displays and modern ultrawide monitors.
 
 ```
-┌─────────────────────────────────┬───────────────────────────────┐
-│                                 │       Stack Window 1          │
-│                                 │                               │
-│                                 ├───────────────────────────────┤
-│       Primary Window            │       Stack Window 2          │
-│   (Configurable ratio,          │                               │
-│    e.g. 50% / 60%)              ├───────────────────────────────┤
-│                                 │       Stack Window 3          │
-│                                 │                               │
-└─────────────────────────────────┴───────────────────────────────┘
-  ◀────────── Outer Gap ─────────▶ ◀─ Inner Gap ─▶
+┌───────────────────┬───────────────────┐     ┌──────────────┬──────────────┬──────────────┐
+│                   │                   │     │              │  Center Top  │              │
+│    Top-Left       │    Top-Right      │     │              │ (focal 50%)  │              │
+│    Quadrant       │    Quadrant       │     │  Left        ├──────────────┤  Right       │
+│                   │                   │     │  Pillar      │Center Bottom │  Pillar      │
+├───────────────────┼───────────────────┤     │  (33%)       │ (focal 50%)  │  (33%)       │
+│                   │                   │     │              │              │              │
+│   Bottom-Left     │   Bottom-Right    │     │              │              │              │
+│    Quadrant       │    Quadrant       │     │              │              │              │
+└───────────────────┴───────────────────┘     └──────────────┴──────────────┴──────────────┘
+          4-Corner Quadrants                       3-Column Pillars (Center Stacked or Full*)
 ```
+*(Center column also accommodates a single full-height Center Full pillar)*
 
 ---
 
 ## ✨ Features
 
-- 🏎️ **Coalesced Geometry Pipeline**: Configurable event debouncing and echo suppression reduce redundant geometry work.
-- 📐 **Dynamic Tiling Layouts**:
-  - **Balanced Grid**: Optimal square tiles with equitable distribution across all windows.
-  - **Primary + Stack**: Prominent primary work area on the left with vertical stack of secondary windows.
-  - **Binary Split (BSP / Dwindle)**: Recursive alternating horizontal/vertical splits (Hyprland / bspwm style).
-  - **Columns**: Clean vertical multi-column arrangement.
-  - **Rows**: Horizontal band slicing.
-  - **Monocle (Deck)**: Maximized working area per window with instant cycling.
-  - **Floating**: Full manual window freedom.
-- 🖥️ **Virtual Desktop Layout Independence**: Assign Primary-Stack to Desktop 1 (coding), Columns to Desktop 2 (communications), and Floating to Desktop 3 (gaming / Steam).
-- 📏 **Live Gap & Margin Studio**: Interactive sliders for inner gaps and outer margins paired with a **real-time desktop preview canvas**.
-- 🎯 **Visual Window Rule Builder**: Stop guessing arcane regex! Click **"Capture Active Window"** to automatically extract any app's class and title, and assign 1-click float or tile rules.
-- 🎨 **1-Click Presets**:
-  - *Hyprland Aesthetic*: BSP Dwindle with modern 8px/12px gaps.
-  - *i3 / Sway Classic*: Compact 4px gaps and 50% split ratio.
-  - *macOS Amethyst*: 55% primary ratio with 10px/14px gaps.
-  - *Ultrawide Productivity*: 65% primary pane with two primary-region windows for 21:9 & 32:9 displays.
-  - *Zero Gap Hacker*: 0px gaps for maximum terminal screen estate.
-- 🔔 **Native Plasma 6 OSD**: Clean HUD toasts displayed via KDE Plasma's native `org.kde.osdService` whenever layouts or modes change.
+- 🏎️ **In-Process & Coalesced**: Executes inside KWin with turn-based event coalescing (60ms debounce default), dirty-screen invalidation, and geometry echo suppression (`recordCommand`, `checkAndHandleEcho`) to prevent redundant geometry operations.
+- 📐 **7 Automatic Layout Engines (Internal & Compatibility Strategies)**:
+  - Tessera's internal layout solver includes 7 deterministic arrangement algorithms (Balanced Grid default, Primary + Stack, Binary Split, Columns, Rows, Monocle, and Floating).
+  - In alignment with Tessera's clean "no presets" design, there are no user-facing preset menus or layout-cycling shortcuts. All workspace layout algorithms normalize to the canonical Balanced Grid engine, while preserving custom per-window floating and game policies.
+- 🎯 **12 Visual Snap Zones & Region Occupancy**:
+  - Interactive drop targets: Top Maximize Bar, Left/Right Halves, 4 Corner Quadrants, and 3 Equal Pillars (Left, Center Full/Split, Right).
+  - Deterministic Region Occupancy Model adapts older peer windows to remaining space while protecting the newest requested drop target and preserving custom user resize geometries.
+- 🎞️ **Safe Window Animations**:
+  - Linear timer-driven interpolation (16ms interval, configurable 180ms duration) with cubic deceleration (`easeOutCubic`).
+  - Active animations cancel immediately upon window closure, minimization, fullscreen transition, or interactive user drag to prevent writing stale geometries.
+- ⌨️ **22 Super-Primary Global Shortcuts**: Keyboard navigation for region snapping, keyboard resizing, multi-monitor movement, and spatial focus.
+- 🖥️ **Multi-Screen & Virtual Desktop Integration**: Gaps and per-window states are maintained independently across connected outputs and virtual desktops.
+- 📏 **Live Gaps & Margins**: Configurable inner gaps (default: 8px) and outer screen margins (default: 10px).
+- 🛡️ **Smart Window Rules**: Automatic floating for transient dialogs, splash screens, and recognized games (`steam_app_*`, `gamescope`), with full support for custom application rules.
+- 🔔 **Native Plasma OSD**: Visual feedback toasts via KDE Plasma's native `org.kde.osdService` on layout or region adjustments.
+- 🎛️ **Native System Settings Integration**: No external GUI binaries or companion daemons; all settings are managed directly in **KDE System Settings → Window Management → KWin Scripts**.
 
 ---
 
-## 🚀 Quick Start & Installation
+## 📐 Snap Semantics: Quadrants & Three Pillars
 
-### Prerequisites & Verification Scope
-- KDE Plasma 6.0+ and KWin 6
-- Python 3 with PyQt5 for the source-installed Control Center
+Tessera provides 12 distinct snap drop zones that support both standard halves/quadrants and three-column ultrawide workflows:
 
-**Verification & Acceptance Scope**:
-- **Automated Evidence**: Unit, contract, integration, and simulator suites verify tiling algorithms, geometry reconciliation, config transactions, installer idempotency/purge, and reproducible packaging.
-- **Historical Phase 5B Evidence**: Past live desktop testing on KDE Plasma 6.3.6 under X11 is preserved as historical baseline evidence in `docs/LIVE_KWIN_X11_ACCEPTANCE.md`.
-- **Live Gates (NOT RUN in Current Phase)**: Live KWin script reloading, live KCM settings bindings, Wayland session compatibility, game window policy handling, and multi-monitor hotplug verification remain unexecuted in this automated phase and require dedicated manual live desktop sessions.
+### Corner Quadrants
+- The usable screen area is divided into four equal corners: **Top-Left**, **Top-Right**, **Bottom-Left**, and **Bottom-Right**.
+- Each quadrant occupies 50% of the screen width and 50% of the screen height (adjusted for configured gaps).
+- Dropping a window into a corner pins it to that quadrant. When additional windows are dropped, Tessera automatically arranges peer windows into compatible adjacent quadrants or stacks them vertically.
 
-### Installation
+### Three Pillars (Ultrawide & Multi-Column)
+- The screen width is divided into three equal columns: **Left Pillar** (left 33%), **Center Pillar** (middle 33%), and **Right Pillar** (right 33%).
+- **Center Pillar Configuration**: The center column accommodates either a single full-height **Center Full** (33% width, 100% usable height) focal window or two stacked half-height slots (**Center Top** and **Center Bottom**). Tessera never creates three stacked cells in the center column.
+- **Cross-Family Resolution**: When windows from different snap families share the screen, the Deterministic Region Occupancy Model resolves geometric arrangements:
+  - If a window occupies **Left-Half** (50% width) and a new window is dropped into **Center Pillar**, the left-half window adapts to **Left Pillar** (33% width).
+  - The newest requested target geometry is protected, adapting older peers to remaining screen space.
+  - User-driven keyboard resizes are preserved over inferred allocations whenever geometrically compatible.
 
-Clone the repository and run the installer:
+---
+
+## 🎞️ Window Animations & Technical Limitations
+
+- **Timer-Driven Interpolation**: Window animations interpolate frame bounds via KWin's script API using periodic 16ms timer ticks over a configurable duration (default: 180ms).
+- **Cancellation Safety**: Active animations cancel immediately when a window receives a compositor event (e.g. user drag, manual resize, window closure, minimization, or fullscreen transition) without writing stale target bounds.
+- **Explicit Compositor Limitations**: Tessera does not bypass KWin's frame scheduling or use native Wayland presentation-time callbacks / direct GPU sync. Animation timing relies on the compositor event loop; under heavy system load or rapid window creation, animation frame steps may exhibit jitter.
+
+---
+
+## 🚀 Installation & Lifecycle
+
+### System Requirements
+- **Operating System**: Linux with KDE Plasma 6.0+ and KWin 6.
+- **Packaged Installation Utilities**: `python3`, `kreadconfig6`, `kwriteconfig6` (standard in Plasma 6; sufficient when installing from a prebuilt `.kwinscript` bundle).
+- **Source Checkout Prerequisites**: Node.js 22.12+ (or supported ranges `^24.0.0`, `>=26.0.0`), `npm ci` (or `npm install`), and `npm run build`. When `./install.sh` is executed from a git source checkout, it performs preflight AST validation on generated bridges (`contents/code/*.js`) to guarantee KWin QML host compatibility (rejecting unlowered class fields) and verifies that generated bridges are not stale compared to TypeScript sources before making any system modifications.
+
+### Fresh Installation
+
+Clone the repository, install dependencies, compile fresh bridges, and run the transactional installer:
 
 ```bash
 git clone https://github.com/Andrew-Smith-93/tiling-window-manager.git
 cd tiling-window-manager
+npm ci
+npm run build
 ./install.sh
 ```
 
-The installer will:
-1. Register and deploy the KWin 6 declarative script.
-2. Enable Tessera in the active KDE configuration.
-3. Install the `tessera-settings` CLI executable under `${XDG_BIN_HOME:-$HOME/.local/bin}`.
-4. Install the desktop entry into your KDE Application Launcher (`Applications -> Settings -> Tessera Control Center`).
-5. Trigger KWin to immediately reload.
+*(Note: When modifying TypeScript source files, run `npm run build` prior to `./install.sh` to compile fresh bridge artifacts).*
+
+The installer:
+1. Validates system dependencies and file manifest integrity before modifying any configuration.
+2. Deploys the KWin script package to `~/.local/share/kwin/scripts/tessera/`.
+3. Enables Tessera in `~/.config/kwinrc`.
+4. Registers canonical global shortcuts in `~/.config/kglobalshortcutsrc` (migrating recognized older defaults while strictly preserving existing custom and unbound bindings; does not force-restore defaults or automatically resolve collisions with other Plasma actions).
+5. Cleans up any obsolete configuration files or shortcuts from retired versions.
+6. Notifies KWin to reload the script configuration.
+
+> [!NOTE]
+> **Staging & Rollback Scope**:
+> - **Pre-Commit Staging**: The installer validates preconditions and stages all files in an isolated temporary staging directory (`$XDG_DATA_HOME/.tessera-install.XXXXXX`). If aborted (<kbd>Ctrl</kbd>+<kbd>C</kbd>) or if a validation error occurs prior to commit, the temporary directory is discarded with zero system modification.
+> - **Commit Phase Rollback**: If a failure occurs during file copying or configuration writes, modified shortcuts and settings are restored from in-flight transaction snapshots.
+> - **Post-Commit State**: Once committed (`COMMITTED=true`), the temporary transaction directory is cleaned up and deleted. The installer does not retain persistent configuration backups on disk. If interrupted during post-commit notification, files are already committed to `~/.local/share/kwin/scripts/tessera/` and `~/.config/kwinrc`; trigger a manual KWin reload to complete activation.
+
+### Upgrading
+
+To update an existing installation to the latest version:
+
+```bash
+git pull
+npm ci
+npm run build
+./install.sh
+```
+
+### Uninstallation
+
+To remove Tessera while preserving your configuration:
+
+```bash
+./uninstall.sh
+```
+
+Standard uninstallation removes the installed KWin script, disables the plugin in `kwinrc`, removes legacy Control Center artifacts, and deletes recognized Tessera default shortcut registrations from `kglobalshortcutsrc`. Personal configuration options (`[Script-tessera]`), intentional unbound bindings, and user-customized active or retired shortcuts are preserved byte-for-byte. Unrelated KRunner and Plasma shortcuts are never touched.
+
+To perform a complete purge (removing the script, all settings in `kwinrc`, legacy config backups, and all Tessera shortcut registrations):
+
+```bash
+./uninstall.sh --purge
+```
+
+> [!WARNING]
+> `--purge` permanently deletes all custom Tessera layout options, gaps, rules, and shortcut registrations (both default and custom) from your configuration files. Do **not** use `--purge` merely to resolve shortcut conflicts; use native KDE System Settings instead.
+
+### Recovery & Configuration Realities
+
+Before modifying an existing live installation, users are encouraged to create a personal backup of `~/.config/kwinrc` and `~/.config/kglobalshortcutsrc`.
+
+Understand the operational distinctions between **reloading**, **removing**, and **restoring**:
+- **Reloading Configuration vs. Script Code**:
+  - **Apply Configuration Changes (`kwinrc`)**: Per official KDE KWin scripting documentation, running `reconfigure` instructs KWin to re-read `kwinrc`, start newly enabled scripts, unload disabled scripts, and emit `options.configChanged()` to active script instances:
+    ```bash
+    qdbus6 org.kde.KWin /KWin org.kde.KWin.reconfigure
+    ```
+  - **Reload Updated Script Code**: If a script is already loaded and you have updated its QML/JS files on disk, unload and restart via KWin's Scripting interface to reload the code into memory without logging out:
+    ```bash
+    qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "tessera"
+    qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start
+    ```
+    *(Note: `org.kde.KWin.reconfigure` updates settings for running scripts; because KWin's `loadDeclarativeScript` returns -1 when a script is already registered, an explicit `unloadScript` is required before `start` to reload updated code into memory. Note that `isScriptLoaded` reflects script registration, not proof of successful QML root object instantiation).*
+- **Removing (Uninstall)**: Running `./uninstall.sh` removes the Tessera script from `~/.local/share/kwin/scripts/tessera/`; it does **not** restore previous versions or previous configuration snapshots.
+- **Restoring Shortcuts & Settings**:
+  - **Native Shortcut Reset (Recommended)**: To reset shortcuts to defaults or resolve collisions with other Plasma actions, open **KDE System Settings → Shortcuts → KWin**, select Tessera actions, and click **Defaults** or reassign competing bindings. Re-running `./install.sh` preserves existing custom and unbound bindings; it does **not** force-restore defaults or resolve collisions with other Plasma actions.
+  - **Full Reset**: If a complete configuration wipe is genuinely intended, back up your files first, run `./uninstall.sh --purge`, and reinstall via `./install.sh`.
 
 ---
 
 ## ⌨️ Default Keybindings
 
-All shortcuts integrate directly into KDE Plasma's Global Shortcuts system and can be customized in **KDE System Settings → Shortcuts → KWin**.
+All shortcuts use the Super (<kbd>Meta</kbd>) key as their primary modifier, integrate directly into KDE Plasma's Global Shortcuts system, and can be customized in **KDE System Settings → Shortcuts → KWin**.
 
 | Action ID | Default sequence |
 | :--- | :--- |
-| Tessera: Toggle Zone Overlay | Ctrl+Shift+C |
-| Tessera: Next Layout | Ctrl+Space |
-| Tessera: Previous Layout | Ctrl+Shift+Space |
-| Tessera: Toggle Tiling | Ctrl+Shift+T |
-| Tessera: Toggle Window Floating | Ctrl+Shift+F |
-| Tessera: Focus Left Window | Ctrl+Shift+A |
-| Tessera: Focus Right Window | Ctrl+Shift+D |
-| Tessera: Focus Up Window | Ctrl+Shift+W |
-| Tessera: Focus Down Window | Ctrl+Shift+S |
-| Tessera: Swap Left Window | Ctrl+Shift+Q |
-| Tessera: Swap Right Window | Ctrl+Shift+E |
-| Tessera: Focus Next Window | Ctrl+Shift+J |
-| Tessera: Focus Previous Window | Ctrl+Shift+K |
-| Tessera: Swap Window Forward | Ctrl+Alt+J |
-| Tessera: Swap Window Backward | Ctrl+Alt+K |
-| Tessera: Increase Primary Ratio | Ctrl+Shift+L |
-| Tessera: Decrease Primary Ratio | Ctrl+Shift+H |
-| Tessera: Increase Primary Count | Ctrl+Shift+I |
-| Tessera: Decrease Primary Count | Ctrl+Shift+O |
-| Tessera: Retile Current Workspace | Ctrl+Shift+R |
-| Tessera: Move Window to Next Screen | Ctrl+Shift+Z |
-| Tessera: Cycle Layout on Other Screen | Ctrl+Shift+X |
-| Tessera: Swap Screen Layouts | Ctrl+Alt+X |
+| Tessera: Toggle Zone Overlay | Meta+Shift+C |
+| Tessera: Toggle Tiling | Meta+Shift+T |
+| Tessera: Toggle Window Floating | Meta+Shift+F |
+| Tessera: Move Window to Left Region | Meta+Left |
+| Tessera: Move Window to Right Region | Meta+Right |
+| Tessera: Move Window to Up Region | Meta+Up |
+| Tessera: Move Window to Down Region | Meta+Down |
+| Tessera: Expand Window Width | Meta+Shift+Right |
+| Tessera: Shrink Window Width | Meta+Shift+Left |
+| Tessera: Expand Window Height | Meta+Shift+Down |
+| Tessera: Shrink Window Height | Meta+Shift+Up |
+| Tessera: Move Window to Screen Left | Meta+Ctrl+Left |
+| Tessera: Move Window to Screen Right | Meta+Ctrl+Right |
+| Tessera: Move Window to Screen Above | Meta+Ctrl+Up |
+| Tessera: Move Window to Screen Below | Meta+Ctrl+Down |
+| Tessera: Focus Left Window | Meta+Alt+A |
+| Tessera: Focus Right Window | Meta+Alt+D |
+| Tessera: Focus Up Window | Meta+Alt+W |
+| Tessera: Focus Down Window | Meta+Alt+S |
+| Tessera: Swap Left Window | Meta+Alt+Q |
+| Tessera: Swap Right Window | Meta+Alt+E |
+| Tessera: Retile Current Workspace | Meta+Shift+R |
 
 `config/shortcuts.json` is the canonical catalog. Installation preserves every existing user binding, including an explicitly empty binding.
 
----
+### Preserved Legacy Shortcuts & Spatial Migration
+When upgrading from older Tessera installations:
+- **Dormant Legacy Bindings**: Custom bindings on retired legacy actions (such as `Focus Next Window` or `Swap Window Forward`) are preserved in `kglobalshortcutsrc` to protect your configuration. However, because retired cyclical actions lack active QML runtime handlers (`ShortcutHandler`) in `main.qml`, these preserved legacy entries remain **dormant** and will not trigger actions.
+- **Opt-in Spatial Migration**: Running `./install.sh --migrate-spatial-shortcuts` (or `--migrate-legacy-spatial`) migrates custom bindings from retired cyclical actions to active 2D directional replacements (for example, `Focus Next Window` becomes `Focus Right Window`). Note that this introduces a semantic shift from list-order window cycling to 2D spatial navigation.
+- Old shortcuts do not functionally trigger retired actions unless migrated or re-assigned to one of the 22 active shortcuts in KDE System Settings.
 
-## 🎛️ The Intuitive Control Center
-
-Launch the control center at any time:
-```bash
-tessera-settings
-```
-Or press <kbd>Alt</kbd> + <kbd>Space</kbd> to open KRunner and type `Tessera`.
-
-### Visual Layout Selector
-Choose between layouts using visual cards. Clicking any card immediately previews the tiling behavior and sets the active layout.
-
-### Live Gap Studio
-Slide the **Inner Gap** and **Outer Gap** sliders and watch the real-time mock desktop canvas adapt before your eyes!
-
-### Interactive Window Rules
-1. Open any app you want to float (e.g. Steam or a utility).
-2. Click **"🎯 Capture Active Window"** in Tessera Control Center.
-3. Select **Action: Float** and click **➕ Add Rule**.
-4. Click **💾 Save & Apply**.
+### Resolving Plasma Shortcut Conflicts
+By default, KDE Plasma may assign certain `Meta` key combinations (such as `Meta+Left` / `Meta+Right` for KWin Quick Tiling). `Meta+Space` is reserved for Plasma Search / KRunner and is not bound by Tessera.
+To resolve conflicts:
+1. Open **KDE System Settings → Shortcuts**.
+2. Search for the conflicting shortcut (e.g. `Quick Tile Window to the Left`).
+3. Reassign or disable the default Plasma binding, allowing Tessera's registered handler to receive the key sequence.
 
 ---
 
-## ⚡ Performance controls
+## 🎛️ Native Configuration
 
-The Control Center exposes reconciliation debounce and snap-overlay polling intervals. These are general scheduling controls; no GPU-vendor-specific performance guarantee is claimed. Fullscreen windows are excluded from active tiling while their slot membership is retained.
+All configuration lives in native KDE interfaces. Open **KDE System Settings → Window Management → KWin Scripts** and click the configure icon next to **Tessera**:
+
+- **General**: Toggle global tiling, new window tiling behavior, minimize behavior, virtual desktop layout independence, and Plasma OSD notifications.
+- **Layout & Spacing**: Configure inner gap (default: 8px) and outer margin (default: 10px) sizes. User-facing layout preset menus, layout-cycling shortcuts, and primary ratio controls are retired; legacy stored layout algorithms (such as Primary + Stack, Monocle, Floating, Binary Split, Columns, and Rows) are automatically normalized to the canonical Balanced Grid layout by the runtime reconciler, while per-window floating is managed separately via window rules and game policies.
+- **Window Rules**: Add window classes or application IDs to float automatically, and configure game window policy (`floating`, `tiled`, `monocle`).
+- **Performance**: Adjust reconciliation debounce duration (default: 60ms, range 0–1000ms), animation duration (default: 180ms), and snap overlay polling interval (default: 16ms).
+
+Configuration values are stored in standard KDE configuration files:
+- Script settings: `~/.config/kwinrc` under the `[Script-tessera]` group.
+- Global shortcuts: `~/.config/kglobalshortcutsrc` under the `[kwin]` group.
+
+---
+
+## 🔍 Verification & Acceptance Scope
+
+To provide rigorous technical transparency, repository evidence is categorized into distinct verification tiers:
+
+1. **Automated Non-Live Verification (Passing)**:
+   - **TypeScript Unit & Integration Suites**: 448/448 tests passing across 29 Vitest suites locally on current worktree (430/430 in exact-SHA CI for committed `c8483b5`; fresh CI required after commit; includes core layout solvers, rule classification, kwin adapter, region occupancy, snap persistence, KWin QML host compatibility, and multi-cycle delayed clamp feedback loop bounds).
+   - **Runtime Simulator**: 25/25 golden trace fixtures match byte-for-byte under `npm run sim:verify` on current candidate tree; invariant checks and fixed stress seeds (42, 12345, 99999) pass.
+   - **Protocol V1 Freeze**: Locked and verified against `packages/protocol/protocol-v1.freeze.json`.
+   - **Python Quality & Hygiene**: 107 tests defined across 9 modules (82 fast unit/contract tests across 8 modules + 25 installer integration tests partitioned across 3 shards: 9, 8, 8). On the current candidate worktree, 82/82 fast tests pass cleanly and 3-shard partition integrity (9/8/8) is verified; all 25/25 installer integration tests passed locally across the 3 shards on the current worktree (including targeted unbound/custom shortcut preservation regressions), and full `python3 -m unittest discover tests` passed all 107 tests cleanly, while a fresh exact-SHA CI run remains required after commit.
+   - **Reproducible Packaging & License Digest**: `./package.sh` generates a deterministic `.kwinscript` bundle matching the exact 12-entry package manifest; root `LICENSE` matches the official GNU GPL-3 digest (`3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`), and independent package archives contain byte-for-byte identical `LICENSE` files.
+2. **Historical Phase 5B Evidence**:
+   - Earlier development testing under KDE Plasma 6.3.6 (X11) is preserved as dated historical context in [docs/LIVE_KWIN_X11_ACCEPTANCE.md](docs/LIVE_KWIN_X11_ACCEPTANCE.md).
+3. **Live Gates (NOT RUN in Current Phase)**:
+   - Live interactive session installation and verification (candidate live KWin script loading with bounded disposable drag verified; live KCM GUI bidirectional sync, Wayland session compatibility, multi-monitor physical hotplug, and Steam/Wine fullscreen game window policy handling have not been run in this automated phase and remain explicit pre-release live gates). Authority is tracked in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
+
+---
+
+## 🛍️ Distribution & Publishing
+
+The repository produces an upload-ready `.kwinscript` bundle via `./package.sh`.
+
+Store publication, AUR availability, and release upload are separate maintainer actions and are not claimed by this repository state. Maintainers should refer to [docs/KDE_STORE_PUBLISHING.md](docs/KDE_STORE_PUBLISHING.md) for the publishing checklist.
 
 ---
 
@@ -154,35 +263,43 @@ The Control Center exposes reconciliation debounce and snap-overlay polling inte
 
 ```
 ├── metadata.json              # KWin 6 script manifest
-├── install.sh                 # One-click automated installer
-├── uninstall.sh               # Clean uninstallation script
+├── package.sh                 # Deterministic .kwinscript package builder
+├── install.sh                 # Transactional installer with automatic rollback
+├── uninstall.sh               # Clean uninstaller (--purge supported)
 ├── LICENSE                    # GNU General Public License v3
 ├── contents/                  # Native KWin 6 Declarative Engine
 │   ├── config/
 │   │   └── main.xml           # KConfigXT schema
 │   ├── code/
-│   │   ├── layouts.js         # Pure geometry calculation engine
-│   │   └── rules.js           # Smart window classifier & custom filters
+│   │   ├── layouts.js         # Layout math bridge (compiled from layout-core)
+│   │   ├── rules.js           # Window classifier bridge (compiled from rules-engine)
+│   │   └── reconciler.js      # Retained coordinator bridge (compiled from kwin-adapter)
 │   └── ui/
-│       └── main.qml           # KWin event listener, OSD hook & shortcuts
-├── tessera-control/           # Intuitive Configuration GUI
-│   ├── tessera_settings.py    # PyQt5 Control Center application
-│   ├── config_manager.py      # Bidirectional config sync (kwinrc & DBus)
-│   ├── ui_preview.py          # Real-time miniature desktop painter
-│   └── window_picker.py       # Active window metadata inspector
-├── desktop/
-│   ├── org.kde.tessera.desktop# Application launcher entry
-│   └── tessera.svg            # Scalable vector icon
-└── bin/
-    └── tessera-settings       # CLI wrapper script
+│       ├── config.ui          # Native KCM configuration dialog
+│       └── main.qml           # KWin event listener, snap overlay, OSD & shortcuts
+├── packages/                  # Monorepo Core TypeScript Packages
+│   ├── layout-core/           # Mathematical tiling solvers and geometry algorithms
+│   ├── rules-engine/          # Window rule evaluation and classification
+│   └── protocol/              # IPC Protocol V1 schemas and frozen contract
+├── apps/                      # Monorepo Applications & Testing Frameworks
+│   ├── kwin-adapter/          # Retained coordinator, Region Occupancy, snap zones
+│   └── runtime-simulator/     # Headless KWin session simulator (25 golden traces)
+└── tests/                     # Integration, contract, and hygiene verification suites
 ```
 
 ---
 
-## 🤝 Contributing
+## 🤝 Community & Contributing
 
-Contributions, bug reports, and layout suggestions are warmly welcomed!
-Feel free to open an issue or pull request on GitHub.
+Contributions, bug reports, and layout proposals are welcome!
+- 📖 [Contributor Guide](CONTRIBUTING.md): Monorepo setup, build rules, and verification matrix.
+- 🛠️ [Troubleshooting Guide](docs/TROUBLESHOOTING.md): Installation lifecycle, runtime diagnostics, and log sanitization.
+- 🏛️ [Runtime Architecture](docs/RUNTIME_ARCHITECTURE.md): Detailed component specifications and data flow.
+- 🛡️ [Security Policy](SECURITY.md): Vulnerability intake and handling procedures.
+- 💬 [Support Guidelines](.github/SUPPORT.md): How to get help and report issues.
+- 📜 [Code of Conduct](CODE_OF_CONDUCT.md): Community standards and pledge.
+
+---
 
 ## 📄 License
 

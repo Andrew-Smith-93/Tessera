@@ -5,12 +5,14 @@ import sys
 import unittest
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CONTROL_DIR = os.path.join(REPO_ROOT, "tessera-control")
-if CONTROL_DIR not in sys.path:
-    sys.path.insert(0, CONTROL_DIR)
 
-from config_contract import load_shortcut_catalog  # noqa: E402
 
+def load_shortcut_catalog(path=None):
+    if path is None:
+        path = os.path.join(REPO_ROOT, "config", "shortcuts.json")
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    return [(item["label"], item["sequence"]) for item in data.get("shortcuts", [])]
 
 
 class TestShortcutContract(unittest.TestCase):
@@ -93,8 +95,8 @@ class TestShortcutContract(unittest.TestCase):
         self.assertEqual(len(actual), len(expected))
         self.assertEqual(actual, expected)
 
-    def test_exact_ordered_parity_control_center_display(self):
-        """12. Assert exact Control Center label/sequence display behaviorally (not just regex/presence)."""
+    def test_exact_ordered_parity_catalog_loader(self):
+        """12. Assert exact shortcut catalog label/sequence loading."""
         expected = [(item["label"], item["sequence"]) for item in self.document["shortcuts"]]
         actual = load_shortcut_catalog()
         self.assertEqual(actual, expected)
@@ -121,12 +123,12 @@ class TestShortcutContract(unittest.TestCase):
         self.assertEqual(table_rows, expected)
         self.assertIn("config/shortcuts.json` is the canonical catalog", readme)
 
-    def test_headless_import_and_load_without_pyqt_or_tessera_settings(self):
-        """Proves shortcut contract logic and catalog loading execute with PyQt5 blocked and without importing tessera_settings."""
+    def test_headless_import_and_load_without_pyqt(self):
+        """Proves shortcut contract logic and catalog loading execute with PyQt5 blocked."""
         saved_modules = {
             k: sys.modules.get(k)
             for k in list(sys.modules.keys())
-            if k.startswith("PyQt5") or k in ("tessera_settings", "config_contract")
+            if k.startswith("PyQt5")
         }
         try:
             for k in list(saved_modules.keys()):
@@ -141,14 +143,11 @@ class TestShortcutContract(unittest.TestCase):
             finder = BlockedImportFinder()
             sys.meta_path.insert(0, finder)
             try:
-                import importlib
-                mod = importlib.import_module("config_contract")
-                catalog = mod.load_shortcut_catalog()
+                catalog = load_shortcut_catalog()
                 self.assertIsInstance(catalog, list)
                 self.assertGreater(len(catalog), 0)
                 expected = [(item["label"], item["sequence"]) for item in self.document["shortcuts"]]
                 self.assertEqual(catalog, expected)
-                self.assertNotIn("tessera_settings", sys.modules)
                 self.assertFalse(any(k.startswith("PyQt5") for k in sys.modules))
             finally:
                 sys.meta_path.remove(finder)

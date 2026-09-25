@@ -72,14 +72,14 @@
           <item>
            <widget class="QCheckBox" name="kcfg_perDesktopLayout">
             <property name="text">
-             <string>Remember layout independently per virtual desktop</string>
+             <string>Keep tiling arrangements separate per virtual desktop</string>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QCheckBox" name="kcfg_showOsd">
             <property name="text">
-             <string>Show On-Screen Display (OSD) on layout change</string>
+             <string>Show Tessera notifications for snapping and configuration changes</string>
             </property>
            </widget>
           </item>
@@ -139,6 +139,45 @@
         </widget>
        </item>
        <item>
+        <widget class="QGroupBox" name="grpAnimations">
+         <property name="title">
+          <string>Window Animations</string>
+         </property>
+         <layout class="QFormLayout" name="animationsForm">
+          <item row="0" column="0" colspan="2">
+           <widget class="QCheckBox" name="kcfg_enableAnimations">
+            <property name="text">
+             <string>Enable window geometry animations</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="lblAnimationDuration">
+            <property name="text">
+             <string>Animation Duration:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="kcfg_animationDurationMs">
+            <property name="suffix">
+             <string> ms</string>
+            </property>
+            <property name="minimum">
+             <number>50</number>
+            </property>
+            <property name="maximum">
+             <number>1000</number>
+            </property>
+            <property name="singleStep">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <spacer name="generalSpacer">
          <property name="orientation">
           <enum>Qt::Orientation::Vertical</enum>
@@ -155,113 +194,12 @@
      </widget>
      <widget class="QWidget" name="tabLayout">
       <attribute name="title">
-       <string>Layout &amp; Slots</string>
+       <string>Window Gaps</string>
       </attribute>
       <layout class="QVBoxLayout" name="layoutTabLayout">
        <property name="spacing">
         <number>10</number>
        </property>
-       <item>
-        <widget class="QGroupBox" name="grpDefaultLayout">
-         <property name="title">
-          <string>Default Layout Algorithm</string>
-         </property>
-         <layout class="QFormLayout" name="defaultLayoutForm">
-          <item row="0" column="0">
-           <widget class="QLabel" name="lblDefaultLayout">
-            <property name="text">
-             <string>Layout Algorithm:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QComboBox" name="kcfg_defaultLayout">
-            <item>
-             <property name="text">
-              <string>balanced-grid</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>primary-stack</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>binary-split</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>columns</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>rows</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>monocle</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>floating</string>
-             </property>
-            </item>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="grpPrimaryRegion">
-         <property name="title">
-          <string>Primary Region Parameters</string>
-         </property>
-         <layout class="QFormLayout" name="primaryRegionForm">
-          <item row="0" column="0">
-           <widget class="QLabel" name="lblPrimaryRatio">
-            <property name="text">
-             <string>Primary Region Ratio:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QDoubleSpinBox" name="kcfg_primaryRegionRatio">
-            <property name="minimum">
-             <number>0.10</number>
-            </property>
-            <property name="maximum">
-             <number>0.90</number>
-            </property>
-            <property name="singleStep">
-             <number>0.05</number>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="lblPrimaryCount">
-            <property name="text">
-             <string>Primary Region Count:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <widget class="QSpinBox" name="kcfg_primaryRegionCount">
-            <property name="minimum">
-             <number>0</number>
-            </property>
-            <property name="maximum">
-             <number>10</number>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
        <item>
         <widget class="QGroupBox" name="grpGaps">
          <property name="title">
@@ -389,6 +327,36 @@
         </widget>
        </item>
        <item>
+        <widget class="QGroupBox" name="grpCustomRules">
+         <property name="title">
+          <string>Custom Window Rules (JSON)</string>
+         </property>
+         <layout class="QVBoxLayout" name="customRulesLayout">
+          <item>
+           <widget class="QLabel" name="lblCustomRulesDesc">
+            <property name="text">
+             <string>JSON list of custom window matching and placement rules.
+Supported matchType: class, title, role, app
+Supported action: float, tile, monocle
+Example: [{"matchType": "class", "pattern": "gimp", "action": "float"}]
+Invalid edits retain last valid runtime rules without crashing or discarding.</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPlainTextEdit" name="kcfg_customRulesJson">
+            <property name="placeholderText">
+             <string>[{"matchType": "class", "pattern": "appName", "action": "float"}]</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <spacer name="rulesSpacer">
          <property name="orientation">
           <enum>Qt::Orientation::Vertical</enum>
@@ -403,22 +371,6 @@
        </item>
       </layout>
      </widget>
-    </widget>
-   </item>
-   <item>
-    <widget class="QFrame" name="footerFrame">
-     <property name="frameShape">
-      <enum>QFrame::Shape::StyledPanel</enum>
-     </property>
-     <layout class="QHBoxLayout" name="footerLayout">
-      <item>
-       <widget class="QLabel" name="lblControlCenter">
-        <property name="text">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;For live layout preview, presets, and quick window picker, run &lt;b&gt;tessera-settings&lt;/b&gt;.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
     </widget>
    </item>
   </layout>

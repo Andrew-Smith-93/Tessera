@@ -4,6 +4,7 @@ var RulesEngineModule = (() => {
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -17,17 +18,123 @@ var RulesEngineModule = (() => {
     return to;
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
   // apps/kwin-adapter/src/qml-rules-compat.ts
   var qml_rules_compat_exports = {};
   __export(qml_rules_compat_exports, {
     RuleEngine: () => RuleEngine,
     computeConfigSignature: () => computeConfigSignature,
+    getLastRuleValidationErrors: () => getLastRuleValidationErrors,
+    getLastValidCustomRules: () => getLastValidCustomRules,
     getOrCreateRuleEngine: () => getOrCreateRuleEngine,
-    toWindowRuleInput: () => toWindowRuleInput
+    hasPriorValidCustomRules: () => hasPriorValidCustomRules,
+    recordCustomRules: () => recordCustomRules,
+    resetRuleEngineState: () => resetRuleEngineState,
+    toWindowRuleInput: () => toWindowRuleInput,
+    validateCustomRules: () => validateCustomRules
   });
 
   // packages/rules-engine/src/rules.ts
+  var VALID_MATCH_TYPES = ["class", "title", "role", "app"];
+  var VALID_RULE_ACTIONS = ["tile", "float", "monocle", "tiled", "floating", "ignored"];
+  function validateCustomRules(input) {
+    if (input === void 0 || input === null) {
+      return { valid: true, rules: [], errors: [] };
+    }
+    let rawRules = input;
+    if (typeof input === "string") {
+      const trimmed = input.trim();
+      if (trimmed === "" || trimmed === "[]") {
+        return { valid: true, rules: [], errors: [] };
+      }
+      try {
+        rawRules = JSON.parse(trimmed);
+      } catch (e) {
+        return {
+          valid: false,
+          rules: [],
+          errors: [`Malformed JSON syntax: ${(e == null ? void 0 : e.message) || String(e)}`]
+        };
+      }
+    }
+    if (!Array.isArray(rawRules)) {
+      return {
+        valid: false,
+        rules: [],
+        errors: ["Custom rules must be an array of rule objects"]
+      };
+    }
+    const errors = [];
+    const validRules = [];
+    for (let i = 0; i < rawRules.length; i++) {
+      const item = rawRules[i];
+      const prefix = `Rule #${i + 1}`;
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        errors.push(`${prefix}: must be a non-null object`);
+        continue;
+      }
+      const rec = item;
+      if (typeof rec.pattern !== "string" || rec.pattern.trim().length === 0) {
+        errors.push(`${prefix}: 'pattern' must be a non-empty string`);
+        continue;
+      }
+      const rawMatchType = typeof rec.matchType === "string" ? rec.matchType.toLowerCase() : "";
+      if (!VALID_MATCH_TYPES.includes(rawMatchType)) {
+        errors.push(
+          `${prefix}: 'matchType' must be one of: ${VALID_MATCH_TYPES.join(", ")} (got ${JSON.stringify(rec.matchType)})`
+        );
+        continue;
+      }
+      const rawAction = typeof rec.action === "string" ? rec.action.toLowerCase() : "";
+      if (!VALID_RULE_ACTIONS.includes(rawAction)) {
+        errors.push(
+          `${prefix}: 'action' must be one of: ${VALID_RULE_ACTIONS.join(", ")} (got ${JSON.stringify(rec.action)})`
+        );
+        continue;
+      }
+      let isRegex = false;
+      if ("isRegex" in rec && rec.isRegex !== void 0) {
+        if (typeof rec.isRegex !== "boolean") {
+          errors.push(`${prefix}: 'isRegex' must be a boolean`);
+          continue;
+        }
+        isRegex = rec.isRegex;
+        if (isRegex) {
+          try {
+            new RegExp(rec.pattern, "i");
+          } catch (e) {
+            errors.push(`${prefix}: invalid regular expression '${rec.pattern}': ${(e == null ? void 0 : e.message) || String(e)}`);
+            continue;
+          }
+        }
+      }
+      const validated = {
+        pattern: rec.pattern,
+        matchType: rawMatchType,
+        action: rawAction
+      };
+      if (isRegex) {
+        validated.isRegex = true;
+      }
+      if (typeof rec.id === "string" && rec.id) {
+        validated.id = rec.id;
+      }
+      validRules.push(validated);
+    }
+    if (errors.length > 0) {
+      return {
+        valid: false,
+        rules: [],
+        errors
+      };
+    }
+    return {
+      valid: true,
+      rules: validRules,
+      errors: []
+    };
+  }
   function normalizeAction(action) {
     const a = (action || "").toLowerCase().trim();
     if (a === "tile" || a === "tiled") return "tiled";
@@ -62,12 +169,13 @@ var RulesEngineModule = (() => {
     return { isGame: false };
   }
   function isFullscreenLike(input) {
+    var _a, _b;
     if (input.fullScreen === true) return false;
     if (input.noBorder !== true) return false;
-    const maxMode = input.maximizeMode ?? 0;
+    const maxMode = (_a = input.maximizeMode) != null ? _a : 0;
     if (maxMode !== 0) return false;
     const frame = input.frameGeometry;
-    const out = input.outputGeometry ?? input.outputUsableArea;
+    const out = (_b = input.outputGeometry) != null ? _b : input.outputUsableArea;
     if (!frame || !out) return false;
     const frameArea = frame.width * frame.height;
     const outArea = out.width * out.height;
@@ -81,30 +189,41 @@ var RulesEngineModule = (() => {
     const withinTolerance = xDiff <= 5 && yDiff <= 5 && wDiff <= 5 && hDiff <= 5;
     return coversAlmostAll || withinTolerance;
   }
-  var WindowRuleEngine = class _WindowRuleEngine {
-    userFilterTokens = [];
-    customRules = [];
-    gameWindowPolicy = "floating";
-    customGamePatterns = [];
-    /**
-     * Only Tessera Control Center itself floats by default so user can configure the system.
-     */
-    static DEFAULT_FLOAT_PATTERNS = Object.freeze([
-      "tessera",
-      "tessera-settings",
-      "tessera_settings.py"
-    ]);
+  var WindowRuleEngine = class {
     constructor(options = {}) {
+      __publicField(this, "userFilterTokens", []);
+      __publicField(this, "customRules", []);
+      __publicField(this, "gameWindowPolicy", "floating");
+      __publicField(this, "customGamePatterns", []);
       this.updateOptions(options);
     }
     updateOptions(options) {
       if (options.userFilterString !== void 0) {
         this.userFilterTokens = options.userFilterString.split(",").map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0);
       } else if (options.userFilterPatterns !== void 0) {
-        this.userFilterTokens = options.userFilterPatterns.flatMap((p) => p.split(",")).map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0);
+        const tokens = [];
+        for (const p of options.userFilterPatterns) {
+          if (typeof p === "string") {
+            const parts = p.split(",");
+            for (const part of parts) {
+              const trimmed = part.trim().toLowerCase();
+              if (trimmed.length > 0) {
+                tokens.push(trimmed);
+              }
+            }
+          }
+        }
+        this.userFilterTokens = tokens;
       }
       if (options.customRules !== void 0) {
-        this.customRules = [...options.customRules];
+        if (Array.isArray(options.customRules)) {
+          this.customRules = options.customRules.filter(
+            (r) => Boolean(r && typeof r === "object" && typeof r.pattern === "string" && r.pattern.trim().length > 0)
+          );
+        } else {
+          const validation = validateCustomRules(options.customRules);
+          this.customRules = validation.valid ? validation.rules : [];
+        }
       }
       if (options.gameWindowPolicy !== void 0) {
         this.gameWindowPolicy = options.gameWindowPolicy;
@@ -172,6 +291,9 @@ var RulesEngineModule = (() => {
       const title = (input.caption || input.title || "").toLowerCase();
       const role = (input.windowRole || input.role || "").toLowerCase();
       for (const rule of this.customRules) {
+        if (!rule || typeof rule !== "object" || typeof rule.pattern !== "string" || !rule.pattern) {
+          continue;
+        }
         let target = "";
         switch (rule.matchType) {
           case "class":
@@ -186,17 +308,20 @@ var RulesEngineModule = (() => {
           case "role":
             target = role;
             break;
+          default:
+            continue;
         }
         let matched = false;
+        const patLower = rule.pattern.toLowerCase();
         if (rule.isRegex) {
           try {
             const re = new RegExp(rule.pattern, "i");
             matched = re.test(target);
-          } catch {
-            matched = target.includes(rule.pattern.toLowerCase());
+          } catch (e) {
+            matched = target.includes(patLower);
           }
         } else {
-          matched = target.includes(rule.pattern.toLowerCase());
+          matched = target.includes(patLower);
         }
         if (matched) {
           const normalized = normalizeAction(rule.action);
@@ -235,16 +360,6 @@ var RulesEngineModule = (() => {
           matchedPattern: gameCheck.matchedPattern
         };
       }
-      for (const pat of _WindowRuleEngine.DEFAULT_FLOAT_PATTERNS) {
-        if (rClass.includes(pat) || rName.includes(pat) || appId.includes(pat) || title.includes(pat)) {
-          return {
-            classification: "floating",
-            reason: `Matched default float pattern (${pat})`,
-            source: "default-rule",
-            matchedPattern: pat
-          };
-        }
-      }
       return {
         classification: "tiled",
         reason: "Default tiling fallback",
@@ -252,9 +367,16 @@ var RulesEngineModule = (() => {
       };
     }
   };
+  /**
+   * Default float patterns (retained as an empty frozen array for backward compatibility).
+   * Standalone Control Center is retired; implicit floating exceptions are removed.
+   */
+  __publicField(WindowRuleEngine, "DEFAULT_FLOAT_PATTERNS", Object.freeze([]));
   var WindowClassificationTracker = class {
-    classifications = /* @__PURE__ */ new Map();
-    tileability = /* @__PURE__ */ new Map();
+    constructor() {
+      __publicField(this, "classifications", /* @__PURE__ */ new Map());
+      __publicField(this, "tileability", /* @__PURE__ */ new Map());
+    }
     evaluate(windowId, result) {
       const prevClassification = this.classifications.get(windowId);
       const prevTileable = this.tileability.get(windowId);
@@ -288,6 +410,7 @@ var RulesEngineModule = (() => {
 
   // apps/kwin-adapter/src/qml-rules-compat.ts
   function toWindowRuleInput(w, options) {
+    var _a;
     if (!w) return { managed: false };
     return {
       windowId: w.internalId ? String(w.internalId) : w.windowId || "",
@@ -313,13 +436,13 @@ var RulesEngineModule = (() => {
         width: Number(w.frameGeometry.width || 0),
         height: Number(w.frameGeometry.height || 0)
       } : void 0,
-      outputGeometry: options?.outputGeometry || (w.output?.geometry ? {
+      outputGeometry: (options == null ? void 0 : options.outputGeometry) || (((_a = w.output) == null ? void 0 : _a.geometry) ? {
         x: Number(w.output.geometry.x || 0),
         y: Number(w.output.geometry.y || 0),
         width: Number(w.output.geometry.width || 0),
         height: Number(w.output.geometry.height || 0)
       } : void 0),
-      outputUsableArea: options?.outputUsableArea,
+      outputUsableArea: options == null ? void 0 : options.outputUsableArea,
       desktopWindow: Boolean(w.desktopWindow),
       dock: Boolean(w.dock),
       splash: Boolean(w.splash),
@@ -330,22 +453,43 @@ var RulesEngineModule = (() => {
       specialWindow: Boolean(w.specialWindow)
     };
   }
-  function parseCustomRules(rules) {
-    if (!rules) return [];
-    if (Array.isArray(rules)) return rules;
-    if (typeof rules === "string") {
-      try {
-        const parsed = JSON.parse(rules);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  }
   var cachedEngine = null;
   var cachedSignature = "";
+  var lastValidCustomRules = [];
+  var lastRuleValidationErrors = [];
+  var hasPriorValidCustomRulesState = false;
   var tracker = new WindowClassificationTracker();
+  function getLastRuleValidationErrors() {
+    return [...lastRuleValidationErrors];
+  }
+  function getLastValidCustomRules() {
+    return [...lastValidCustomRules];
+  }
+  function hasPriorValidCustomRules() {
+    return hasPriorValidCustomRulesState && lastValidCustomRules.length > 0;
+  }
+  function recordCustomRules(customRules) {
+    const valResult = validateCustomRules(customRules);
+    if (valResult.valid) {
+      lastValidCustomRules = valResult.rules;
+      if (valResult.rules.length > 0) {
+        hasPriorValidCustomRulesState = true;
+      } else {
+        hasPriorValidCustomRulesState = false;
+      }
+      lastRuleValidationErrors = [];
+    } else {
+      lastRuleValidationErrors = valResult.errors;
+    }
+    return valResult;
+  }
+  function resetRuleEngineState() {
+    cachedEngine = null;
+    cachedSignature = "";
+    lastValidCustomRules = [];
+    lastRuleValidationErrors = [];
+    hasPriorValidCustomRulesState = false;
+  }
   function computeConfigSignature(options) {
     if (!options) return "default";
     const customRulesStr = typeof options.customRules === "string" ? options.customRules : JSON.stringify(options.customRules || []);
@@ -355,15 +499,31 @@ var RulesEngineModule = (() => {
     return `${policyStr}|${filterStr}|${customRulesStr}|${gamePatsStr}`;
   }
   function getOrCreateRuleEngine(options) {
-    const sig = computeConfigSignature(options);
+    if (options && options.customRules !== void 0) {
+      const valResult = validateCustomRules(options.customRules);
+      if (valResult.valid) {
+        lastValidCustomRules = valResult.rules;
+        if (valResult.rules.length > 0) {
+          hasPriorValidCustomRulesState = true;
+        }
+        lastRuleValidationErrors = [];
+      } else {
+        lastRuleValidationErrors = valResult.errors;
+      }
+    }
+    const effectiveRules = lastValidCustomRules;
+    const filterStr = (options == null ? void 0 : options.userFilterString) || ((options == null ? void 0 : options.userFilterPatterns) ? options.userFilterPatterns.join(",") : "");
+    const policyStr = (options == null ? void 0 : options.gameWindowPolicy) || "floating";
+    const gamePatsStr = (options == null ? void 0 : options.customGamePatterns) ? options.customGamePatterns.join(",") : "";
+    const rulesSig = JSON.stringify(effectiveRules);
+    const sig = `${policyStr}|${filterStr}|${rulesSig}|${gamePatsStr}`;
     if (!cachedEngine || cachedSignature !== sig) {
-      const parsedRules = parseCustomRules(options?.customRules);
-      const filterPatterns = options?.userFilterPatterns || (options?.userFilterString ? [options.userFilterString] : []);
+      const filterPatterns = (options == null ? void 0 : options.userFilterPatterns) || ((options == null ? void 0 : options.userFilterString) ? [options.userFilterString] : []);
       cachedEngine = new WindowRuleEngine({
-        customRules: parsedRules,
+        customRules: effectiveRules,
         userFilterPatterns: filterPatterns,
-        gameWindowPolicy: options?.gameWindowPolicy || "floating",
-        customGamePatterns: options?.customGamePatterns
+        gameWindowPolicy: (options == null ? void 0 : options.gameWindowPolicy) || "floating",
+        customGamePatterns: options == null ? void 0 : options.customGamePatterns
       });
       cachedSignature = sig;
     }
@@ -379,11 +539,11 @@ var RulesEngineModule = (() => {
       const input = toWindowRuleInput(w, options);
       const engine = getOrCreateRuleEngine(options);
       const result = engine.classify(input);
-      const wid = input.windowId || (w?.internalId ? String(w.internalId) : "unknown");
+      const wid = input.windowId || ((w == null ? void 0 : w.internalId) ? String(w.internalId) : "unknown");
       return tracker.evaluate(wid, result);
     },
     forget(w) {
-      const wid = typeof w === "string" ? w : w?.internalId ? String(w.internalId) : w?.windowId || "";
+      const wid = typeof w === "string" ? w : (w == null ? void 0 : w.internalId) ? String(w.internalId) : (w == null ? void 0 : w.windowId) || "";
       if (wid) {
         tracker.forget(wid);
       }
@@ -400,6 +560,24 @@ var RulesEngineModule = (() => {
       const result = this.classify(w);
       return result.classification === "ignored";
     },
+    validateRules(rules) {
+      return validateCustomRules(rules);
+    },
+    getLastValidationErrors() {
+      return getLastRuleValidationErrors();
+    },
+    getLastValidRules() {
+      return getLastValidCustomRules();
+    },
+    hasPriorValidRules() {
+      return hasPriorValidCustomRules();
+    },
+    recordCustomRules(rules) {
+      return recordCustomRules(rules);
+    },
+    resetState() {
+      resetRuleEngineState();
+    },
     defaultFloatPatterns: WindowRuleEngine.DEFAULT_FLOAT_PATTERNS,
     getCachedSignature() {
       return cachedSignature;
@@ -411,7 +589,6 @@ var RulesEngineModule = (() => {
     },
     tracker
   };
-  globalThis.RuleEngine = RuleEngine;
   return __toCommonJS(qml_rules_compat_exports);
 })();
 var RuleEngine = RulesEngineModule.RuleEngine;

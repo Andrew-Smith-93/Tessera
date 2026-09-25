@@ -1,5 +1,5 @@
 {
-  "digest": "474d72fdc677e3ae79a49fcfd0d16432b74f6b5e73bd3e33229bfdf01f4f73f9",
+  "digest": "f2868c5f283fa58e6f960b17b941fa9bd50fb2c78fcb0915122d04de096f5a4f",
   "fixtureName": "10-two-horizontal-outputs",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -64,7 +64,7 @@
         }
       },
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

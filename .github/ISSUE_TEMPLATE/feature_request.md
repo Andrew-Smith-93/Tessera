@@ -1,19 +1,26 @@
 ---
 name: Feature request
-about: Suggest an idea or new tiling layout for Tessera
+about: Suggest an idea, tiling algorithm, or enhancement for Tessera
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+> [!NOTE]
+> **Privacy First**: Do NOT include sensitive personal information, proprietary code, or unredacted system paths in your request.
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+### Problem Statement
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+A clear and concise description of what problem this feature solves. *(e.g., "I frequently find it difficult to arrange three editor panes on ultrawide monitors without manual resizing...")*
 
-**Additional context**
-Add any mockups, screenshots, or references (e.g. from Hyprland, i3, or macOS Amethyst).
+### Proposed Solution
+
+A clear and concise description of what you want to happen and how you envision the workflow or layout working.
+
+### Alternatives Considered
+
+Describe any alternative approaches, workarounds, or layouts you have considered.
+
+### Reference Implementations
+
+Mention any similar tiling window managers or tools with this feature *(e.g., Hyprland, bspwm, i3, macOS Amethyst)*. Screenshots or mockups are welcome!

@@ -1,13 +1,17 @@
 import {
   WindowRuleEngine,
   WindowClassificationTracker,
+  validateCustomRules,
   type WindowRuleInput,
   type WindowClassificationResult,
   type CustomRule,
   type GameWindowPolicy,
-  type ClassificationChangeResult
+  type ClassificationChangeResult,
+  type RuleValidationResult
 } from "@tessera/rules-engine";
 import type { Rect } from "@tessera/protocol";
+
+export { validateCustomRules };
 
 export interface QmlRuleOptions {
   userFilterString?: string;
@@ -65,23 +69,48 @@ export function toWindowRuleInput(w: any, options?: QmlRuleOptions): WindowRuleI
   };
 }
 
-function parseCustomRules(rules: CustomRule[] | string | undefined): CustomRule[] {
-  if (!rules) return [];
-  if (Array.isArray(rules)) return rules;
-  if (typeof rules === "string") {
-    try {
-      const parsed = JSON.parse(rules);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
 let cachedEngine: WindowRuleEngine | null = null;
 let cachedSignature = "";
+let lastValidCustomRules: CustomRule[] = [];
+let lastRuleValidationErrors: string[] = [];
+let hasPriorValidCustomRulesState = false;
 const tracker = new WindowClassificationTracker();
+
+export function getLastRuleValidationErrors(): string[] {
+  return [...lastRuleValidationErrors];
+}
+
+export function getLastValidCustomRules(): CustomRule[] {
+  return [...lastValidCustomRules];
+}
+
+export function hasPriorValidCustomRules(): boolean {
+  return hasPriorValidCustomRulesState && lastValidCustomRules.length > 0;
+}
+
+export function recordCustomRules(customRules: unknown): RuleValidationResult {
+  const valResult = validateCustomRules(customRules);
+  if (valResult.valid) {
+    lastValidCustomRules = valResult.rules;
+    if (valResult.rules.length > 0) {
+      hasPriorValidCustomRulesState = true;
+    } else {
+      hasPriorValidCustomRulesState = false;
+    }
+    lastRuleValidationErrors = [];
+  } else {
+    lastRuleValidationErrors = valResult.errors;
+  }
+  return valResult;
+}
+
+export function resetRuleEngineState(): void {
+  cachedEngine = null;
+  cachedSignature = "";
+  lastValidCustomRules = [];
+  lastRuleValidationErrors = [];
+  hasPriorValidCustomRulesState = false;
+}
 
 export function computeConfigSignature(options?: QmlRuleOptions): string {
   if (!options) return "default";
@@ -95,12 +124,30 @@ export function computeConfigSignature(options?: QmlRuleOptions): string {
 }
 
 export function getOrCreateRuleEngine(options?: QmlRuleOptions): WindowRuleEngine {
-  const sig = computeConfigSignature(options);
+  if (options && options.customRules !== undefined) {
+    const valResult = validateCustomRules(options.customRules);
+    if (valResult.valid) {
+      lastValidCustomRules = valResult.rules;
+      if (valResult.rules.length > 0) {
+        hasPriorValidCustomRulesState = true;
+      }
+      lastRuleValidationErrors = [];
+    } else {
+      lastRuleValidationErrors = valResult.errors;
+    }
+  }
+
+  const effectiveRules = lastValidCustomRules;
+  const filterStr = options?.userFilterString || (options?.userFilterPatterns ? options.userFilterPatterns.join(",") : "");
+  const policyStr = options?.gameWindowPolicy || "floating";
+  const gamePatsStr = options?.customGamePatterns ? options.customGamePatterns.join(",") : "";
+  const rulesSig = JSON.stringify(effectiveRules);
+  const sig = `${policyStr}|${filterStr}|${rulesSig}|${gamePatsStr}`;
+
   if (!cachedEngine || cachedSignature !== sig) {
-    const parsedRules = parseCustomRules(options?.customRules);
     const filterPatterns = options?.userFilterPatterns || (options?.userFilterString ? [options.userFilterString] : []);
     cachedEngine = new WindowRuleEngine({
-      customRules: parsedRules,
+      customRules: effectiveRules,
       userFilterPatterns: filterPatterns,
       gameWindowPolicy: options?.gameWindowPolicy || "floating",
       customGamePatterns: options?.customGamePatterns
@@ -146,6 +193,30 @@ export const RuleEngine = {
     return result.classification === "ignored";
   },
 
+  validateRules(rules: unknown): RuleValidationResult {
+    return validateCustomRules(rules);
+  },
+
+  getLastValidationErrors(): string[] {
+    return getLastRuleValidationErrors();
+  },
+
+  getLastValidRules(): CustomRule[] {
+    return getLastValidCustomRules();
+  },
+
+  hasPriorValidRules(): boolean {
+    return hasPriorValidCustomRules();
+  },
+
+  recordCustomRules(rules: unknown): RuleValidationResult {
+    return recordCustomRules(rules);
+  },
+
+  resetState(): void {
+    resetRuleEngineState();
+  },
+
   defaultFloatPatterns: WindowRuleEngine.DEFAULT_FLOAT_PATTERNS,
   getCachedSignature(): string {
     return cachedSignature;
@@ -157,7 +228,4 @@ export const RuleEngine = {
   },
   tracker
 };
-
-// Export to global for QML consumption
-(globalThis as unknown as { RuleEngine: typeof RuleEngine }).RuleEngine = RuleEngine;
 

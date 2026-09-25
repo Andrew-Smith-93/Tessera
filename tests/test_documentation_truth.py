@@ -9,13 +9,6 @@ TARGET_TOKEN = "ma" + "ster"
 TARGET_RE = re.compile(rf"\b{TARGET_TOKEN}\b", re.IGNORECASE)
 
 STATIC_PER_OCCURRENCE_REGISTRY = {
-    "apps/kwin-adapter/src/index.ts": {
-        "category": "LEGACY_COMPATIBILITY",
-        "total_occurrences": 1,
-        "lines": {
-            "4866d265d40a7c6397d14eb78e8128d824263a6b266d29a802514afb23b6a1ff": {"occ": 1, "repeat": 1, "positions": [32]},
-        }
-    },
     "apps/kwin-adapter/src/qml-compat.ts": {
         "category": "LEGACY_COMPATIBILITY",
         "total_occurrences": 1,
@@ -27,19 +20,8 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "category": "LEGACY_COMPATIBILITY",
         "total_occurrences": 2,
         "lines": {
-            "170fd9f7e4718c57127bccdc214d52cf9e7b6c04ab8b067bfb92b47763071a55": {"occ": 1, "repeat": 1, "positions": [285]},
-            "b7f68df55a64bf310f69293f35cc51b53b83eab3bd3e5e6b52d86744397dc857": {"occ": 1, "repeat": 1, "positions": [1381]},
-        }
-    },
-    "apps/kwin-adapter/src/screen-state.ts": {
-        "category": "LEGACY_COMPATIBILITY",
-        "total_occurrences": 5,
-        "lines": {
-            "2a4fafd2949e480f3525ea61e581ab5ea1088f7353d35247b0a3572ed4cf9d29": {"occ": 1, "repeat": 1, "positions": [68]},
-            "39a7965157509333a5c169f5c04d34ed70a04a37be8266ba6a31859cd45c8723": {"occ": 1, "repeat": 1, "positions": [18]},
-            "5b71625e1b1f91ca341c54db19b1f1f65d5092cec2a4a58f06a2fedfb43c2d2f": {"occ": 1, "repeat": 1, "positions": [35]},
-            "b0e2b2cad83c78ad823e8ba990f2cc600d54b7b946a6ee3de537ddf74457db82": {"occ": 1, "repeat": 1, "positions": [69]},
-            "fc163f5931e0c13536b99bcac8a4f71d7813b32c67e409790cb2a9b6d3bc447f": {"occ": 1, "repeat": 1, "positions": [78]},
+            "170fd9f7e4718c57127bccdc214d52cf9e7b6c04ab8b067bfb92b47763071a55": {"occ": 1, "repeat": 1, "positions": [358]},
+            "677495302d129c88935bcef077d1a30c86aa8a534ab3b75eed3cc1c614ee3698": {"occ": 1, "repeat": 1, "positions": [2007]},
         }
     },
     "apps/kwin-adapter/tests/qml-isolation.test.ts": {
@@ -60,8 +42,8 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "category": "TEST_ASSERTION_OR_FIXTURE",
         "total_occurrences": 2,
         "lines": {
-            "a5bdaae63a601bbd2ef015215e45922cc303dd31c3435fcc6846c4a2029a8b58": {"occ": 1, "repeat": 1, "positions": [116]},
-            "b597ac023a6aea002988f811e4e046d53bf7720d9c410c2e17da249de0866b60": {"occ": 1, "repeat": 1, "positions": [48]},
+            "a5bdaae63a601bbd2ef015215e45922cc303dd31c3435fcc6846c4a2029a8b58": {"occ": 1, "repeat": 1, "positions": [118]},
+            "b597ac023a6aea002988f811e4e046d53bf7720d9c410c2e17da249de0866b60": {"occ": 1, "repeat": 1, "positions": [50]},
         }
     },
     "apps/kwin-adapter/tests/scoped-slot-ordering.test.ts": {
@@ -76,10 +58,10 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "category": "SIMULATOR_INTERNAL",
         "total_occurrences": 6,
         "lines": {
-            "8219f53deb47a0d063da892a5f2f477e1aa944149a1eaeef2e463029806fb676": {"occ": 1, "repeat": 1, "positions": [45]},
-            "8ebd71e7b6a105f8aebc0d1891a3e8e949b57b10639ee934a3650620b7faa43d": {"occ": 1, "repeat": 1, "positions": [95]},
-            "a6e726af701e0192de044f8e88ea6ba4e3c30a1dbd524d88242c85ad188f6d1d": {"occ": 2, "repeat": 1, "positions": [68]},
-            "fd8745b1edca0514a913a23f409398c6b8c1b30d58f8869cf073030685d4a125": {"occ": 2, "repeat": 1, "positions": [67]},
+            "1090b646a228413a31fcbefa68a4796a274bbfa9b114736fdf4a30bab76dd7c6": {"occ": 2, "repeat": 1, "positions": [67]},
+            "1f97b92f3d2f0a0c7bf1f51aedd96697db57c3cd9b0c28c7851630b9a03497f3": {"occ": 2, "repeat": 1, "positions": [68]},
+            "97bcd21e46e3dcc5cc6bc14ab3e52d7d438380d8bec775427391fbeac5d56e52": {"occ": 1, "repeat": 1, "positions": [45]},
+            "c8271eee5ba5a61e2200bf0d6ebdba0a8fc253d221b5ac652270c36d64ae742c": {"occ": 1, "repeat": 1, "positions": [95]},
         }
     },
     "apps/runtime-simulator/fixtures/01-single-screen-three-windows.fixture.json": {
@@ -269,174 +251,12 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
             "9d4daf30741b380af8ac340c907e03520af8d20eba375c78b65cba1ffcdbd15a": {"occ": 1, "repeat": 1, "positions": [7]},
         }
     },
-    "apps/runtime-simulator/goldens/01-single-screen-three-windows.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/02-window-addition-removal.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
     f"apps/runtime-simulator/goldens/03-{TARGET_TOKEN}-count-ratio-change.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 3,
+        "category": "SIMULATOR_FIXTURE",
+        "total_occurrences": 2,
         "lines": {
             "2391dd3cb6cf067c7ec6a7d0dc1eaa5e194ca942f92d0cead59a42137cc7dfba": {"occ": 1, "repeat": 1, "positions": [29]},
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
             "f1aaec64940d9881a2a52886ac165ebd55e58586d016231635d04b9119c19bf4": {"occ": 1, "repeat": 1, "positions": [3]},
-        }
-    },
-    "apps/runtime-simulator/goldens/04-minimize-and-restore.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/05-true-fullscreen-enter-exit.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/06-borderless-fullscreen-enter-exit.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/08-ordinary-steam-client-tiled.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/09-generic-wine-config-tiled.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/10-two-horizontal-outputs.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 2,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 2, "positions": [36, 67]},
-        }
-    },
-    "apps/runtime-simulator/goldens/11-output-negative-coordinates.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 2,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 2, "positions": [36, 65]},
-        }
-    },
-    "apps/runtime-simulator/goldens/12-vertically-stacked-outputs.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 2,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 2, "positions": [36, 65]},
-        }
-    },
-    "apps/runtime-simulator/goldens/13-differently-sized-outputs.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 2,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 2, "positions": [36, 65]},
-        }
-    },
-    "apps/runtime-simulator/goldens/14-panel-work-area-offset.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/15-window-migration-between-outputs.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 2,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 2, "positions": [36, 67]},
-        }
-    },
-    "apps/runtime-simulator/goldens/16-output-removal-reassignment.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/17-screen-geometry-change.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/18-hundred-coalesced-geometry-events.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/19-expected-geometry-echo.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/20-expired-geometry-echo.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/21-mismatched-external-geometry.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/22-cursor-movement-no-user-action.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 1,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 1, "positions": [36]},
-        }
-    },
-    "apps/runtime-simulator/goldens/23-snap-preview-and-commit.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 2,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 2, "positions": [36, 65]},
-        }
-    },
-    "apps/runtime-simulator/goldens/24-config-revision-invalidation.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 2,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 2, "positions": [36, 65]},
-        }
-    },
-    "apps/runtime-simulator/goldens/25-mixed-burst.golden.json": {
-        "category": "SIMULATOR_GOLDEN",
-        "total_occurrences": 2,
-        "lines": {
-            "24b2075aee12aba7e5b20890e274e516fa4cc17f4dd7ffcffe7fefad039b1d52": {"occ": 1, "repeat": 2, "positions": [36, 68]},
         }
     },
     "apps/runtime-simulator/src/invariants.ts": {
@@ -474,9 +294,10 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
     },
     "apps/runtime-simulator/tests/simulator.test.ts": {
         "category": "SIMULATOR_INTERNAL",
-        "total_occurrences": 4,
+        "total_occurrences": 5,
         "lines": {
             "0dc4d895e4a51eb85d7cf8d0aa75f09a26e642b05621f772f8f53ac69dd6ccb5": {"occ": 1, "repeat": 1, "positions": [467]},
+            "15e4f87e7d31e7025b448151dda5b616f26b976a5689be0d1a643d6ccff47576": {"occ": 1, "repeat": 1, "positions": [626]},
             "5168602173f84f5e3d376fe63a02b3e8518dbe8b56834e4322d42228bdc98af3": {"occ": 1, "repeat": 3, "positions": [418, 457, 497]},
         }
     },
@@ -491,11 +312,11 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "category": "LEGACY_COMPATIBILITY",
         "total_occurrences": 5,
         "lines": {
-            "015aaebd822d99fbd692bd7bd723623e2162054b7bd4336603443f880dab842c": {"occ": 1, "repeat": 1, "positions": [32]},
-            "8e0387c999f70597dcdb69290ef0aed40351d6cb194d8059ea5a89b3bc9ca066": {"occ": 1, "repeat": 1, "positions": [33]},
-            "984bdce5e151006ac706e7c4e1340d5cad42118dea5326036fde0378285cba17": {"occ": 1, "repeat": 1, "positions": [29]},
-            "cc7e001a2e8d41aa221552457bb355c66f916ed137cb479c51da8765c0f93c14": {"occ": 1, "repeat": 1, "positions": [31]},
-            "e7e51b30b53fc2b70aa44635879f9984af0e8afb8c6b476688a60d87874a4220": {"occ": 1, "repeat": 1, "positions": [30]},
+            "015aaebd822d99fbd692bd7bd723623e2162054b7bd4336603443f880dab842c": {"occ": 1, "repeat": 1, "positions": [42]},
+            "63390770725f7e873080318e502f897c8e9e807e6f132acc48f1b24d4706f604": {"occ": 1, "repeat": 1, "positions": [43]},
+            "984bdce5e151006ac706e7c4e1340d5cad42118dea5326036fde0378285cba17": {"occ": 1, "repeat": 1, "positions": [39]},
+            "cc7e001a2e8d41aa221552457bb355c66f916ed137cb479c51da8765c0f93c14": {"occ": 1, "repeat": 1, "positions": [41]},
+            "e7e51b30b53fc2b70aa44635879f9984af0e8afb8c6b476688a60d87874a4220": {"occ": 1, "repeat": 1, "positions": [40]},
         }
     },
     "contents/code/layouts.js": {
@@ -503,23 +324,23 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "total_occurrences": 2,
         "lines": {
             "3b2c23bcfaf8ab9172994c9f1e9fc482aa405294e9182ab8d5cef963b282d5c5": {"occ": 1, "repeat": 1, "positions": [302]},
-            "a91b7098573060d5c8376df27bd940120b701c0f47f37308960d39ac4b5aef60": {"occ": 1, "repeat": 1, "positions": [411]},
+            "a91b7098573060d5c8376df27bd940120b701c0f47f37308960d39ac4b5aef60": {"occ": 1, "repeat": 1, "positions": [412]},
         }
     },
     "contents/code/reconciler.js": {
         "category": "LEGACY_COMPATIBILITY",
         "total_occurrences": 3,
         "lines": {
-            "3b2c23bcfaf8ab9172994c9f1e9fc482aa405294e9182ab8d5cef963b282d5c5": {"occ": 1, "repeat": 1, "positions": [314]},
-            "570ee0074f90a904d28262d3f6060f6fcfc9d551f2689463077e629a97a1c17a": {"occ": 1, "repeat": 1, "positions": [1190]},
-            "677495302d129c88935bcef077d1a30c86aa8a534ab3b75eed3cc1c614ee3698": {"occ": 1, "repeat": 1, "positions": [2109]},
+            "3b2c23bcfaf8ab9172994c9f1e9fc482aa405294e9182ab8d5cef963b282d5c5": {"occ": 1, "repeat": 1, "positions": [338]},
+            "570ee0074f90a904d28262d3f6060f6fcfc9d551f2689463077e629a97a1c17a": {"occ": 1, "repeat": 1, "positions": [1805]},
+            "cdbc7b1fbbf63b99af56367ed69243c5904f6f99f4d5c232a4b883ec779a0eb2": {"occ": 1, "repeat": 1, "positions": [3282]},
         }
     },
     "contents/ui/main.qml": {
         "category": "LEGACY_COMPATIBILITY",
         "total_occurrences": 1,
         "lines": {
-            "89af9378bf6cb43da12a01a6d24bf28b61fc851a003f9aefe8610966a4f16ab8": {"occ": 1, "repeat": 1, "positions": [135]},
+            "89af9378bf6cb43da12a01a6d24bf28b61fc851a003f9aefe8610966a4f16ab8": {"occ": 1, "repeat": 1, "positions": [138]},
         }
     },
     "docs/BASELINE_SETTINGS_DRIFT_MATRIX.md": {
@@ -536,45 +357,35 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "category": "HISTORICAL_DOCUMENTATION",
         "total_occurrences": 4,
         "lines": {
-            "43d3418e4e501490a2b3933578b149ef317476735b85ca0ebddb1503e046070e": {"occ": 2, "repeat": 1, "positions": [309]},
-            "8203859cf90e317124ea5fc8b006e2ad85da86b22f8ee35e95fd62d1698d40a3": {"occ": 1, "repeat": 1, "positions": [72]},
-            "c3f69653d993d4abe17073739b010a9747d91a7fc78fe21228076855ae2bebdc": {"occ": 1, "repeat": 1, "positions": [139]},
+            "43d3418e4e501490a2b3933578b149ef317476735b85ca0ebddb1503e046070e": {"occ": 2, "repeat": 1, "positions": [314]},
+            "8203859cf90e317124ea5fc8b006e2ad85da86b22f8ee35e95fd62d1698d40a3": {"occ": 1, "repeat": 1, "positions": [77]},
+            "c3f69653d993d4abe17073739b010a9747d91a7fc78fe21228076855ae2bebdc": {"occ": 1, "repeat": 1, "positions": [144]},
         }
     },
     "docs/PHASE_5D_RUNTIME_SETTINGS_REBUILD.md": {
         "category": "HISTORICAL_DOCUMENTATION",
         "total_occurrences": 3,
         "lines": {
-            "8e0adedd540a20ab5b0eeba5a3cac9c31c58fe00495f7fcd2eda5ee97523af4d": {"occ": 1, "repeat": 1, "positions": [6]},
-            "b2bd31d96943fe293a5ef6f9b212e5492a09b8c5d6086796a1258271c3499895": {"occ": 1, "repeat": 1, "positions": [98]},
-            "bb6b8f9aef0edc559c05ac38c4673e2ff3c5138c059ac193051fcbc626a2a610": {"occ": 1, "repeat": 1, "positions": [38]},
+            "8e0adedd540a20ab5b0eeba5a3cac9c31c58fe00495f7fcd2eda5ee97523af4d": {"occ": 1, "repeat": 1, "positions": [9]},
+            "b2bd31d96943fe293a5ef6f9b212e5492a09b8c5d6086796a1258271c3499895": {"occ": 1, "repeat": 1, "positions": [101]},
+            "bb6b8f9aef0edc559c05ac38c4673e2ff3c5138c059ac193051fcbc626a2a610": {"occ": 1, "repeat": 1, "positions": [41]},
         }
     },
     "docs/PHASE_5D_SECOND_PASS_AUDIT.md": {
         "category": "HISTORICAL_DOCUMENTATION",
         "total_occurrences": 5,
         "lines": {
-            "380fba4b753f4b2b9ca7578b1ab2dcb0e01915b641f2a0142a0916bd004a0612": {"occ": 3, "repeat": 1, "positions": [48]},
-            "9d4f26a1a2c89d55216277919603ed1f8131e39e520a70c2726e6c6208aff412": {"occ": 1, "repeat": 1, "positions": [127]},
-            "cef44e192432e22ea654abbd8e1c66975a0eb132e1c1a43586a8e0a0cfc6a3dc": {"occ": 1, "repeat": 1, "positions": [51]},
-        }
-    },
-    "docs/RUNTIME_ARCHITECTURE.md": {
-        "category": "HISTORICAL_DOCUMENTATION",
-        "total_occurrences": 4,
-        "lines": {
-            "1768870bbf2b1d94bea6a484219c8474d6a31082617ff995ae25d60d732c3982": {"occ": 1, "repeat": 1, "positions": [381]},
-            "4f1a1bc429b022b4d27668d098620a3b69fc9b85b0efe1bd9befe2b636e5d703": {"occ": 1, "repeat": 1, "positions": [380]},
-            "6b4b8d0b4140b6109b95ff25cd975836b7f4ed974fc2895f493354cf128d74d5": {"occ": 1, "repeat": 1, "positions": [298]},
-            "808fc921dc235b488c512de4c195f7cf79e8cb63a0b711481694abc918622a44": {"occ": 1, "repeat": 1, "positions": [365]},
+            "380fba4b753f4b2b9ca7578b1ab2dcb0e01915b641f2a0142a0916bd004a0612": {"occ": 3, "repeat": 1, "positions": [51]},
+            "9d4f26a1a2c89d55216277919603ed1f8131e39e520a70c2726e6c6208aff412": {"occ": 1, "repeat": 1, "positions": [130]},
+            "cef44e192432e22ea654abbd8e1c66975a0eb132e1c1a43586a8e0a0cfc6a3dc": {"occ": 1, "repeat": 1, "positions": [54]},
         }
     },
     "install.sh": {
         "category": "INSTALLER_REJECTION_CHECK",
         "total_occurrences": 3,
         "lines": {
-            "17b2d80674cd4dce65cf7d863d70a11244c6cb1ce68b9f868a607766363b5088": {"occ": 1, "repeat": 1, "positions": [211]},
-            "9c301d161a63e951b20cd75ec74c56effec3344d1dc2fd04a62cfeee3860790f": {"occ": 2, "repeat": 1, "positions": [210]},
+            "17b2d80674cd4dce65cf7d863d70a11244c6cb1ce68b9f868a607766363b5088": {"occ": 1, "repeat": 1, "positions": [238]},
+            "9c301d161a63e951b20cd75ec74c56effec3344d1dc2fd04a62cfeee3860790f": {"occ": 2, "repeat": 1, "positions": [237]},
         }
     },
     "packages/layout-core/src/solver.ts": {
@@ -647,26 +458,6 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
             "fa58ed7dbcb5f76789f480c0caabb4b13f41fdccb386f7bc8c7b8e6939c906c0": {"occ": 1, "repeat": 1, "positions": [173]},
         }
     },
-    "tessera-control/config_contract.py": {
-        "category": "LEGACY_COMPATIBILITY",
-        "total_occurrences": 2,
-        "lines": {
-            "2b4c5f024e2b7362e0f66f8c3ebe24d7dd1d1fcea2a24baa0120186f96245d9f": {"occ": 1, "repeat": 1, "positions": [137]},
-            "b59bf5b3d09605bd02f3ceb2d5c0fdb94daf93dd4c40e9f8389104d764dd6be4": {"occ": 1, "repeat": 1, "positions": [32]},
-        }
-    },
-    "tessera-control/ui_preview.py": {
-        "category": "LEGACY_COMPATIBILITY",
-        "total_occurrences": 6,
-        "lines": {
-            "2e6431804029cc44fc7a93edd290da5e4256cbafed888ef2311d7cb77a9aee03": {"occ": 1, "repeat": 1, "positions": [4]},
-            "6bd33b963d4bfe067a66b9d4c9d7a7e9d99f95ee6c789a5ce5ac211ec0abbab0": {"occ": 1, "repeat": 1, "positions": [137]},
-            "907a91211dd9a866a8e0196f3f071e347c6bb4dc8b266039378ec5fa0bd03ca4": {"occ": 1, "repeat": 1, "positions": [15]},
-            "a080368c72b34ac0618b744b264783b07149fcbddea25a6238b67e1c82a2ae59": {"occ": 1, "repeat": 1, "positions": [183]},
-            "a09db0bf8ac940df2b6b5c4f1c552731e2182b551faa6d863136bc1432df9afa": {"occ": 1, "repeat": 1, "positions": [269]},
-            "af7ae5008f74e490cefd386bb9be30a011f454545edcb41d250e3f4d4cdd4713": {"occ": 1, "repeat": 1, "positions": [50]},
-        }
-    },
     "tests/fixtures/workspace-layouts-corpus.json": {
         "category": "TEST_ASSERTION_OR_FIXTURE",
         "total_occurrences": 4,
@@ -677,60 +468,64 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
             "e7fb8e0f9cc4a1f31fa175996130464936ac48cfa15e537df7bf168bd2099efd": {"occ": 1, "repeat": 1, "positions": [86]},
         }
     },
-    "tests/test_config_manager.py": {
-        "category": "TEST_ASSERTION_OR_FIXTURE",
-        "total_occurrences": 2,
-        "lines": {
-            "4a15b1180c1ef4c11499e9e3bb9aa1a13d5ff415f3b4dbebef357d47ff22630b": {"occ": 1, "repeat": 1, "positions": [237]},
-            "59500e0f25e6bedef284f712d4eb75f87f8a717384c83676232c973ccd08f65b": {"occ": 1, "repeat": 1, "positions": [379]},
-        }
-    },
     "tests/test_config_ui_bindings.py": {
         "category": "TEST_ASSERTION_OR_FIXTURE",
         "total_occurrences": 3,
         "lines": {
-            "11cff64dfc21ea938055ee440bfe879833411cfb4532a442abbfe2d28de35c98": {"occ": 1, "repeat": 1, "positions": [383]},
-            "3f0ccfbc11dd870c41837872ffcb39b7f74a5561f2ce790d5fb1c90b96d8e73f": {"occ": 1, "repeat": 1, "positions": [384]},
-            "dfe5a2f4a85c3bb34b21a40d550cbf69a39a4caa91eb3a422b0a98280537f6de": {"occ": 1, "repeat": 1, "positions": [379]},
+            "11cff64dfc21ea938055ee440bfe879833411cfb4532a442abbfe2d28de35c98": {"occ": 1, "repeat": 1, "positions": [384]},
+            "3f0ccfbc11dd870c41837872ffcb39b7f74a5561f2ce790d5fb1c90b96d8e73f": {"occ": 1, "repeat": 1, "positions": [385]},
+            "dfe5a2f4a85c3bb34b21a40d550cbf69a39a4caa91eb3a422b0a98280537f6de": {"occ": 1, "repeat": 1, "positions": [380]},
         }
     },
     "tests/test_installer_integration.py": {
         "category": "TEST_ASSERTION_OR_FIXTURE",
-        "total_occurrences": 5,
+        "total_occurrences": 17,
         "lines": {
-            "1eeea19856cd52ac7c55b07e5247923b8257618f165de475d41841caa5458254": {"occ": 1, "repeat": 1, "positions": [534]},
-            "35e289c92826b7fa9f7866d5a77834465452c87ec1a67544b25f7984fa56121f": {"occ": 1, "repeat": 1, "positions": [530]},
-            "4b753d791829cef7071471cb811b2d92bf362c49fda2d20a8b24f0ed33569062": {"occ": 1, "repeat": 1, "positions": [901]},
-            "a32314ac4378fd66ad57ed6b3d87df7fc384b6c6a7809e2c0f62b9d4d20ddb37": {"occ": 1, "repeat": 1, "positions": [888]},
-            "a5b487659d82472453e661f83a13fb2f2c38d89450617821109b6dacc411daf2": {"occ": 1, "repeat": 1, "positions": [900]},
+            "15cebb5712ae147356d3ef7bd7159d49851146f4ab5c96eaddaff23d2e6a3e8c": {"occ": 1, "repeat": 1, "positions": [552]},
+            "35e289c92826b7fa9f7866d5a77834465452c87ec1a67544b25f7984fa56121f": {"occ": 1, "repeat": 1, "positions": [502]},
+            "4b753d791829cef7071471cb811b2d92bf362c49fda2d20a8b24f0ed33569062": {"occ": 1, "repeat": 1, "positions": [857]},
+            "5b163b329be26068ee5d42b36040c56d4b7484b1f8ff437646ce391faf60a792": {"occ": 1, "repeat": 1, "positions": [2459]},
+            "683d0ce58c84bb7ecaab9a7752beeed670bebcce3d270de56a12d79a9d71bb90": {"occ": 1, "repeat": 1, "positions": [510]},
+            "6a20f9f88f7c9590fa6beea162c5ddb632c1954060b4f9bf579de58af5522ad8": {"occ": 1, "repeat": 1, "positions": [2454]},
+            "7b213c796a54995e6b8560891e8cd9179a0198700fd5f2bdd99289802364e7c8": {"occ": 1, "repeat": 1, "positions": [2037]},
+            "8e237545839598577cfeee55e1871ae32afd95e5026600835534d74084841897": {"occ": 1, "repeat": 1, "positions": [2455]},
+            "8f7e98b8a44136222715171783e63a7b05d9a393a961a0908ddd6c17b04b9174": {"occ": 1, "repeat": 1, "positions": [2038]},
+            "8fa6c5f82db54f32e4ac52129a633c3c8153ed3fd7268877dcec27b57f68ee3c": {"occ": 1, "repeat": 1, "positions": [2453]},
+            "93ccbbb289cb2fa31be78aea5b234715ab9b89a6b701a7be7907aa06dc5444c8": {"occ": 1, "repeat": 1, "positions": [512]},
+            "a32314ac4378fd66ad57ed6b3d87df7fc384b6c6a7809e2c0f62b9d4d20ddb37": {"occ": 1, "repeat": 1, "positions": [844]},
+            "a5b487659d82472453e661f83a13fb2f2c38d89450617821109b6dacc411daf2": {"occ": 1, "repeat": 1, "positions": [856]},
+            "ba3f022b9efb1f40eb4ce2fe83382a9a3fac0865dc0aa4c2a30ee009516a56b2": {"occ": 1, "repeat": 1, "positions": [503]},
+            "baba73c3f60a03dd8b6ab6bc99cb674328be6c0e031f78527dc2a7265b2047d6": {"occ": 1, "repeat": 1, "positions": [2047]},
+            "ea00afda041f172ac61bb7a41aa34c1e8d871f914240cda177c82c96b815bef4": {"occ": 1, "repeat": 1, "positions": [543]},
+            "f2e7000d05df0de939fc89452022363b2260389893fc98cf12baa4227a6147e1": {"occ": 1, "repeat": 1, "positions": [505]},
         }
     },
     "tests/test_package_manifest.py": {
         "category": "TEST_ASSERTION_OR_FIXTURE",
         "total_occurrences": 2,
         "lines": {
-            "b38f86bd2705a4f2b632cba36eff0756069d7bab65f651f4fe09018b03857dd7": {"occ": 1, "repeat": 1, "positions": [494]},
-            "ee1f7dcb880f79f2cec9353f4a0fe11d598da16329434e20c274acfe3a61862d": {"occ": 1, "repeat": 1, "positions": [482]},
+            "b38f86bd2705a4f2b632cba36eff0756069d7bab65f651f4fe09018b03857dd7": {"occ": 1, "repeat": 1, "positions": [544]},
+            "ee1f7dcb880f79f2cec9353f4a0fe11d598da16329434e20c274acfe3a61862d": {"occ": 1, "repeat": 1, "positions": [532]},
         }
     },
     "tests/test_shortcut_contract.py": {
         "category": "TEST_ASSERTION_OR_FIXTURE",
         "total_occurrences": 5,
         "lines": {
-            "446279d7865c2d49c02df98f724e61698f4a64912cfa69b0854f1c83e562092b": {"occ": 1, "repeat": 1, "positions": [29]},
-            "5e2ac1b2114621acd459b50fc8b61277a098d2cce81400df8749e69d21bb8f4a": {"occ": 2, "repeat": 1, "positions": [63]},
-            "e959a76b4646a0e2b3cb5d6cd929af784fc501f7271a948e9aff5e6a92f962ea": {"occ": 2, "repeat": 1, "positions": [64]},
+            "446279d7865c2d49c02df98f724e61698f4a64912cfa69b0854f1c83e562092b": {"occ": 1, "repeat": 1, "positions": [31]},
+            "5e2ac1b2114621acd459b50fc8b61277a098d2cce81400df8749e69d21bb8f4a": {"occ": 2, "repeat": 1, "positions": [65]},
+            "e959a76b4646a0e2b3cb5d6cd929af784fc501f7271a948e9aff5e6a92f962ea": {"occ": 2, "repeat": 1, "positions": [66]},
         }
     },
     "uninstall.sh": {
         "category": "UNINSTALLER_LEGACY_PURGE",
         "total_occurrences": 5,
         "lines": {
-            "8e0387c999f70597dcdb69290ef0aed40351d6cb194d8059ea5a89b3bc9ca066": {"occ": 1, "repeat": 1, "positions": [94]},
-            "ace0320b95684ad13f436e8f0f76a9e06b137575984318612e9bde3f8c16fe8c": {"occ": 1, "repeat": 1, "positions": [93]},
-            "c3af88f6516e3880592b703d6d1ce169908026bfa51668f752db521666bdc84b": {"occ": 1, "repeat": 1, "positions": [92]},
-            "e0dd846fc4300b597c9be647b033c7aef7c18319a72c5d168e78d50093a41ba5": {"occ": 1, "repeat": 1, "positions": [90]},
-            "ec6548777e9e0bc90cdec30eaf0f79b85e30e667aea20651abe68aec08f4f663": {"occ": 1, "repeat": 1, "positions": [91]},
+            "8e0387c999f70597dcdb69290ef0aed40351d6cb194d8059ea5a89b3bc9ca066": {"occ": 1, "repeat": 1, "positions": [104]},
+            "ace0320b95684ad13f436e8f0f76a9e06b137575984318612e9bde3f8c16fe8c": {"occ": 1, "repeat": 1, "positions": [103]},
+            "c3af88f6516e3880592b703d6d1ce169908026bfa51668f752db521666bdc84b": {"occ": 1, "repeat": 1, "positions": [102]},
+            "e0dd846fc4300b597c9be647b033c7aef7c18319a72c5d168e78d50093a41ba5": {"occ": 1, "repeat": 1, "positions": [100]},
+            "ec6548777e9e0bc90cdec30eaf0f79b85e30e667aea20651abe68aec08f4f663": {"occ": 1, "repeat": 1, "positions": [101]},
         }
     },
 }
@@ -872,10 +667,6 @@ class TestDocumentationTruth(unittest.TestCase):
         self.assertNotIn("NVIDIA", meta_desc)
         self.assertNotIn("nvidia", meta_desc.lower())
 
-        desktop_content = self._read_file("desktop/org.kde.tessera.desktop")
-        self.assertNotIn("nvidia", desktop_content.lower())
-        self.assertNotIn("NVIDIA", desktop_content)
-
         package_content = self._read_file("package.sh")
         self.assertNotIn("Ready for upload to https://store.kde.org", package_content)
         self.assertIn("Publication/upload remains a separate maintainer decision", package_content)
@@ -894,16 +685,24 @@ class TestDocumentationTruth(unittest.TestCase):
 
     def test_historical_audit_and_drift_snapshots_reference_current_authority(self):
         """
-        Asserts historical snapshot documents contain prominent notices and point
-        current authority to PHASE_5D_SECOND_PASS_AUDIT.md.
+        Asserts historical snapshot documents contain prominent notices, point
+        operational authority exclusively to current sources (PUBLIC_RELEASE_CHECKLIST.md,
+        RUNTIME_ARCHITECTURE.md, canonical config/schema), and retain past audit reports
+        only as historical references.
         """
         pre_pub = self._read_file("docs/PRE_PUBLICATION_AUDIT.md")
         self.assertIn("Historical Audit Snapshot", pre_pub)
-        self.assertIn("PHASE_5D_SECOND_PASS_AUDIT.md", pre_pub)
+        self.assertIn("PUBLIC_RELEASE_CHECKLIST.md", pre_pub)
+        self.assertIn("RUNTIME_ARCHITECTURE.md", pre_pub)
+        self.assertIn("historical reference only", pre_pub)
 
         drift = self._read_file("docs/BASELINE_SETTINGS_DRIFT_MATRIX.md")
         self.assertIn("Historical Baseline Snapshot", drift)
-        self.assertIn("PHASE_5D_SECOND_PASS_AUDIT.md", drift)
+        self.assertIn("PUBLIC_RELEASE_CHECKLIST.md", drift)
+        self.assertIn("RUNTIME_ARCHITECTURE.md", drift)
+        self.assertIn("canonical-config.json", drift)
+        self.assertIn("contents/config/main.xml", drift)
+        self.assertIn("historical reference only", drift)
 
     def test_active_user_facing_surfaces_contain_no_primary_predecessor_terminology(self):
         """
@@ -923,7 +722,7 @@ class TestDocumentationTruth(unittest.TestCase):
 
         # 2a. Active shortcuts
         sc_blocks = re.findall(r"ShortcutHandler\s*\{([^}]+)\}", qml)
-        self.assertEqual(len(sc_blocks), 23, "Expected exactly 23 ShortcutHandler blocks in main.qml")
+        self.assertEqual(len(sc_blocks), 22, "Expected exactly 22 ShortcutHandler blocks in main.qml")
         for sc in sc_blocks:
             self.assertIsNone(
                 TARGET_RE.search(sc),
@@ -932,7 +731,7 @@ class TestDocumentationTruth(unittest.TestCase):
 
         # 2b. Visual snap overlay zones: title, badge, desc
         zone_blocks = re.findall(r"zones\.push\(\s*\{([\s\S]*?)\}\s*\);", qml)
-        self.assertEqual(len(zone_blocks), 7, "Expected exactly 7 overlay zone definitions in main.qml")
+        self.assertEqual(len(zone_blocks), 12, "Expected exactly 12 overlay zone definitions in main.qml")
         for z in zone_blocks:
             title_m = re.search(r'title:\s*"([^"]+)"', z)
             badge_m = re.search(r'badge:\s*"([^"]+)"', z)
@@ -965,14 +764,7 @@ class TestDocumentationTruth(unittest.TestCase):
             "metadata.json must not contain target terminology"
         )
 
-        # 4. desktop/org.kde.tessera.desktop
-        desktop_content = self._read_file("desktop/org.kde.tessera.desktop")
-        self.assertIsNone(
-            TARGET_RE.search(desktop_content),
-            "desktop file must not contain target terminology"
-        )
-
-        # 5. contents/ui/config.ui visible string tags
+        # 4. contents/ui/config.ui visible string tags
         config_ui = self._read_file("contents/ui/config.ui")
         string_matches = re.findall(r"<string>([^<]+)</string>", config_ui)
         self.assertGreater(len(string_matches), 5, "Expected string elements in config.ui")
@@ -982,13 +774,7 @@ class TestDocumentationTruth(unittest.TestCase):
                 f"Visible string in config.ui must not contain target terminology: {text}"
             )
 
-        # 6. tessera-control/tessera_settings.py card descriptions
-        settings_code = self._read_file("tessera-control/tessera_settings.py")
-        self.assertNotIn(f"dominant {TARGET_TOKEN}", settings_code.lower())
-        self.assertNotIn(f"{TARGET_TOKEN} count", settings_code.lower())
-        self.assertNotIn(f"{TARGET_TOKEN} ratio", settings_code.lower())
-
-        # 7. package.sh user-facing echo output
+        # 5. package.sh user-facing echo output
         package_content = self._read_file("package.sh")
         for line in package_content.splitlines():
             if line.strip().startswith("echo"):
@@ -1070,14 +856,14 @@ class TestDocumentationTruth(unittest.TestCase):
                 total_hits += file_hits
                 scanned_files_with_hits.add(relpath)
 
-        # 1. Assert exact current totals: exactly 189 occurrences across 93 files
+        # 1. Assert exact current totals: exactly 169 occurrences across 87 files
         self.assertEqual(
-            total_hits, 189,
-            f"Expected exactly 189 target occurrences across candidate files, found {total_hits}"
+            total_hits, 150,
+            f"Expected exactly 150 target occurrences across candidate files, found {total_hits}"
         )
         self.assertEqual(
-            len(scanned_files_with_hits), 93,
-            f"Expected exactly 93 files with target occurrences, found {len(scanned_files_with_hits)}"
+            len(scanned_files_with_hits), 64,
+            f"Expected exactly 64 files with target occurrences, found {len(scanned_files_with_hits)}"
         )
 
         # 2. Reconcile missing or extra files in registry
@@ -1107,7 +893,7 @@ class TestDocumentationTruth(unittest.TestCase):
         self.assertTrue(any("unallowed file" in v for v in violations_a))
 
         # Probe (b): allowed historical path with substituted user-facing line (count held constant)
-        target_path = "docs/RUNTIME_ARCHITECTURE.md"
+        target_path = "docs/BASELINE_SETTINGS_DRIFT_MATRIX.md"
         real_lines = self._read_file(target_path).splitlines()
 
         mutated_lines_b = []
@@ -1130,10 +916,10 @@ class TestDocumentationTruth(unittest.TestCase):
 
         # Probe (c): allowed historical path with moved line position (count and bytes held constant)
         mutated_lines_c = list(real_lines)
-        line_298 = mutated_lines_c[297]  # 0-indexed 297 is line 298
-        # Swap line 1 (index 0) with line 298 (index 297)
-        mutated_lines_c[297] = mutated_lines_c[0]
-        mutated_lines_c[0] = line_298
+        line_15 = mutated_lines_c[14]  # 0-indexed 14 is line 15 (which has a hit in BASELINE_SETTINGS_DRIFT_MATRIX.md)
+        # Swap line 1 (index 0) with line 15 (index 14)
+        mutated_lines_c[14] = mutated_lines_c[0]
+        mutated_lines_c[0] = line_15
         violations_c = classify_candidate_file_hits(target_path, mutated_lines_c, STATIC_PER_OCCURRENCE_REGISTRY)
         self.assertTrue(len(violations_c) > 0, "Probe (c) failed: expected moved line to be rejected by position check")
         self.assertTrue(

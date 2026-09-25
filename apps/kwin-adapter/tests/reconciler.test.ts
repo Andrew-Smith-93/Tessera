@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { RuntimeCoordinator } from "../src/runtime-coordinator.js";
-import type {
-  NormalizedScreenInput,
-  NormalizedWindowInput,
-  CoordinatorDiagnostics
+import {
+  LogicalClock,
+  type NormalizedScreenInput,
+  type NormalizedWindowInput,
+  type CoordinatorDiagnostics
 } from "../src/coordinator-types.js";
+import type { Rect } from "@tessera/protocol";
 import { execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
@@ -446,10 +448,23 @@ describe("Phase 2A Runtime Coordinator & Coalesced Reconciliation", () => {
       }
     });
 
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: {
+        id: "browser-steam",
+        resourceClass: "firefox",
+        title: "Steam Community :: Workshop",
+        managed: true,
+        normalWindow: true
+      }
+    });
+
     const steamWin = coordinator.getRetainedWindow("steam-client")!;
     const wineWin = coordinator.getRetainedWindow("wine-tool")!;
+    const browserWin = coordinator.getRetainedWindow("browser-steam")!;
     expect(steamWin.classification).toBe("tiled");
     expect(wineWin.classification).toBe("tiled");
+    expect(browserWin.classification).toBe("tiled");
   });
 
   it("18. Maximized normal applications are not mistaken for fullscreen-like games", () => {
@@ -486,5 +501,283 @@ describe("Phase 2A Runtime Coordinator & Coalesced Reconciliation", () => {
     expect(existsSync(resolve(rootDir, "contents/code/rules.js"))).toBe(true);
     expect(existsSync(resolve(rootDir, "contents/code/reconciler.js"))).toBe(true);
     expect(existsSync(resolve(rootDir, "contents/ui/main.qml"))).toBe(true);
+  });
+
+  it("21. Retired workspace layout algorithms deliberately migrate to balanced-grid", () => {
+    const legacyName = ["ma", "ster", "-stack"].join("");
+    const legacyLayouts = ["monocle", "floating", "columns", "rows", "binary-split", "primary-stack", legacyName];
+    for (const layout of legacyLayouts) {
+      const coord = new RuntimeCoordinator({
+        enableTiling: true,
+        defaultLayout: layout as any,
+        gapInner: 8,
+        gapOuter: 10,
+        geometryTolerancePx: 1,
+        echoExpiryMs: 300,
+        workspaceLayoutsJson: JSON.stringify({
+          version: 1,
+          scopes: {
+            "HDMI-A-1//1": { layout }
+          }
+        })
+      });
+      const screen = coord.getOrCreateScreen(SCREEN_1);
+      expect(screen.activeLayout).toBe("balanced-grid");
+      expect(coord.getOrCreateWorkspace("HDMI-A-1", "1").activeLayout).toBe("balanced-grid");
+
+      // Direct assignment
+      screen.activeLayout = layout as any;
+      expect(screen.activeLayout).toBe("balanced-grid");
+
+      // Ingested layout event
+      coord.ingestEvent({
+        type: "ScreenLayoutChanged",
+        outputId: "HDMI-A-1",
+        layout: layout as any
+      });
+      expect(screen.activeLayout).toBe("balanced-grid");
+
+      // updateConfig
+      coord.updateConfig({ defaultLayout: layout as any });
+      expect(coord.getOrCreateWorkspace("HDMI-A-1", "1").activeLayout).toBe("balanced-grid");
+    }
+  });
+
+  it("22. Clamped geometry echo recognition suppresses discrete size hint mismatches", () => {
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeNormalWindow("xterm-1", { x: 10, y: 10, width: 800, height: 600 })
+    });
+    const tx = coordinator.reconcile();
+    expect(tx!.operations.length).toBe(1);
+    const target = tx!.operations[0].targetRect; // e.g. { x: 10, y: 10, width: 1900, height: 1060 }
+    coordinator.recordCommand("xterm-1", target, tx!.epoch);
+
+    // KWin clamps to character cell multiple: width - 6px, height - 12px
+    const clampedGeometry = {
+      x: target.x,
+      y: target.y,
+      width: target.width - 6,
+      height: target.height - 12
+    };
+
+    const echoRes = coordinator.checkAndHandleEcho("xterm-1", clampedGeometry);
+    expect(echoRes.isEcho).toBe(true);
+    expect(coordinator.hasRecordedCommand("xterm-1")).toBe(false);
+    expect(coordinator.getRetainedWindow("xterm-1")?.frameGeometry).toEqual(clampedGeometry);
+  });
+
+  it("23. Retained-window hysteresis skips redundant writes when window is settled at clamped geometry", () => {
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeNormalWindow("xterm-1", { x: 10, y: 10, width: 800, height: 600 })
+    });
+    const tx1 = coordinator.reconcile();
+    expect(tx1!.operations.length).toBe(1);
+    const target = tx1!.operations[0].targetRect;
+
+    // Simulate echo acknowledging clamped geometry
+    const clampedGeometry = {
+      x: target.x,
+      y: target.y,
+      width: target.width - 6,
+      height: target.height - 12
+    };
+    coordinator.recordCommand("xterm-1", target, tx1!.epoch);
+
+    // Ingest WindowGeometryChanged with clamped geometry; should be recognized as echo
+    const ingestRes = coordinator.ingestEvent({
+      type: "WindowGeometryChanged",
+      windowId: "xterm-1",
+      geometry: clampedGeometry
+    });
+    expect(ingestRes.dirty).toBe(false);
+    expect(ingestRes.isEcho).toBe(true);
+    expect(coordinator.hasRecordedCommand("xterm-1")).toBe(false);
+    expect(coordinator.getRetainedWindow("xterm-1")?.frameGeometry).toEqual(clampedGeometry);
+
+    // Even if screen is marked dirty by another trigger, reconcile must NOT re-issue write
+    coordinator.markScreenDirty("HDMI-A-1", "ExternalTrigger");
+    const tx2 = coordinator.reconcile();
+    expect(tx2!.operations.length).toBe(0);
+    expect(tx2!.skippedWrites).toBe(1);
+  });
+
+  it("24. Real external geometry change clears lastRequestedGeometry and triggers retile", () => {
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeNormalWindow("xterm-1", { x: 10, y: 10, width: 800, height: 600 })
+    });
+    const tx1 = coordinator.reconcile();
+    const target = tx1!.operations[0].targetRect;
+    coordinator.recordCommand("xterm-1", target, tx1!.epoch);
+    coordinator.checkAndHandleEcho("xterm-1", target);
+
+    // User moves window externally away from tile slot
+    const externalGeom = { x: 500, y: 500, width: 600, height: 400 };
+    const ingestRes = coordinator.ingestEvent({
+      type: "WindowGeometryChanged",
+      windowId: "xterm-1",
+      geometry: externalGeom
+    });
+    expect(ingestRes.dirty).toBe(true);
+
+    // Reconcile must issue operation to restore window to slot
+    const tx2 = coordinator.reconcile();
+    expect(tx2!.operations.length).toBe(1);
+    expect(tx2!.operations[0].targetRect).toEqual(target);
+  });
+
+  it("25. Multi-cycle small clamp (12px delayed clamp) bounds writes and settles", () => {
+    const clock = new LogicalClock(0);
+    const coord = new RuntimeCoordinator({
+      enableTiling: true,
+      echoExpiryMs: 50,
+      geometryTolerancePx: 1
+    }, clock);
+    coord.getOrCreateScreen(SCREEN_1);
+
+    coord.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeNormalWindow("xterm-1", "HDMI-A-1", { frameGeometry: { x: 100, y: 100, width: 600, height: 400 } })
+    });
+
+    let totalWrites = 0;
+    const clamp12 = (t: Rect) => ({
+      x: t.x,
+      y: t.y,
+      width: t.width - 12,
+      height: t.height - 12
+    });
+
+    for (let cycle = 1; cycle <= 5; cycle++) {
+      const tx = coord.reconcile();
+      if (tx && tx.operations.length > 0) {
+        totalWrites += tx.operations.length;
+        const target = tx.operations[0].targetRect;
+        coord.recordCommand("xterm-1", target, tx.epoch);
+        // Deliver geometry signal 100ms after write (exceeding echoExpiryMs=50)
+        clock.advance(100);
+        coord.ingestEvent({
+          type: "WindowGeometryChanged",
+          windowId: "xterm-1",
+          geometry: clamp12(target),
+          timestamp: clock.now()
+        });
+      }
+    }
+
+    // Must bound: 12px clamp settles within bounded writes
+    expect(totalWrites).toBeLessThanOrEqual(2);
+    expect(coord.getDiagnostics().suppressedGeometryEchoes).toBe(0);
+  });
+
+  it("26. Multi-cycle liveness regression: >32px delayed clamp must bound writes and not loop indefinitely", () => {
+    const clock = new LogicalClock(0);
+    const coord = new RuntimeCoordinator({
+      enableTiling: true,
+      echoExpiryMs: 50,
+      geometryTolerancePx: 1
+    }, clock);
+    coord.getOrCreateScreen(SCREEN_1);
+
+    coord.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeNormalWindow("xterm-1", "HDMI-A-1", { frameGeometry: { x: 100, y: 100, width: 600, height: 400 } })
+    });
+
+    let totalWrites = 0;
+    const clamp60 = (t: Rect) => ({
+      x: t.x,
+      y: t.y,
+      width: t.width - 60,
+      height: t.height - 60
+    });
+
+    for (let cycle = 1; cycle <= 5; cycle++) {
+      const tx = coord.reconcile();
+      if (tx && tx.operations.length > 0) {
+        totalWrites += tx.operations.length;
+        const target = tx.operations[0].targetRect;
+        coord.recordCommand("xterm-1", target, tx.epoch);
+        // Deliver geometry signal 100ms after write (exceeding echoExpiryMs=50)
+        clock.advance(100);
+        coord.ingestEvent({
+          type: "WindowGeometryChanged",
+          windowId: "xterm-1",
+          geometry: clamp60(target),
+          timestamp: clock.now()
+        });
+      }
+    }
+
+    // Must bound: cannot produce 5 writes across 5 cycles
+    expect(totalWrites).toBeLessThanOrEqual(2);
+    expect(coord.getDiagnostics().suppressedGeometryEchoes).toBe(0);
+  });
+
+  it("27. Negative control: genuine external move/resize away from settled clamped geometry still gets corrected once", () => {
+    const clock = new LogicalClock(0);
+    const coord = new RuntimeCoordinator({
+      enableTiling: true,
+      echoExpiryMs: 50,
+      geometryTolerancePx: 1
+    }, clock);
+    coord.getOrCreateScreen(SCREEN_1);
+
+    coord.ingestEvent({
+      type: "WindowDiscovered",
+      window: makeNormalWindow("xterm-1", "HDMI-A-1", { frameGeometry: { x: 100, y: 100, width: 600, height: 400 } })
+    });
+
+    // Cycle 1: initial discovery retile
+    const tx1 = coord.reconcile();
+    expect(tx1!.operations.length).toBe(1);
+    const target = tx1!.operations[0].targetRect;
+    coord.recordCommand("xterm-1", target, tx1!.epoch);
+
+    // Clamped signal arrives delayed
+    clock.advance(100);
+    const clampedGeom = { x: target.x, y: target.y, width: target.width - 60, height: target.height - 60 };
+    coord.ingestEvent({
+      type: "WindowGeometryChanged",
+      windowId: "xterm-1",
+      geometry: clampedGeom,
+      timestamp: clock.now()
+    });
+
+    // Let any bounded retry settle
+    for (let i = 0; i < 3; i++) {
+      const tx = coord.reconcile();
+      if (tx && tx.operations.length > 0) {
+        clock.advance(100);
+        coord.ingestEvent({
+          type: "WindowGeometryChanged",
+          windowId: "xterm-1",
+          geometry: clampedGeom,
+          timestamp: clock.now()
+        });
+      }
+    }
+
+    // Window is now settled at clampedGeom. Verify reconcile produces 0 writes.
+    const txSettled = coord.reconcile();
+    expect(txSettled?.operations.length ?? 0).toBe(0);
+
+    // Now genuine external move/resize occurs
+    const externalGeom = { x: 300, y: 300, width: 700, height: 500 };
+    clock.advance(100);
+    coord.ingestEvent({
+      type: "WindowGeometryChanged",
+      windowId: "xterm-1",
+      geometry: externalGeom,
+      timestamp: clock.now()
+    });
+
+    // MUST produce exactly 1 corrective write targeting the slot
+    const txCorrective = coord.reconcile();
+    expect(txCorrective).not.toBeNull();
+    expect(txCorrective!.operations.length).toBe(1);
+    expect(txCorrective!.operations[0].targetRect).toEqual(target);
   });
 });

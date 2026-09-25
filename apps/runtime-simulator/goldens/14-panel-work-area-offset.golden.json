@@ -1,5 +1,5 @@
 {
-  "digest": "1b3b30bac5af0ff5bdf9e9d541e790e0aee2ff78f71243b27f078d2494e6720f",
+  "digest": "07651ee2a0acca004a9da42ad1659ca18c2f498d4a2c253689e9a10aa405a77a",
   "fixtureName": "14-panel-work-area-offset",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

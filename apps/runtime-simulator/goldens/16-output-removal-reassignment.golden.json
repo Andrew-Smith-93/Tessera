@@ -1,14 +1,14 @@
 {
-  "digest": "2823e4465a19792b71d9856f1537b098e6679bd0d34949d3f6be024b4d35ad9e",
+  "digest": "892b99b589299afa51cb1ebc8d4c619e534bdb8ff2de6779ee694c25cb434f15",
   "fixtureName": "16-output-removal-reassignment",
   "finalTick": 0,
   "diagnostics": {
     "totalEvents": 7,
     "totalTransactions": 2,
     "totalLayoutComputations": 3,
-    "totalGeometryWrites": 7,
-    "skippedWrites": 1,
-    "suppressedEchoes": 7,
+    "totalGeometryWrites": 8,
+    "skippedWrites": 0,
+    "suppressedEchoes": 8,
     "previewOnlyOperations": 0,
     "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
@@ -17,10 +17,10 @@
     "diagnostics": {
       "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
-      "skippedWrites": 1,
-      "suppressedEchoes": 7,
+      "skippedWrites": 0,
+      "suppressedEchoes": 8,
       "totalEvents": 7,
-      "totalGeometryWrites": 7,
+      "totalGeometryWrites": 8,
       "totalLayoutComputations": 3,
       "totalTransactions": 2,
       "unaffectedScreensRecomputed": 0
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -72,13 +72,13 @@
       {
         "classification": "tiled",
         "desiredGeometry": {
-          "height": 1060,
+          "height": 526,
           "width": 946,
           "x": 10,
           "y": 10
         },
         "frameGeometry": {
-          "height": 1060,
+          "height": 526,
           "width": 946,
           "x": 10,
           "y": 10
@@ -98,13 +98,13 @@
       {
         "classification": "tiled",
         "desiredGeometry": {
-          "height": 346,
+          "height": 526,
           "width": 946,
           "x": 964,
           "y": 10
         },
         "frameGeometry": {
-          "height": 346,
+          "height": 526,
           "width": 946,
           "x": 964,
           "y": 10
@@ -124,16 +124,16 @@
       {
         "classification": "tiled",
         "desiredGeometry": {
-          "height": 352,
+          "height": 526,
           "width": 946,
-          "x": 964,
-          "y": 364
+          "x": 10,
+          "y": 544
         },
         "frameGeometry": {
-          "height": 352,
+          "height": 526,
           "width": 946,
-          "x": 964,
-          "y": 364
+          "x": 10,
+          "y": 544
         },
         "fullScreen": false,
         "id": "win-3",
@@ -150,16 +150,16 @@
       {
         "classification": "tiled",
         "desiredGeometry": {
-          "height": 346,
+          "height": 526,
           "width": 946,
           "x": 964,
-          "y": 724
+          "y": 544
         },
         "frameGeometry": {
-          "height": 346,
+          "height": 526,
           "width": 946,
           "x": 964,
-          "y": 724
+          "y": 544
         },
         "fullScreen": false,
         "id": "win-4",
@@ -260,11 +260,26 @@
             "previousRect": {
               "height": 1060,
               "width": 946,
+              "x": 10,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 526,
+              "width": 946,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-1"
+          },
+          {
+            "previousRect": {
+              "height": 1060,
+              "width": 946,
               "x": 964,
               "y": 10
             },
             "targetRect": {
-              "height": 346,
+              "height": 526,
               "width": 946,
               "x": 964,
               "y": 10
@@ -279,10 +294,10 @@
               "y": 10
             },
             "targetRect": {
-              "height": 352,
+              "height": 526,
               "width": 946,
-              "x": 964,
-              "y": 364
+              "x": 10,
+              "y": 544
             },
             "windowId": "win-3"
           },
@@ -294,10 +309,10 @@
               "y": 10
             },
             "targetRect": {
-              "height": 346,
+              "height": 526,
               "width": 946,
               "x": 964,
-              "y": 724
+              "y": 544
             },
             "windowId": "win-4"
           }
@@ -305,7 +320,7 @@
         "reasons": [
           "ScreenTopologyChanged"
         ],
-        "skippedWrites": 1,
+        "skippedWrites": 0,
         "tick": 0
       }
     ]

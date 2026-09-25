@@ -1,5 +1,5 @@
 {
-  "digest": "2171f6646dcd7ec07b411eb5bd7e41e619f30736e1e62bc9de685180e13a937b",
+  "digest": "4b9c01266918e20e63a3c22a1fa87fcf4410c1d2676cd0c4e4dea876abae58b2",
   "fixtureName": "24-config-revision-invalidation",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -62,7 +62,7 @@
         }
       },
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

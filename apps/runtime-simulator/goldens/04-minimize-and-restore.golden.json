@@ -1,14 +1,14 @@
 {
-  "digest": "b63a8d96bd4b154576fac379edaf8a77995bd3614e7b81b72501d1e98c0731ff",
+  "digest": "c64a62aec80e28e16da9ef816e73d436068e6847f08124de207a5ade76320d1e",
   "fixtureName": "04-minimize-and-restore",
   "finalTick": 0,
   "diagnostics": {
     "totalEvents": 8,
     "totalTransactions": 3,
     "totalLayoutComputations": 3,
-    "totalGeometryWrites": 5,
-    "skippedWrites": 3,
-    "suppressedEchoes": 5,
+    "totalGeometryWrites": 7,
+    "skippedWrites": 1,
+    "suppressedEchoes": 7,
     "previewOnlyOperations": 0,
     "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
@@ -17,10 +17,10 @@
     "diagnostics": {
       "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
-      "skippedWrites": 3,
-      "suppressedEchoes": 5,
+      "skippedWrites": 1,
+      "suppressedEchoes": 7,
       "totalEvents": 8,
-      "totalGeometryWrites": 5,
+      "totalGeometryWrites": 7,
       "totalLayoutComputations": 3,
       "totalTransactions": 3,
       "unaffectedScreensRecomputed": 0
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -71,13 +71,13 @@
         "classification": "tiled",
         "desiredGeometry": {
           "height": 1060,
-          "width": 946,
+          "width": 626,
           "x": 10,
           "y": 10
         },
         "frameGeometry": {
           "height": 1060,
-          "width": 946,
+          "width": 626,
           "x": 10,
           "y": 10
         },
@@ -96,15 +96,15 @@
       {
         "classification": "tiled",
         "desiredGeometry": {
-          "height": 526,
-          "width": 946,
-          "x": 964,
+          "height": 1060,
+          "width": 632,
+          "x": 644,
           "y": 10
         },
         "frameGeometry": {
-          "height": 526,
-          "width": 946,
-          "x": 964,
+          "height": 1060,
+          "width": 632,
+          "x": 644,
           "y": 10
         },
         "fullScreen": false,
@@ -116,9 +116,9 @@
         "outputAffinity": "HDMI-A-1",
         "outputId": "HDMI-A-1",
         "preMinimizeGeometry": {
-          "height": 526,
-          "width": 946,
-          "x": 964,
+          "height": 1060,
+          "width": 632,
+          "x": 644,
           "y": 10
         },
         "resourceClass": "kitty",
@@ -127,16 +127,16 @@
       {
         "classification": "tiled",
         "desiredGeometry": {
-          "height": 526,
-          "width": 946,
-          "x": 964,
-          "y": 544
+          "height": 1060,
+          "width": 626,
+          "x": 1284,
+          "y": 10
         },
         "frameGeometry": {
-          "height": 526,
-          "width": 946,
-          "x": 964,
-          "y": 544
+          "height": 1060,
+          "width": 626,
+          "x": 1284,
+          "y": 10
         },
         "fullScreen": false,
         "id": "win-3",
@@ -168,7 +168,7 @@
             },
             "targetRect": {
               "height": 1060,
-              "width": 946,
+              "width": 626,
               "x": 10,
               "y": 10
             },
@@ -182,9 +182,9 @@
               "y": 100
             },
             "targetRect": {
-              "height": 526,
-              "width": 946,
-              "x": 964,
+              "height": 1060,
+              "width": 632,
+              "x": 644,
               "y": 10
             },
             "windowId": "win-2"
@@ -197,10 +197,10 @@
               "y": 100
             },
             "targetRect": {
-              "height": 526,
-              "width": 946,
-              "x": 964,
-              "y": 544
+              "height": 1060,
+              "width": 626,
+              "x": 1284,
+              "y": 10
             },
             "windowId": "win-3"
           }
@@ -219,10 +219,25 @@
         "operations": [
           {
             "previousRect": {
-              "height": 526,
+              "height": 1060,
+              "width": 626,
+              "x": 10,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 1060,
               "width": 946,
-              "x": 964,
-              "y": 544
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-1"
+          },
+          {
+            "previousRect": {
+              "height": 1060,
+              "width": 626,
+              "x": 1284,
+              "y": 10
             },
             "targetRect": {
               "height": 1060,
@@ -236,7 +251,7 @@
         "reasons": [
           "WindowStateChanged"
         ],
-        "skippedWrites": 1,
+        "skippedWrites": 0,
         "tick": 0
       },
       {
@@ -249,14 +264,29 @@
             "previousRect": {
               "height": 1060,
               "width": 946,
+              "x": 10,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 1060,
+              "width": 626,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-1"
+          },
+          {
+            "previousRect": {
+              "height": 1060,
+              "width": 946,
               "x": 964,
               "y": 10
             },
             "targetRect": {
-              "height": 526,
-              "width": 946,
-              "x": 964,
-              "y": 544
+              "height": 1060,
+              "width": 626,
+              "x": 1284,
+              "y": 10
             },
             "windowId": "win-3"
           }
@@ -264,7 +294,7 @@
         "reasons": [
           "WindowStateChanged"
         ],
-        "skippedWrites": 2,
+        "skippedWrites": 1,
         "tick": 0
       }
     ]

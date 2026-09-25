@@ -1,7 +1,7 @@
 # Tessera Pre-Publication Safety, Privacy, Code-Quality, and Integrity Audit
 
 > [!NOTE]
-> **Historical Audit Snapshot**: This document records the pre-publication audit conducted during Phase 5C. It is a historical record of that checkpoint, not proof of current product state. Current authoritative architecture, audit findings, and verification gates are tracked in [PHASE_5D_SECOND_PASS_AUDIT.md](PHASE_5D_SECOND_PASS_AUDIT.md).
+> **Historical Audit Snapshot**: This document records the pre-publication audit conducted during Phase 5C. It is a historical record of that checkpoint, not proof of current product state. Current authoritative architecture, audit findings, and verification gates are tracked in [PUBLIC_RELEASE_CHECKLIST.md](PUBLIC_RELEASE_CHECKLIST.md) and [RUNTIME_ARCHITECTURE.md](RUNTIME_ARCHITECTURE.md) (earlier development audits such as [PHASE_5D_SECOND_PASS_AUDIT.md](PHASE_5D_SECOND_PASS_AUDIT.md) are retained for historical reference only).
 
 ## 1. Audit Scope & Executive Summary
 
@@ -44,8 +44,8 @@ This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/tiling-window
 | **SEC-01** | Packaging | **MEDIUM** | Non-deterministic packaging: timestamps and directory entry ordering varied between builds. | **RESOLVED** | Implemented deterministic ordering and fixed timestamp in `package.sh`. SHA-256 is now invariant. |
 | **SEC-02** | Desktop File | **LOW** | Hardcoded local user path `/home/<user>/.local/bin/tessera-settings` in `Exec` field of `desktop/org.kde.tessera.desktop`. | **RESOLVED** | Replaced with standard PATH binary lookup: `Exec=tessera-settings %u`. |
 | **SEC-03** | Documentation | **INFORMATIONAL** | Local paths `/home/<user>/.local/...` recorded in manual recovery instructions in `docs/LIVE_KWIN_X11_ACCEPTANCE.md`. | **RESOLVED** | Normalized to user-relative `~/.local/...` paths. |
-| **SEC-04** | Dependencies | **LOW** | 2 moderate vulnerabilities in dev-dependency `@vitest/mocker` (Vitest: Path Traversal in mocker redirect mock). | **DEFERRED** | Dev tooling only; does not affect packaged KWin runtime. Deferred wholesale upgrade to prevent destabilization. |
-| **SEC-05** | Identity / Contact | **INFORMATIONAL** | Mixed author email and maintainer fields across `metadata.json` and `PKGBUILD`. | **DECISION FOR OMEGA** | Documented for Omega's explicit selection of public-facing identity. |
+| **SEC-04** | Dependencies | **LOW** | Vulnerabilities in dev-dependency `@vitest/mocker` (Vitest: Path Traversal in mocker redirect mock). | **HISTORICALLY RESOLVED / FRESH AUDIT PENDING APPROVAL** | Vitest and `@vitest/mocker` 5.0.1 upgraded in tree. Fresh online dependency audit (`npm audit`) is pending explicit user approval due to `registry.npmjs.org` metadata transmission restrictions; past CI run reporting 0 vulnerabilities remains dated historical evidence, not a newly authorized audit. |
+| **SEC-05** | Identity / Contact | **INFORMATIONAL** | Maintainer display name and author metadata across `metadata.json` and `PKGBUILD`. | **CURRENT TREE RESOLVED / HISTORY PENDING** | Current tree sanitized: placeholder email removed from `metadata.json` and maintainer identity standardized. Remote branches and historical commit author exposure are tracked as a hard pre-public gate in `docs/PUBLIC_RELEASE_CHECKLIST.md`. |
 | **SEC-06** | Licensing | **INFORMATIONAL** | License confirmation: `metadata.json` and AUR `PKGBUILD` specify `GPL-3.0+` (standalone Rust daemon retired prior to release). | **RESOLVED** | Repository standardizes on GPL-3.0+; retired daemon MIT license divergence is eliminated. |
 | **SEC-07** | Workflows | **LOW** | CI workflow lacked `audit/*` branch trigger and `workflow_dispatch`. Third-party actions reference tags rather than commit SHAs. | **RESOLVED / DEFERRED** | Added `audit/*` branch trigger and `workflow_dispatch` to `.github/workflows/ci.yml`. Pinning actions to full commit SHAs is deferred to P1. |
 
@@ -68,13 +68,12 @@ This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/tiling-window
 - **Reachable Commits**: All reachable commits across all branches were examined.
 - **Secret Scanning across Diffs**: `git log -p --all` revealed zero API keys, private keys, database connection strings, or cloud tokens.
 - **Author Identity Exposure**:
-  - Commits consistently identify author/committer as:
-    `Andrew Smith <137859776+Andrew-Smith-93@users.noreply.github.com>`
+  - Commits in historical repository history identify the author/committer with a personal domain email address rather than a GitHub noreply address.
   - No personal physical addresses, personal telephone numbers, or financial identifiers exist in Git history.
 - **Blob Sizes & History Integrity**:
   - Largest tracked blobs in history are `contents/ui/main.qml` (~88 KB) and `package-lock.json` (~68 KB).
   - No database dumps, crash logs, core dumps, binary build artifacts, or node_modules trees were ever committed.
-- **Conclusion**: **No Git history rewriting is required or recommended.** Rewriting history would break developer refs and provide no privacy benefit given the absence of actual secrets.
+- **Maintainer Decision on History**: Deciding whether to perform a historical commit-author rewrite prior to public release or retain commit provenance remains an explicit maintainer decision (documented in `docs/PUBLIC_RELEASE_CHECKLIST.md`).
 
 ---
 
@@ -202,19 +201,20 @@ Before transitioning this repository to public visibility, Omega must decide and
 - **Current State**:
   - Repository root `LICENSE`: GNU General Public License v3.0 (GPLv3).
   - Package metadata (`metadata.json`): `"License": "GPL-3.0+"`.
-  - Arch Linux package (`desktop/PKGBUILD`): `license=('GPL3')`.
+  - Arch Linux package (`packaging/aur/PKGBUILD`, historically referenced as `desktop/PKGBUILD`): `license=('GPL3')`.
   - Native Daemon: Retired prior to release (eliminating MIT license divergence).
 - **Status**: Standardized under GPL-3.0+.
 
-### Decision 2: Public Author Name and Contact Address
+### Decision 2: Public Author Name and Contact Identity
 - **Current State**:
-  - `metadata.json`: `"Author": "Drew <user@localhost>"`
-  - `PKGBUILD`: `Maintainer: Drew <user@localhost>`
-  - Git Commits: `Andrew Smith <137859776+Andrew-Smith-93@users.noreply.github.com>`
+  - `metadata.json`: `"Authors": [{"Name": "Drew"}]`, Website pointing to GitHub repository
+  - `packaging/aur/PKGBUILD`: `Maintainer: Drew`
+  - Current-Tree Git Config: Configured with GitHub noreply identity
+  - Historical Commits: Identified with personal domain email
   - GitHub Organization/User: `Andrew-Smith-93`
-- **Options for Omega**:
-  1. Retain `Drew` and `Andrew Smith <137859776+Andrew-Smith-93@users.noreply.github.com>` as the public maintainer identity.
-  2. Normalize all package metadata to a preferred public display name and contact email address (e.g., `Andrew Smith <137859776+Andrew-Smith-93@users.noreply.github.com>`).
+- **Resolution**:
+  - Current release metadata and documentation strictly omit personal email addresses and use public GitHub profile / noreply identity.
+  - Deciding whether to rewrite historical commit author metadata remains an explicit maintainer pre-public gate.
 
 ---
 

@@ -1,14 +1,14 @@
 {
-  "digest": "651e879ea870bb9bf70bc78697ea3c386dae81ff058876f75599a299b505838c",
+  "digest": "09fb1c00212a9d3a1bdd20d35ccd3afe9b416aaae37e4fa6263b00bcbfb179d0",
   "fixtureName": "02-window-addition-removal",
   "finalTick": 0,
   "diagnostics": {
     "totalEvents": 7,
     "totalTransactions": 3,
     "totalLayoutComputations": 3,
-    "totalGeometryWrites": 5,
-    "skippedWrites": 2,
-    "suppressedEchoes": 5,
+    "totalGeometryWrites": 7,
+    "skippedWrites": 0,
+    "suppressedEchoes": 7,
     "previewOnlyOperations": 0,
     "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
@@ -17,10 +17,10 @@
     "diagnostics": {
       "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
-      "skippedWrites": 2,
-      "suppressedEchoes": 5,
+      "skippedWrites": 0,
+      "suppressedEchoes": 7,
       "totalEvents": 7,
-      "totalGeometryWrites": 5,
+      "totalGeometryWrites": 7,
       "totalLayoutComputations": 3,
       "totalTransactions": 3,
       "unaffectedScreensRecomputed": 0
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -173,13 +173,28 @@
             "previousRect": {
               "height": 1060,
               "width": 946,
+              "x": 10,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 1060,
+              "width": 626,
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-1"
+          },
+          {
+            "previousRect": {
+              "height": 1060,
+              "width": 946,
               "x": 964,
               "y": 10
             },
             "targetRect": {
-              "height": 526,
-              "width": 946,
-              "x": 964,
+              "height": 1060,
+              "width": 632,
+              "x": 644,
               "y": 10
             },
             "windowId": "win-2"
@@ -192,10 +207,10 @@
               "y": 100
             },
             "targetRect": {
-              "height": 526,
-              "width": 946,
-              "x": 964,
-              "y": 544
+              "height": 1060,
+              "width": 626,
+              "x": 1284,
+              "y": 10
             },
             "windowId": "win-3"
           }
@@ -203,7 +218,7 @@
         "reasons": [
           "WindowDiscovered"
         ],
-        "skippedWrites": 1,
+        "skippedWrites": 0,
         "tick": 0
       },
       {
@@ -214,10 +229,25 @@
         "operations": [
           {
             "previousRect": {
-              "height": 526,
+              "height": 1060,
+              "width": 626,
+              "x": 10,
+              "y": 10
+            },
+            "targetRect": {
+              "height": 1060,
               "width": 946,
-              "x": 964,
-              "y": 544
+              "x": 10,
+              "y": 10
+            },
+            "windowId": "win-1"
+          },
+          {
+            "previousRect": {
+              "height": 1060,
+              "width": 626,
+              "x": 1284,
+              "y": 10
             },
             "targetRect": {
               "height": 1060,
@@ -231,7 +261,7 @@
         "reasons": [
           "WindowRemoved"
         ],
-        "skippedWrites": 1,
+        "skippedWrites": 0,
         "tick": 0
       }
     ]

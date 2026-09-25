@@ -42,7 +42,7 @@ Trace fixtures use a versioned JSON schema (`schemaVersion: "1.0.0"`). Each fixt
 - `schemaVersion`: Must be `"1.0.0"`.
 - `name`: Descriptive fixture name.
 - `description`: Scenario explanation.
-- `initialConfig`: Coordinator configuration parameters (gaps, layout, master ratio, etc.).
+- `initialConfig`: Coordinator configuration parameters (gaps, and test-only compatibility parameters like layout or master ratio).
 - `initialScreens`: Initial display outputs and usable work areas.
 - `initialWindows`: Initial windows in the session.
 - `echoMode`: Geometry echo emulation mode (`immediate`, `delayed`, `missing`, `mismatched`, `duplicate`).
@@ -62,10 +62,10 @@ Trace fixtures use a versioned JSON schema (`schemaVersion: "1.0.0"`). Each fixt
 - `screen-added`: New display output plugged in.
 - `screen-removed`: Display output unplugged.
 - `screen-geometry-change`: Display resolution or usable area change.
-- `layout-change`: Algorithm change on specific output.
+- `layout-change`: Algorithm change on specific output (test-only compatibility trace; user-facing layout preset menu and cycling shortcuts are retired).
 - `gap-change`: Inner/outer gap reconfiguration.
-- `master-count-change`: Master area window count adjustment.
-- `master-ratio-change`: Master split ratio adjustment.
+- `master-count-change`: Master area window count adjustment (test-only compatibility trace; user-facing primary count controls are retired).
+- `master-ratio-change`: Master split ratio adjustment (test-only compatibility trace; user-facing primary ratio shortcuts and KCM controls are retired).
 - `rules-config-change`: Global configuration update.
 - `cursor-position-update`: Cursor movement across zones.
 - `snap-preview`: Visual snap zone hover preview.
@@ -83,22 +83,19 @@ Trace fixtures use a versioned JSON schema (`schemaVersion: "1.0.0"`). Each fixt
 
 ---
 
-## Invariant Verification
+### Invariant Verification
 
-Every simulation run validates 13 structural invariants:
+At the completion of each trace simulation, `validateInvariants` audits structural state invariants on the **final simulation state**:
 1. `SCREEN_RECT_NOT_FINITE` / `WINDOW_FRAME_NOT_FINITE` / `OPERATION_RECT_NOT_FINITE`: All coordinates are finite numbers.
 2. `SCREEN_RECT_NEGATIVE_DIMENSIONS` / `WINDOW_FRAME_NEGATIVE_DIMENSIONS`: Widths and heights are nonnegative.
-3. `TILED_GEOMETRY_OUT_OF_BOUNDS`: Active tiled windows reside inside screen usableArea.
+3. `TILED_GEOMETRY_OUT_OF_BOUNDS`: Active tiled windows reside inside screen `usableArea`. Horizontal bounds and top bound strictly hold; vertical overflow is permitted only when vertical saturation occurs (`usableArea.height / countOnScreen < 60px`).
 4. `DUPLICATE_WINDOW_RETAINED`: Each window belongs to at most one output.
-5. `WINDOW_OUTPUT_MISMATCH`: Window output affiliation matches screen list.
+5. `DUPLICATE_WINDOW_IN_SCREEN_ORDER` / `WINDOW_OUTPUT_MISMATCH`: Window output affiliation matches screen list.
 6. `TRANSACTION_EPOCH_NOT_STRICTLY_INCREASING`: Transaction epochs strictly increase monotonically.
-7. `TILED_WINDOWS_OVERLAP`: Non-overlapping layouts (master-stack, grid, columns, rows, bsp) have zero overlap between active visible tiled windows.
-8. Minimized and fullscreen windows are excluded from active tiling operations.
-9. Persistent slot identity survives minimize and fullscreen restore cycles.
-10. Expected geometry echoes do not cause feedback loops or redundant retiles.
-11. No-op reconciliation produces zero geometry writes.
-12. Output removal deterministically relocates windows to surviving screens.
-13. Unaffected screens undergo zero recomputation.
+7. `TILED_WINDOWS_OVERLAP`: Non-overlapping layouts (master-stack, grid, columns, rows, bsp) have zero overlap between active visible tiled windows. Cross-column overlaps are strictly forbidden; vertical overlap tolerance applies only when an individual column partition is mathematically saturated (`partitionHeight / partitionWindows.length < 60px`).
+
+*Behavioral Invariants Tested Separately*:
+The structural validator (`validateInvariants`) evaluates final retained state geometry and transaction records. Additional behavioral invariants—such as persistent slot identity across minimize/restore, echo suppression loop prevention, no-op reconciliation zero writes, output removal relocation, and unaffected screen isolation—are asserted in specific test suites (`apps/runtime-simulator/tests/simulator.test.ts`, `apps/kwin-adapter/tests/scoped-slot-ordering.test.ts`, and `benchmark.test.ts`), rather than in the general final-state validator.
 
 ---
 
@@ -117,7 +114,7 @@ To guarantee cross-platform byte-identical golden output:
 The simulator includes a Mulberry32 32-bit pseudo-random trace generator:
 - **Deterministic**: A given integer seed generates the exact same sequence of events and final digest across runs and platforms.
 - **Exploratory**: Tests window discoveries, removals, state transitions, output moves, gap changes, and flushes under high churn.
-- **Automated Invariant Auditing**: Evaluates all invariants across every state change.
+- **Automated Invariant Auditing**: Evaluates final-state structural invariants at the completion of generated simulation runs.
 
 CI validates three fixed regression seeds: `42`, `12345`, and `99999`.
 
@@ -135,9 +132,12 @@ CI validates three fixed regression seeds: `42`, `12345`, and `99999`.
 
 ## CLI Usage
 
-Run simulator commands from the repository root:
+Before running the simulator CLI, compile the TypeScript packages:
 
 ```bash
+# Compile monorepo packages (generates apps/runtime-simulator/dist/cli.js)
+npm run build
+
 # Verify all 25 fixtures against their committed goldens
 npm run sim:verify
 

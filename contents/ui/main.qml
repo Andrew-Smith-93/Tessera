@@ -19,13 +19,16 @@ Item {
         primaryRegionRatio: 0.50,
         primaryRegionCount: 1,
         reconcileDebounceMs: 60,
+        overlayPollingMs: 16,
         perDesktopLayout: true,
         tileNewWindows: true,
         showOsd: true,
+        enableAnimations: true,
+        animationDurationMs: 180,
         smoothResize: false,
         ignoreMinimized: true,
         gameWindowPolicy: "floating",
-        floatFilter: "tessera,tessera-settings,tessera_settings.py",
+        floatFilter: "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1",
         customRulesJson: "[]",
         workspaceLayoutsJson: '{"version":1,"scopes":{}}'
     })
@@ -34,9 +37,9 @@ Item {
     // 2. State Tracking
     // =========================================================================
     property var wasDraggingMaximized: ({}) // windowId -> boolean
-    property var currentLayoutList: ["balanced-grid", "primary-stack", "binary-split", "columns", "rows", "monocle", "floating"]
     property bool isArranging: false
     property var currentDraggingWindow: null
+    property string lastRuleValidationError: ""
 
     // Runtime Mode: "reconciler" (single runtime authority)
     property string runtimeMode: "reconciler"
@@ -133,7 +136,10 @@ Item {
         config.enableTiling = KWin.readConfig("enableTiling", true);
         var readDefLayout = KWin.readConfig("defaultLayout", "balanced-grid");
         if (readDefLayout === "master-stack") {
-            readDefLayout = "primary-stack";
+            readDefLayout = "balanced-grid";
+        }
+        if (readDefLayout !== "balanced-grid") {
+            readDefLayout = "balanced-grid";
         }
         config.defaultLayout = readDefLayout || "balanced-grid";
         config.gapInner = KWin.readConfig("gapInner", 8);
@@ -141,22 +147,32 @@ Item {
         config.primaryRegionRatio = KWin.readConfig("primaryRegionRatio", KWin.readConfig("masterRatio", 0.50));
         config.primaryRegionCount = KWin.readConfig("primaryRegionCount", KWin.readConfig("masterCount", 1));
         config.reconcileDebounceMs = KWin.readConfig("reconcileDebounceMs", KWin.readConfig("nvidiaDebounceMs", 60));
+        config.overlayPollingMs = KWin.readConfig("overlayPollingMs", 16);
         config.perDesktopLayout = KWin.readConfig("perDesktopLayout", true);
         config.tileNewWindows = KWin.readConfig("tileNewWindows", true);
         config.showOsd = KWin.readConfig("showOsd", true);
+        config.enableAnimations = KWin.readConfig("enableAnimations", true);
+        config.animationDurationMs = KWin.readConfig("animationDurationMs", 180);
         config.smoothResize = KWin.readConfig("smoothResize", false);
         config.ignoreMinimized = KWin.readConfig("ignoreMinimized", true);
         config.gameWindowPolicy = KWin.readConfig("gameWindowPolicy", "floating");
-        config.floatFilter = KWin.readConfig("floatFilter", "tessera,tessera-settings,tessera_settings.py");
+        config.floatFilter = KWin.readConfig("floatFilter", "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1");
         config.customRulesJson = KWin.readConfig("customRulesJson", "[]");
         config.workspaceLayoutsJson = KWin.readConfig("workspaceLayoutsJson", '{"version":1,"scopes":{}}');
+
+        if (!config.enableTiling || !config.enableAnimations) {
+            if (windowAnimator) {
+                windowAnimator.cancelAllAnimations(true);
+            }
+        }
 
         var allWins = Workspace.stackingOrder || [];
         for (var i = 0; i < allWins.length; i++) {
             hookWindow(allWins[i]);
         }
-        if (coordinator) {
-            coordinator.updateConfig({
+        var coord = getCoordinator();
+        if (coord) {
+            coord.updateConfig({
                 enableTiling: config.enableTiling,
                 defaultLayout: config.defaultLayout,
                 gapInner: config.gapInner,
@@ -170,6 +186,26 @@ Item {
                 customRules: config.customRulesJson,
                 workspaceLayoutsJson: config.workspaceLayoutsJson
             });
+
+            var ruleErrors = (typeof coord.getLastCustomRuleErrors === "function")
+                ? coord.getLastCustomRuleErrors()
+                : [];
+            if (ruleErrors && ruleErrors.length > 0) {
+                var errCount = ruleErrors.length;
+                var hasPriorValid = (typeof coord.hasPriorValidCustomRules === "function")
+                    ? coord.hasPriorValidCustomRules()
+                    : ((typeof coord.getLastValidCustomRules === "function")
+                        && coord.getLastValidCustomRules().length > 0);
+                var suffix = hasPriorValid ? "retaining previous rules" : "using default tiling";
+                var errSummary = "Custom window rules invalid (" + errCount + " issue" + (errCount > 1 ? "s" : "") + ") - " + suffix;
+                root.lastRuleValidationError = errSummary;
+                log(errSummary);
+                if (typeof osdCall !== "undefined" && osdCall && typeof osdCall.notify === "function") {
+                    osdCall.notify(errSummary, "dialog-warning", true);
+                }
+            } else {
+                root.lastRuleValidationError = "";
+            }
         }
 
         log("Config reloaded live: gaps=" + config.gapInner + "/" + config.gapOuter + " ratio=" + config.primaryRegionRatio + " tiling=" + config.enableTiling);
@@ -192,8 +228,8 @@ Item {
         path: "/org/kde/osdService"
         method: "showText"
 
-        function notify(text, icon) {
-            if (!config.showOsd) return;
+        function notify(text, icon, force) {
+            if (!config.showOsd && !force) return;
             arguments = [icon || "preferences-desktop-virtual", "Tessera: " + text];
             call();
         }
@@ -220,55 +256,92 @@ Item {
         return Workspace.activeScreen || (Workspace.screens ? Workspace.screens[0] : null);
     }
 
+    function getScreenByName(name) {
+        if (!name) return null;
+        var screens = Workspace.screens || [];
+        for (var i = 0; i < screens.length; i++) {
+            if (screens[i] && (screens[i].name === name || getScreenName(screens[i]) === name)) {
+                return screens[i];
+            }
+        }
+        return null;
+    }
+
+    function resolveRegionTransition(currentRegion, direction) {
+        if (typeof ReconcilerModule !== "undefined" && ReconcilerModule.ReconcilerBridge && ReconcilerModule.ReconcilerBridge.resolveRegionTransition) {
+            return ReconcilerModule.ReconcilerBridge.resolveRegionTransition(currentRegion, direction);
+        }
+        if (direction === "left") {
+            switch (currentRegion) {
+                case "right-half": return "left-half";
+                case "top-right": return "top-left";
+                case "bottom-right": return "bottom-left";
+                case "right-pillar": return "center-pillar";
+                case "center-pillar": return "left-pillar";
+                case "center-top": return "top-left";
+                case "center-bottom": return "bottom-left";
+                case "left-half": return "left-half";
+                case "left-pillar": return "left-pillar";
+                case "top-left": return "top-left";
+                case "bottom-left": return "bottom-left";
+                default: return "left-half";
+            }
+        } else if (direction === "right") {
+            switch (currentRegion) {
+                case "left-half": return "right-half";
+                case "top-left": return "top-right";
+                case "bottom-left": return "bottom-right";
+                case "left-pillar": return "center-pillar";
+                case "center-pillar": return "right-pillar";
+                case "center-top": return "top-right";
+                case "center-bottom": return "bottom-right";
+                case "right-half": return "right-half";
+                case "right-pillar": return "right-pillar";
+                case "top-right": return "top-right";
+                case "bottom-right": return "bottom-right";
+                default: return "right-half";
+            }
+        } else if (direction === "up") {
+            switch (currentRegion) {
+                case "bottom-left": return "top-left";
+                case "bottom-right": return "top-right";
+                case "center-bottom": return "center-top";
+                case "center-pillar": return "center-top";
+                case "left-half": return "top-left";
+                case "right-half": return "top-right";
+                case "left-pillar": return "top-left";
+                case "right-pillar": return "top-right";
+                case "top-left": return "top-left";
+                case "top-right": return "top-right";
+                case "center-top": return "center-top";
+                case "maximize": return "maximize";
+                default: return "top-left";
+            }
+        } else if (direction === "down") {
+            switch (currentRegion) {
+                case "top-left": return "bottom-left";
+                case "top-right": return "bottom-right";
+                case "center-top": return "center-bottom";
+                case "center-pillar": return "center-bottom";
+                case "left-half": return "bottom-left";
+                case "right-half": return "bottom-right";
+                case "left-pillar": return "bottom-left";
+                case "right-pillar": return "bottom-right";
+                case "bottom-left": return "bottom-left";
+                case "bottom-right": return "bottom-right";
+                case "center-bottom": return "center-bottom";
+                case "maximize": return "maximize";
+                default: return "bottom-left";
+            }
+        }
+        return "left-half";
+    }
+
     function getLayoutKey(screen) {
         var scr = screen || getCurrentTargetScreen();
         var sName = getScreenName(scr);
         var deskKey = getCurrentDesktopKey();
         return sName + ":" + deskKey;
-    }
-
-    function getActiveLayout(screen) {
-        var scr = screen || getCurrentTargetScreen();
-        var sName = getScreenName(scr);
-        var deskKey = getCurrentDesktopKey();
-        var coord = getCoordinator();
-        if (coord) {
-            var ws = coord.getOrCreateWorkspace(sName, deskKey);
-            return ws.activeLayout || config.defaultLayout || "balanced-grid";
-        }
-        return config.defaultLayout || "balanced-grid";
-    }
-
-    function setActiveLayout(layoutName, screen) {
-        var scr = screen || getCurrentTargetScreen();
-        var sName = getScreenName(scr);
-        var deskKey = getCurrentDesktopKey();
-        var coord = getCoordinator();
-        if (coord) {
-            coord.ingestEvent({
-                type: "WorkspaceLayoutChanged",
-                outputId: sName,
-                desktopId: deskKey,
-                layout: layoutName
-            });
-        }
-        var sLabel = scr ? (scr.name || "Screen") : "Screen";
-        osdCall.notify(sLabel + " Layout: " + layoutName.toUpperCase(), "preferences-desktop-virtual");
-        retileNow();
-    }
-
-    function cycleLayout(forward) {
-        var scr = getCurrentTargetScreen();
-        var current = getActiveLayout(scr);
-        var idx = currentLayoutList.indexOf(current);
-        if (idx === -1) idx = 0;
-
-        if (forward) {
-            idx = (idx + 1) % currentLayoutList.length;
-        } else {
-            idx = (idx - 1 + currentLayoutList.length) % currentLayoutList.length;
-        }
-        setActiveLayout(currentLayoutList[idx], scr);
     }
 
     // =========================================================================
@@ -345,6 +418,326 @@ Item {
         }
     }
 
+    // =========================================================================
+    // Window Animation Engine (Real KWin 6 Geometry Interpolation)
+    // =========================================================================
+    Item {
+        id: windowAnimator
+        property var activeAnimations: ({})
+        property int activeCount: 0
+        property var writingWindowId: null
+
+        Timer {
+            id: animTimer
+            interval: 16
+            repeat: true
+            running: false
+            onTriggered: windowAnimator.step()
+        }
+
+        function isAnimating(wid) {
+            return !!activeAnimations[wid];
+        }
+
+        function isExpectedIntermediate(wid, geom) {
+            if (!geom) return false;
+            var anim = activeAnimations[wid];
+            if (!anim || !anim.expectedRect) return false;
+            var exp = anim.expectedRect;
+            var tolPos = 4;
+            var tolSize = 32;
+            return Math.abs(geom.x - exp.x) <= tolPos &&
+                   Math.abs(geom.y - exp.y) <= tolPos &&
+                   Math.abs(geom.width - exp.width) <= tolSize &&
+                   Math.abs(geom.height - exp.height) <= tolSize;
+        }
+
+        function cancelAnimation(wid, clearCommand) {
+            if (windowAnimator && windowAnimator.writingWindowId === wid) {
+                windowAnimator.writingWindowId = null;
+            }
+            var anim = activeAnimations[wid];
+            var animWin = anim ? anim.win : null;
+            if (activeAnimations[wid]) {
+                delete activeAnimations[wid];
+                activeCount = Math.max(0, activeCount - 1);
+                if (activeCount === 0) {
+                    animTimer.stop();
+                }
+            }
+            if (clearCommand) {
+                var coord = getCoordinator();
+                if (coord) {
+                    coord.clearRecordedCommand(wid);
+                }
+                if (animWin) {
+                    animWin._targetOutputName = null;
+                    if (coord) {
+                        var obsScr = animWin.output || (animWin.frameGeometry ? getScreenForPos(animWin.frameGeometry) : null);
+                        if (obsScr) {
+                            var obsName = getScreenName(obsScr);
+                            var retained = coord.getRetainedWindow(wid);
+                            if (retained && retained.outputId !== obsName) {
+                                coord.ingestEvent({
+                                    type: "WindowMovedOutput",
+                                    windowId: wid,
+                                    fromOutputId: retained.outputId,
+                                    toOutputId: obsName
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function cancelAllAnimations(clearCommand) {
+            var keys = [];
+            for (var wid in activeAnimations) {
+                keys.push(wid);
+            }
+            for (var i = 0; i < keys.length; i++) {
+                cancelAnimation(keys[i], clearCommand);
+            }
+        }
+
+        function cancelInvalidAnimations() {
+            var screens = Workspace.screens || [Workspace.activeScreen];
+            var keys = [];
+            for (var wid in activeAnimations) {
+                var anim = activeAnimations[wid];
+                if (!anim || !anim.win || !anim.win.managed || anim.win.deleted) {
+                    keys.push(wid);
+                    continue;
+                }
+                var winScr = anim.win.output || (anim.win.frameGeometry ? getScreenForPos(anim.win.frameGeometry) : null);
+                var found = false;
+                for (var s = 0; s < screens.length; s++) {
+                    if (screens[s] === winScr) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    keys.push(wid);
+                }
+            }
+            for (var i = 0; i < keys.length; i++) {
+                cancelAnimation(keys[i], true);
+            }
+        }
+
+        function easeOutCubic(t) {
+            return 1 - Math.pow(1 - t, 3);
+        }
+
+        function animateWindow(win, targetRect, epoch, durationMs) {
+            if (!win) return;
+            var wid = getWindowId(win);
+            if (!wid) return;
+
+            var current = win.frameGeometry;
+            if (!current) {
+                cancelAnimation(wid, false);
+                var writeSucceededNoAnim = false;
+                try {
+                    win.frameGeometry = Qt.rect(targetRect.x, targetRect.y, targetRect.width, targetRect.height);
+                    writeSucceededNoAnim = true;
+                } catch (e) {
+                    writeSucceededNoAnim = false;
+                }
+                var coordNoAnim = getCoordinator();
+                if (!writeSucceededNoAnim) {
+                    if (coordNoAnim) coordNoAnim.clearRecordedCommand(wid);
+                    return;
+                }
+                var actualNoAnim = win.frameGeometry;
+                if (!actualNoAnim) {
+                    if (coordNoAnim) coordNoAnim.clearRecordedCommand(wid);
+                    return;
+                }
+                if (coordNoAnim && coordNoAnim.hasRecordedCommand && coordNoAnim.hasRecordedCommand(wid)) {
+                    var echoNoAnim = coordNoAnim.checkAndHandleEcho(wid, {
+                        x: actualNoAnim.x,
+                        y: actualNoAnim.y,
+                        width: actualNoAnim.width,
+                        height: actualNoAnim.height
+                    });
+                    if (!echoNoAnim || !echoNoAnim.isEcho) {
+                        coordNoAnim.clearRecordedCommand(wid);
+                        coordNoAnim.ingestEvent({
+                            type: "WindowGeometryChanged",
+                            windowId: wid,
+                            geometry: {
+                                x: actualNoAnim.x,
+                                y: actualNoAnim.y,
+                                width: actualNoAnim.width,
+                                height: actualNoAnim.height
+                            }
+                        });
+                        scheduleReconcile("WindowGeometryClamped");
+                    }
+                }
+                return;
+            }
+
+            if (current.x === targetRect.x && current.y === targetRect.y &&
+                current.width === targetRect.width && current.height === targetRect.height) {
+                cancelAnimation(wid, true);
+                return;
+            }
+
+            var startX = current.x;
+            var startY = current.y;
+            var startW = current.width;
+            var startH = current.height;
+            var dur = (durationMs && durationMs > 0) ? durationMs : (config.animationDurationMs || 180);
+
+            if (!activeAnimations[wid]) {
+                activeCount++;
+            }
+
+            activeAnimations[wid] = {
+                win: win,
+                startX: startX,
+                startY: startY,
+                startW: startW,
+                startH: startH,
+                targetX: targetRect.x,
+                targetY: targetRect.y,
+                targetW: targetRect.width,
+                targetH: targetRect.height,
+                startTime: Date.now(),
+                duration: dur,
+                epoch: epoch || 0,
+                expectedRect: null
+            };
+
+            if (!animTimer.running) {
+                animTimer.start();
+            }
+        }
+
+        function step() {
+            var now = Date.now();
+            var finishedKeys = [];
+            var completedAnims = [];
+
+            for (var wid in activeAnimations) {
+                var anim = activeAnimations[wid];
+                if (!anim || !anim.win) {
+                    finishedKeys.push(wid);
+                    continue;
+                }
+
+                var win = anim.win;
+
+                // Safety checks: cancel WITHOUT writing target if window is invalid, fullscreen, being user-dragged/resized, minimized, maximized, or tiling disabled
+                if (!win.managed || win.deleted || win.fullScreen || win.moveResized || win === currentDraggingWindow || win.minimized || (win.maximizeMode !== undefined && win.maximizeMode !== 0) || (root && !root.config.enableTiling)) {
+                    finishedKeys.push(wid);
+                    continue;
+                }
+
+                var elapsed = now - anim.startTime;
+                var progress = anim.duration > 0 ? Math.min(1.0, elapsed / anim.duration) : 1.0;
+                var eased = easeOutCubic(progress);
+
+                if (progress >= 1.0) {
+                    completedAnims.push({
+                        wid: wid,
+                        win: win,
+                        targetX: anim.targetX,
+                        targetY: anim.targetY,
+                        targetW: anim.targetW,
+                        targetH: anim.targetH
+                    });
+                } else {
+                    var curX = Math.round(anim.startX + (anim.targetX - anim.startX) * eased);
+                    var curY = Math.round(anim.startY + (anim.targetY - anim.startY) * eased);
+                    var curW = Math.round(anim.startW + (anim.targetW - anim.startW) * eased);
+                    var curH = Math.round(anim.startH + (anim.targetH - anim.startH) * eased);
+                    try {
+                        windowAnimator.writingWindowId = wid;
+                        anim.expectedRect = { x: curX, y: curY, width: curW, height: curH };
+                        win.frameGeometry = Qt.rect(curX, curY, curW, curH);
+                    } catch (e) {
+                        finishedKeys.push(wid);
+                    } finally {
+                        windowAnimator.writingWindowId = null;
+                    }
+                }
+            }
+
+            for (var i = 0; i < finishedKeys.length; i++) {
+                cancelAnimation(finishedKeys[i], true);
+            }
+
+            for (var j = 0; j < completedAnims.length; j++) {
+                var c = completedAnims[j];
+                var win = c.win;
+                cancelAnimation(c.wid, false);
+
+                var coord = getCoordinator();
+                var writeSucceeded = false;
+                try {
+                    windowAnimator.writingWindowId = c.wid;
+                    win.frameGeometry = Qt.rect(c.targetX, c.targetY, c.targetW, c.targetH);
+                    writeSucceeded = true;
+                } catch (e) {
+                    writeSucceeded = false;
+                } finally {
+                    windowAnimator.writingWindowId = null;
+                }
+
+                var actual = writeSucceeded ? win.frameGeometry : null;
+                if (!writeSucceeded || !actual) {
+                    if (coord) {
+                        coord.clearRecordedCommand(c.wid);
+                    }
+                    win._targetOutputName = null;
+                    if (coord) {
+                        var obsScrFail = win.output || (win.frameGeometry ? getScreenForPos(win.frameGeometry) : null);
+                        if (obsScrFail) {
+                            var obsNameFail = getScreenName(obsScrFail);
+                            var retFail = coord.getRetainedWindow(c.wid);
+                            if (retFail && retFail.outputId !== obsNameFail) {
+                                coord.ingestEvent({
+                                    type: "WindowMovedOutput",
+                                    windowId: c.wid,
+                                    fromOutputId: retFail.outputId,
+                                    toOutputId: obsNameFail
+                                });
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                var observed = {
+                    x: actual.x,
+                    y: actual.y,
+                    width: actual.width,
+                    height: actual.height
+                };
+
+                if (coord) {
+                    if (coord.hasRecordedCommand && coord.hasRecordedCommand(c.wid)) {
+                        var echoCheck = coord.checkAndHandleEcho(c.wid, observed);
+                        if (!echoCheck || !echoCheck.isEcho) {
+                            coord.clearRecordedCommand(c.wid);
+                            coord.ingestEvent({
+                                type: "WindowGeometryChanged",
+                                windowId: c.wid,
+                                geometry: observed
+                            });
+                            scheduleReconcile("WindowGeometryClamped");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     function commitWindowGeometry(win, targetRect, reason, epoch) {
         if (!win || !targetRect) return { outcome: "rejected", normalized: null };
 
@@ -359,18 +752,56 @@ Item {
         if (evalResult.outcome === "rejected") {
             return { outcome: "rejected", normalized: null };
         }
+
+        var wid = getWindowId(win);
+        var isCurrentlyAnimating = windowAnimator && windowAnimator.isAnimating(wid);
+
         if (evalResult.outcome === "unchanged-valid") {
+            if (isCurrentlyAnimating) {
+                // If a new target equals current observed geometry while an older transition is active,
+                // cancel the older animation and clear the superseded command so the old timer
+                // doesn't continue stepping toward the superseded target.
+                windowAnimator.cancelAnimation(wid, true);
+            }
             return { outcome: "unchanged-valid", normalized: evalResult.normalized };
         }
 
         var normalized = evalResult.normalized;
-        var wid = getWindowId(win);
         try {
             coord.recordCommand(wid, normalized, epoch || 0);
-            win.frameGeometry = Qt.rect(normalized.x, normalized.y, normalized.width, normalized.height);
+            if (config.enableAnimations && windowAnimator && reason !== "drag_start") {
+                windowAnimator.animateWindow(win, normalized, epoch || 0, config.animationDurationMs);
+            } else {
+                if (windowAnimator) windowAnimator.cancelAnimation(wid, false);
+                win.frameGeometry = Qt.rect(normalized.x, normalized.y, normalized.width, normalized.height);
+                var actualDirect = win.frameGeometry;
+                if (coord.hasRecordedCommand && coord.hasRecordedCommand(wid)) {
+                    if (!actualDirect) {
+                        coord.clearRecordedCommand(wid);
+                    } else {
+                        var obsDirect = {
+                            x: actualDirect.x,
+                            y: actualDirect.y,
+                            width: actualDirect.width,
+                            height: actualDirect.height
+                        };
+                        var echoDirect = coord.checkAndHandleEcho(wid, obsDirect);
+                        if (!echoDirect || !echoDirect.isEcho) {
+                            coord.clearRecordedCommand(wid);
+                            coord.ingestEvent({
+                                type: "WindowGeometryChanged",
+                                windowId: wid,
+                                geometry: obsDirect
+                            });
+                            scheduleReconcile("WindowGeometryClamped");
+                        }
+                    }
+                }
+            }
             return { outcome: "applied", normalized: normalized };
         } catch (err) {
             coord.clearRecordedCommand(wid);
+            if (windowAnimator) windowAnimator.cancelAnimation(wid, true);
             return { outcome: "rejected", normalized: null };
         }
     }
@@ -414,9 +845,28 @@ Item {
         var allWins = Workspace.stackingOrder || [];
         for (var wIdx = 0; wIdx < allWins.length; wIdx++) {
             var winObj = allWins[wIdx];
-            if (!winObj || !winObj.managed || !winObj.normalWindow) continue;
+            if (!winObj || !winObj.managed || !winObj.normalWindow || winObj.deleted) continue;
             var wid = getWindowId(winObj);
-            var wScr = winObj.output || getScreenForPos(winObj.frameGeometry);
+            var wScr = null;
+            if (winObj._targetOutputName) {
+                wScr = getScreenByName(winObj._targetOutputName);
+                if (!wScr) {
+                    winObj._targetOutputName = null;
+                } else if (!windowAnimator || !windowAnimator.isAnimating(wid)) {
+                    var obsScr = winObj.output || (winObj.frameGeometry ? getScreenForPos(winObj.frameGeometry) : null);
+                    if (obsScr && obsScr !== wScr) {
+                        var obsArea = Workspace.clientArea(KWin.MaximizeArea, obsScr, Workspace.currentDesktop);
+                        var fg = winObj.frameGeometry;
+                        if (fg && obsArea && (fg.x + fg.width <= obsArea.x + obsArea.width && fg.x >= obsArea.x)) {
+                            winObj._targetOutputName = null;
+                            wScr = obsScr;
+                        }
+                    }
+                }
+            }
+            if (!wScr) {
+                wScr = winObj.output || getScreenForPos(winObj.frameGeometry);
+            }
             var wArea = wScr ? Workspace.clientArea(KWin.MaximizeArea, wScr, Workspace.currentDesktop) : null;
             var normWin = ReconcilerModule.ReconcilerBridge.toNormalizedWindow(winObj, wScr, wArea);
             normWin.isManualFloating = coord.isManualFloating(wid);
@@ -471,7 +921,7 @@ Item {
                         break;
                     }
                 }
-                if (!targetWin) continue;
+                if (!targetWin || targetWin.deleted) continue;
                 if (targetWin === currentDraggingWindow) continue;
 
                 if (targetWin.maximizeMode !== 0) {
@@ -516,7 +966,7 @@ Item {
     }
 
     // =========================================================================
-    // 6. KZones-Style Visual Snap Overlay (PlasmaCore.Dialog)
+    // 6. Visual Snap Overlay (PlasmaCore.Dialog)
     // =========================================================================
     PlasmaCore.Dialog {
         id: overlayDialog
@@ -525,28 +975,52 @@ Item {
         location: PlasmaCore.Types.Desktop
         type: PlasmaCore.Dialog.OnScreenDisplay
         backgroundHints: PlasmaCore.Types.NoBackground
-        flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint | Qt.Popup
-        hideOnWindowDeactivate: true
-        visible: false
+        flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint
+        hideOnWindowDeactivate: false
+        visible: true
         outputOnly: true
         opacity: 1
-        width: Workspace.virtualScreenSize ? Workspace.virtualScreenSize.width : 1920
-        height: Workspace.virtualScreenSize ? Workspace.virtualScreenSize.height : 1080
+
+        property int originX: Workspace.virtualScreenGeometry ? Workspace.virtualScreenGeometry.x : 0
+        property int originY: Workspace.virtualScreenGeometry ? Workspace.virtualScreenGeometry.y : 0
+        property int virtualWidth: Workspace.virtualScreenGeometry ? Workspace.virtualScreenGeometry.width : (Workspace.virtualScreenSize ? Workspace.virtualScreenSize.width : 1920)
+        property int virtualHeight: Workspace.virtualScreenGeometry ? Workspace.virtualScreenGeometry.height : (Workspace.virtualScreenSize ? Workspace.virtualScreenSize.height : 1080)
+
+        x: originX
+        y: originY
+
+        property bool overlayActive: false
 
         property var snapZones: []
         property int hoveredZoneIndex: -1
         property var activeScreenGeom: Qt.rect(0, 0, 1920, 1080)
 
+        function updateVirtualGeometry() {
+            var vsGeom = Workspace.virtualScreenGeometry;
+            if (vsGeom) {
+                originX = vsGeom.x;
+                originY = vsGeom.y;
+                virtualWidth = vsGeom.width;
+                virtualHeight = vsGeom.height;
+            } else if (Workspace.virtualScreenSize) {
+                originX = 0;
+                originY = 0;
+                virtualWidth = Workspace.virtualScreenSize.width;
+                virtualHeight = Workspace.virtualScreenSize.height;
+            }
+            x = originX;
+            y = originY;
+        }
+
         function showOverlay(w) {
-            visible = true;
-            setWidth(Workspace.virtualScreenSize.width);
-            setHeight(Workspace.virtualScreenSize.height);
-            hoveredZoneIndex = -1;
             computeZones(w);
+            updateVirtualGeometry();
+            hoveredZoneIndex = -1;
+            overlayActive = true;
         }
 
         function hideOverlay() {
-            visible = false;
+            overlayActive = false;
             hoveredZoneIndex = -1;
             snapZones = [];
         }
@@ -573,9 +1047,21 @@ Item {
             var hw = Math.floor((uw - gi) / 2);
             var hh = Math.floor((uh - gi) / 2);
 
+            // 3 Equal-width pillars: distribute remainder so max(width) - min(width) <= 1
+            var totalColW = Math.max(0, uw - 2 * gi);
+            var baseW = Math.floor(totalColW / 3);
+            var rem = totalColW % 3;
+            var colW0 = baseW + (rem === 2 ? 1 : 0);
+            var colW1 = baseW + (rem === 1 ? 1 : 0);
+            var colW2 = baseW + (rem === 2 ? 1 : 0);
+
+            var cx0 = area.x + go;
+            var cx1 = cx0 + colW0 + gi;
+            var cx2 = cx1 + colW1 + gi;
+
             var zones = [];
 
-            // 1. Top Maximize Bar Card
+            // 1. Top Maximize Bar Card (Index 0)
             var barW = Math.min(800, Math.floor(uw * 0.6));
             var barX = area.x + Math.floor((area.width - barW) / 2);
             zones.push({
@@ -594,7 +1080,7 @@ Item {
                 triggerH: 66
             });
 
-            // 2. Left Half (Primary Slot)
+            // 2. Left Half (Primary Slot) (Index 1)
             zones.push({
                 type: "half",
                 id: "left-half",
@@ -604,13 +1090,13 @@ Item {
                 slotIndex: 0,
                 rect: { x: area.x + go, y: area.y + go + 70, width: hw, height: uh - 70 },
                 targetRect: { x: area.x + go, y: area.y + go, width: hw, height: uh },
-                triggerX: area.x,
+                triggerX: area.x + Math.floor(area.width * 0.16),
                 triggerY: area.y + 80,
-                triggerW: Math.floor(area.width / 2),
+                triggerW: Math.floor(area.width * 0.18),
                 triggerH: area.height - 80
             });
 
-            // 3. Right Half (Stack Slot)
+            // 3. Right Half (Stack Slot) (Index 2)
             zones.push({
                 type: "half",
                 id: "right-half",
@@ -620,13 +1106,13 @@ Item {
                 slotIndex: 1,
                 rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: uh - 70 },
                 targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: uh },
-                triggerX: area.x + Math.floor(area.width / 2),
+                triggerX: area.x + Math.floor(area.width * 0.66),
                 triggerY: area.y + 80,
-                triggerW: Math.floor(area.width / 2),
+                triggerW: Math.floor(area.width * 0.18),
                 triggerH: area.height - 80
             });
 
-            // 4. Top-Left Quarter
+            // 4. Top-Left Quarter (Index 3)
             zones.push({
                 type: "quarter",
                 id: "top-left",
@@ -642,7 +1128,7 @@ Item {
                 triggerH: Math.floor(area.height * 0.32)
             });
 
-            // 5. Bottom-Left Quarter
+            // 5. Bottom-Left Quarter (Index 4)
             zones.push({
                 type: "quarter",
                 id: "bottom-left",
@@ -658,7 +1144,7 @@ Item {
                 triggerH: Math.floor(area.height * 0.32)
             });
 
-            // 6. Top-Right Quarter
+            // 6. Top-Right Quarter (Index 5)
             zones.push({
                 type: "quarter",
                 id: "top-right",
@@ -674,7 +1160,7 @@ Item {
                 triggerH: Math.floor(area.height * 0.32)
             });
 
-            // 7. Bottom-Right Quarter
+            // 7. Bottom-Right Quarter (Index 6)
             zones.push({
                 type: "quarter",
                 id: "bottom-right",
@@ -688,6 +1174,86 @@ Item {
                 triggerY: area.y + Math.floor(area.height * 0.68),
                 triggerW: Math.floor(area.width * 0.22),
                 triggerH: Math.floor(area.height * 0.32)
+            });
+
+            // 8. Left Pillar (Index 7)
+            zones.push({
+                type: "pillar",
+                id: "left-pillar",
+                title: "Left Pillar",
+                badge: "▎ Left Pillar",
+                desc: "1/3 Left Column",
+                slotIndex: 0,
+                rect: { x: cx0, y: area.y + go + 70, width: colW0, height: uh - 70 },
+                targetRect: { x: cx0, y: area.y + go, width: colW0, height: uh },
+                triggerX: area.x,
+                triggerY: area.y + Math.floor(area.height * 0.32),
+                triggerW: Math.floor(area.width * 0.16),
+                triggerH: Math.floor(area.height * 0.36)
+            });
+
+            // 9. Center Pillar (Index 8)
+            zones.push({
+                type: "pillar",
+                id: "center-pillar",
+                title: "Center Pillar",
+                badge: "▍ Center Pillar",
+                desc: "1/3 Center Column (Full)",
+                slotIndex: 1,
+                rect: { x: cx1, y: area.y + go + 70, width: colW1, height: uh - 70 },
+                targetRect: { x: cx1, y: area.y + go, width: colW1, height: uh },
+                triggerX: cx1,
+                triggerY: area.y + Math.floor(area.height * 0.35),
+                triggerW: colW1,
+                triggerH: Math.floor(area.height * 0.30)
+            });
+
+            // 10. Center Top (Index 9)
+            zones.push({
+                type: "pillar",
+                id: "center-top",
+                title: "Center Top",
+                badge: "⬒ Center Top",
+                desc: "1/3 Center Column (Top)",
+                slotIndex: 1,
+                rect: { x: cx1, y: area.y + go + 70, width: colW1, height: Math.max(60, hh - 70) },
+                targetRect: { x: cx1, y: area.y + go, width: colW1, height: hh },
+                triggerX: cx1,
+                triggerY: area.y + 66,
+                triggerW: colW1,
+                triggerH: Math.floor(area.height * 0.28)
+            });
+
+            // 11. Center Bottom (Index 10)
+            zones.push({
+                type: "pillar",
+                id: "center-bottom",
+                title: "Center Bottom",
+                badge: "⬓ Center Bottom",
+                desc: "1/3 Center Column (Bottom)",
+                slotIndex: 2,
+                rect: { x: cx1, y: area.y + go + hh + gi, width: colW1, height: uh - hh - gi },
+                targetRect: { x: cx1, y: area.y + go + hh + gi, width: colW1, height: uh - hh - gi },
+                triggerX: cx1,
+                triggerY: area.y + Math.floor(area.height * 0.65),
+                triggerW: colW1,
+                triggerH: Math.floor(area.height * 0.35)
+            });
+
+            // 12. Right Pillar (Index 11)
+            zones.push({
+                type: "pillar",
+                id: "right-pillar",
+                title: "Right Pillar",
+                badge: "▕ Right Pillar",
+                desc: "1/3 Right Column",
+                slotIndex: 2,
+                rect: { x: cx2, y: area.y + go + 70, width: colW2, height: uh - 70 },
+                targetRect: { x: cx2, y: area.y + go, width: colW2, height: uh },
+                triggerX: area.x + Math.floor(area.width * 0.84),
+                triggerY: area.y + Math.floor(area.height * 0.32),
+                triggerW: Math.floor(area.width * 0.16),
+                triggerH: Math.floor(area.height * 0.36)
             });
 
             snapZones = zones;
@@ -706,8 +1272,8 @@ Item {
             if (typeof ReconcilerModule !== "undefined" && ReconcilerModule.matchSnapZoneHover) {
                 matchedIndex = ReconcilerModule.matchSnapZoneHover(snapZones, cursorPos);
             } else {
-                // 1. Check corner quarters first (higher priority in corners)
-                for (var i = 3; i < snapZones.length; i++) {
+                // 1. Check corner quarters first (higher priority in corners: indices 3, 4, 5, 6)
+                for (var i = 3; i <= 6 && i < snapZones.length; i++) {
                     var qz = snapZones[i];
                     if (cursorPos.x >= qz.triggerX && cursorPos.x < qz.triggerX + qz.triggerW &&
                         cursorPos.y >= qz.triggerY && cursorPos.y < qz.triggerY + qz.triggerH) {
@@ -716,7 +1282,7 @@ Item {
                     }
                 }
 
-                // 2. Check top maximize bar
+                // 2. Check top maximize bar (index 0)
                 if (matchedIndex === -1 && snapZones.length > 0) {
                     var mz = snapZones[0];
                     if (cursorPos.x >= mz.triggerX && cursorPos.x < mz.triggerX + mz.triggerW &&
@@ -725,7 +1291,28 @@ Item {
                     }
                 }
 
-                // 3. Check Left/Right halves
+                // 3. Check Center Top / Center Bottom / Center Pillar (indices 9, 10, 8)
+                if (matchedIndex === -1 && snapZones.length >= 11) {
+                    var ct = snapZones[9];
+                    if (cursorPos.x >= ct.triggerX && cursorPos.x < ct.triggerX + ct.triggerW &&
+                        cursorPos.y >= ct.triggerY && cursorPos.y < ct.triggerY + ct.triggerH) {
+                        matchedIndex = 9;
+                    } else {
+                        var cb = snapZones[10];
+                        if (cursorPos.x >= cb.triggerX && cursorPos.x < cb.triggerX + cb.triggerW &&
+                            cursorPos.y >= cb.triggerY && cursorPos.y < cb.triggerY + cb.triggerH) {
+                            matchedIndex = 10;
+                        } else {
+                            var cp = snapZones[8];
+                            if (cursorPos.x >= cp.triggerX && cursorPos.x < cp.triggerX + cp.triggerW &&
+                                cursorPos.y >= cp.triggerY && cursorPos.y < cp.triggerY + cp.triggerH) {
+                                matchedIndex = 8;
+                            }
+                        }
+                    }
+                }
+
+                // 4. Check Left/Right halves (indices 1, 2)
                 if (matchedIndex === -1) {
                     if (snapZones.length > 1) {
                         var lz = snapZones[1];
@@ -739,6 +1326,24 @@ Item {
                         if (cursorPos.x >= rz.triggerX && cursorPos.x < rz.triggerX + rz.triggerW &&
                             cursorPos.y >= rz.triggerY && cursorPos.y < rz.triggerY + rz.triggerH) {
                             matchedIndex = 2;
+                        }
+                    }
+                }
+
+                // 5. Check Left Pillar (7) and Right Pillar (11)
+                if (matchedIndex === -1) {
+                    if (snapZones.length > 7) {
+                        var lp = snapZones[7];
+                        if (cursorPos.x >= lp.triggerX && cursorPos.x < lp.triggerX + lp.triggerW &&
+                            cursorPos.y >= lp.triggerY && cursorPos.y < lp.triggerY + lp.triggerH) {
+                            matchedIndex = 7;
+                        }
+                    }
+                    if (snapZones.length > 11 && matchedIndex === -1) {
+                        var rp = snapZones[11];
+                        if (cursorPos.x >= rp.triggerX && cursorPos.x < rp.triggerX + rp.triggerW &&
+                            cursorPos.y >= rp.triggerY && cursorPos.y < rp.triggerY + rp.triggerH) {
+                            matchedIndex = 11;
                         }
                     }
                 }
@@ -769,15 +1374,18 @@ Item {
         // =====================================================================
         // Overlay Visual Representation (Exact LiveDesktopPreview Styling)
         // =====================================================================
-        Item {
+        mainItem: Item {
             id: overlayContainer
-            anchors.fill: parent
+            width: overlayDialog.virtualWidth
+            height: overlayDialog.virtualHeight
+            visible: true
+            opacity: overlayDialog.overlayActive ? 1.0 : 0.0
 
             // Cursor tracking & snap refresh rate (16ms = smooth 60 FPS)
             Timer {
                 id: overlayTimer
                 interval: config.overlayPollingMs || 16
-                running: overlayDialog.visible
+                running: overlayDialog.overlayActive
                 repeat: true
                 onTriggered: {
                     overlayDialog.updateHover(Workspace.cursorPos);
@@ -788,16 +1396,17 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 color: Qt.rgba(0, 0, 0, 0.20)
+                visible: overlayDialog.overlayActive
             }
 
             // Top Maximize Card
             Repeater {
-                model: [overlayDialog.snapZones.length > 0 ? overlayDialog.snapZones[0] : null]
+                model: (overlayDialog.overlayActive && overlayDialog.snapZones.length > 0) ? [overlayDialog.snapZones[0]] : []
 
                 delegate: Rectangle {
                     visible: modelData !== null
-                    x: modelData ? modelData.rect.x : 0
-                    y: modelData ? modelData.rect.y : 0
+                    x: modelData ? (modelData.rect.x - overlayDialog.originX) : 0
+                    y: modelData ? (modelData.rect.y - overlayDialog.originY) : 0
                     width: modelData ? modelData.rect.width : 0
                     height: modelData ? modelData.rect.height : 0
                     radius: 8
@@ -831,14 +1440,14 @@ Item {
 
             // Split Zones (Left Half & Right Half)
             Repeater {
-                model: (overlayDialog.snapZones.length >= 3) ? [overlayDialog.snapZones[1], overlayDialog.snapZones[2]] : []
+                model: (overlayDialog.overlayActive && overlayDialog.snapZones.length >= 3) ? [overlayDialog.snapZones[1], overlayDialog.snapZones[2]] : []
 
                 delegate: Rectangle {
                     property int zoneIdx: index + 1
                     property bool isHovered: overlayDialog.hoveredZoneIndex === zoneIdx
 
-                    x: modelData ? modelData.rect.x : 0
-                    y: modelData ? modelData.rect.y : 0
+                    x: modelData ? (modelData.rect.x - overlayDialog.originX) : 0
+                    y: modelData ? (modelData.rect.y - overlayDialog.originY) : 0
                     width: modelData ? modelData.rect.width : 0
                     height: modelData ? modelData.rect.height : 0
                     radius: 8
@@ -894,15 +1503,15 @@ Item {
 
             // Quarters in the 4 Corners (Rendered with glow when hovered)
             Repeater {
-                model: (overlayDialog.snapZones.length >= 7) ? [overlayDialog.snapZones[3], overlayDialog.snapZones[4], overlayDialog.snapZones[5], overlayDialog.snapZones[6]] : []
+                model: (overlayDialog.overlayActive && overlayDialog.snapZones.length >= 7) ? [overlayDialog.snapZones[3], overlayDialog.snapZones[4], overlayDialog.snapZones[5], overlayDialog.snapZones[6]] : []
 
                 delegate: Rectangle {
                     property int quarterIdx: index + 3
                     property bool isHovered: overlayDialog.hoveredZoneIndex === quarterIdx
 
                     visible: isHovered // Subtle, lights up with glowing border and fill when corner is hovered
-                    x: modelData ? modelData.rect.x : 0
-                    y: modelData ? modelData.rect.y : 0
+                    x: modelData ? (modelData.rect.x - overlayDialog.originX) : 0
+                    y: modelData ? (modelData.rect.y - overlayDialog.originY) : 0
                     width: modelData ? modelData.rect.width : 0
                     height: modelData ? modelData.rect.height : 0
                     radius: 8
@@ -953,6 +1562,74 @@ Item {
                     }
                 }
             }
+
+            // 3-Pillar Zones (Left Pillar, Center Pillar, Center Top, Center Bottom, Right Pillar)
+            Repeater {
+                model: (overlayDialog.overlayActive && overlayDialog.snapZones.length >= 12) ? [
+                    overlayDialog.snapZones[7],
+                    overlayDialog.snapZones[8],
+                    overlayDialog.snapZones[9],
+                    overlayDialog.snapZones[10],
+                    overlayDialog.snapZones[11]
+                ] : []
+
+                delegate: Rectangle {
+                    property int pillarIdx: index === 0 ? 7 : (index === 1 ? 8 : (index === 2 ? 9 : (index === 3 ? 10 : 11)))
+                    property bool isHovered: overlayDialog.hoveredZoneIndex === pillarIdx
+
+                    visible: isHovered
+                    x: modelData ? (modelData.rect.x - overlayDialog.originX) : 0
+                    y: modelData ? (modelData.rect.y - overlayDialog.originY) : 0
+                    width: modelData ? modelData.rect.width : 0
+                    height: modelData ? modelData.rect.height : 0
+                    radius: 8
+
+                    color: Qt.rgba(0.11, 0.40, 0.56, 0.75)
+                    border.color: "#3daee9"
+                    border.width: 3
+
+                    Rectangle {
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        height: 24
+                        color: Qt.rgba(0.24, 0.68, 0.91, 0.4)
+                        topLeftRadius: 7
+                        topRightRadius: 7
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData ? modelData.title : ""
+                            color: "#ffffff"
+                            font.bold: true
+                            font.pixelSize: 11
+                        }
+                    }
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 6
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: modelData ? modelData.badge : ""
+                            color: "#ffffff"
+                            font.bold: true
+                            font.pixelSize: 20
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: isHovered ? "✓ Release to Snap Pillar" : (modelData ? modelData.desc : "")
+                            color: "#3daee9"
+                            font.pixelSize: 12
+                            font.bold: true
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -963,6 +1640,10 @@ Item {
     // =========================================================================
     function unhookWindow(w) {
         if (!w || !w._tesseraHooks) return;
+        var wid = getWindowId(w);
+        if (windowAnimator) {
+            windowAnimator.cancelAnimation(wid, true);
+        }
         try {
             var h = w._tesseraHooks;
             if (w.interactiveMoveResizeStarted && h.started) w.interactiveMoveResizeStarted.disconnect(h.started);
@@ -982,10 +1663,11 @@ Item {
         }
         delete w._tesseraHooks;
         delete w._tesseraHooked;
+        delete w._targetOutputName;
     }
 
     function hookWindow(w) {
-        if (!w || !w.managed || !w.normalWindow) return;
+        if (!w || !w.managed || !w.normalWindow || w.deleted) return;
         if (w._tesseraHooks) {
             unhookWindow(w);
         }
@@ -995,9 +1677,12 @@ Item {
 
         var onMoveResizeStarted = function() {
             if (!root || !root.coordinator) return;
+            var wid = getWindowId(w);
+            if (windowAnimator) {
+                windowAnimator.cancelAnimation(wid, true);
+            }
             if (w.move && checkFilter(w)) {
                 currentDraggingWindow = w;
-                var wid = getWindowId(w);
                 if (w.maximizeMode !== 0) {
                     wasDraggingMaximized[wid] = true;
                     if (typeof w.setMaximize === "function") {
@@ -1025,7 +1710,7 @@ Item {
 
         var onMoveResizeStepped = function() {
             if (!root || !root.coordinator) return;
-            if (overlayDialog && overlayDialog.visible && currentDraggingWindow === w) {
+            if (overlayDialog && overlayDialog.overlayActive && currentDraggingWindow === w) {
                 overlayDialog.updateHover(Workspace.cursorPos);
             }
         };
@@ -1071,6 +1756,7 @@ Item {
                                         height: snapResult.normalized.height
                                     },
                                     slotIndex: target.slotIndex,
+                                    snapRegion: target.id,
                                     desktopId: getCurrentDesktopKey()
                                 });
                             }
@@ -1099,6 +1785,9 @@ Item {
             if (!root || !root.coordinator) return;
             var wid = getWindowId(w);
             if (w.minimized) {
+                if (windowAnimator) {
+                    windowAnimator.cancelAnimation(wid, true);
+                }
                 setPreMinimizeGeometry(wid, w.frameGeometry);
             } else {
                 // Window was restored from minimize!
@@ -1126,6 +1815,17 @@ Item {
         var onFrameGeometryChanged = function() {
             if (!root || !root.coordinator || isArranging) return;
             var wid = getWindowId(w);
+            if (!wid || !w.frameGeometry) return;
+            if (windowAnimator && windowAnimator.isAnimating(wid)) {
+                if (windowAnimator.writingWindowId === wid) {
+                    return;
+                }
+                if (windowAnimator.isExpectedIntermediate && windowAnimator.isExpectedIntermediate(wid, w.frameGeometry)) {
+                    return;
+                }
+                // External geometry change during active animation cancels animation and clears command
+                windowAnimator.cancelAnimation(wid, true);
+            }
             var coord = getCoordinator();
             if (coord) {
                 var echoCheck = coord.checkAndHandleEcho(wid, {
@@ -1137,6 +1837,18 @@ Item {
                 if (echoCheck.isEcho) {
                     return;
                 }
+                if (coord.ingestEvent) {
+                    coord.ingestEvent({
+                        type: "WindowGeometryChanged",
+                        windowId: wid,
+                        geometry: {
+                            x: w.frameGeometry.x,
+                            y: w.frameGeometry.y,
+                            width: w.frameGeometry.width,
+                            height: w.frameGeometry.height
+                        }
+                    });
+                }
             }
             scheduleReconcile("WindowGeometryChanged");
         };
@@ -1144,6 +1856,9 @@ Item {
         var onFullScreenChanged = function() {
             if (!root || !root.coordinator || isArranging) return;
             var wid = getWindowId(w);
+            if (windowAnimator && w.fullScreen) {
+                windowAnimator.cancelAnimation(wid, true);
+            }
             var coord = getCoordinator();
             if (coord) {
                 coord.ingestEvent({
@@ -1162,6 +1877,9 @@ Item {
         var onMaximizedChanged = function() {
             if (!root || !root.coordinator || isArranging) return;
             var wid = getWindowId(w);
+            if (windowAnimator && w.maximizeMode !== 0) {
+                windowAnimator.cancelAnimation(wid, true);
+            }
             var coord = getCoordinator();
             if (coord) {
                 coord.setPreTiled(wid, false);
@@ -1204,6 +1922,9 @@ Item {
 
         var onOutputChanged = function() {
             if (!root || !root.coordinator || isArranging) return;
+            if (w._targetOutputName && getScreenName(w.output) === w._targetOutputName) {
+                w._targetOutputName = null;
+            }
             scheduleReconcile("WindowOutputChanged");
         };
 
@@ -1311,7 +2032,7 @@ Item {
         }
 
         function onWindowAdded(w) {
-            if (!w || !w.normalWindow || !w.managed) return;
+            if (!w || !w.normalWindow || !w.managed || w.deleted) return;
             hookWindow(w);
 
             if (config.tileNewWindows) {
@@ -1365,6 +2086,9 @@ Item {
         }
 
         function onScreensChanged() {
+            if (windowAnimator) {
+                windowAnimator.cancelInvalidAnimations();
+            }
             var coord = getCoordinator();
             if (coord) {
                 synchronizeScreenTopology(coord);
@@ -1381,6 +2105,10 @@ Item {
         osdCall.notify(config.enableTiling ? "Tiling Enabled" : "Tiling Disabled", "preferences-desktop-virtual");
         if (config.enableTiling) {
             retileNow();
+        } else {
+            if (windowAnimator) {
+                windowAnimator.cancelAllAnimations(true);
+            }
         }
     }
 
@@ -1400,6 +2128,10 @@ Item {
                 coord.setPreTiled(wid, false);
             }
             coordAfter = coord.isManualFloating(wid);
+        }
+
+        if (nextFloating && windowAnimator) {
+            windowAnimator.cancelAnimation(wid, true);
         }
 
         log("manual floating: " + currentlyFloating + " -> " + nextFloating + ", coordinator: " + currentlyFloating + " -> " + coordAfter);
@@ -1460,67 +2192,164 @@ Item {
         retileNow();
     }
 
-    function adjustMasterRatio(delta) {
-        var scr = getCurrentTargetScreen();
-        var sName = getScreenName(scr);
-        var deskKey = getCurrentDesktopKey();
-        var coord = getCoordinator();
-        var currentRatio = config.primaryRegionRatio;
-        if (coord) {
-            var ws = coord.getOrCreateWorkspace(sName, deskKey);
-            currentRatio = ws.primaryRegionRatio;
-        }
-
-        var newRatio = Math.max(0.1, Math.min(0.9, currentRatio + delta));
-        newRatio = Math.round(newRatio * 100) / 100;
-        if (coord) {
-            coord.ingestEvent({
-                type: "WorkspacePrimaryConfigChanged",
-                outputId: sName,
-                desktopId: deskKey,
-                ratio: newRatio
-            });
-        }
-
-        osdCall.notify(sName + " Primary Ratio: " + Math.round(newRatio * 100) + "%", "preferences-desktop-virtual");
-        retileNow();
-    }
-
-    function adjustMasterCount(delta) {
-        var scr = getCurrentTargetScreen();
-        var sName = getScreenName(scr);
-        var deskKey = getCurrentDesktopKey();
-        var coord = getCoordinator();
-        var currentCount = config.primaryRegionCount;
-        if (coord) {
-            var ws = coord.getOrCreateWorkspace(sName, deskKey);
-            currentCount = ws.primaryRegionCount;
-        }
-
-        var newCount = Math.max(0, Math.min(10, currentCount + delta));
-        if (coord) {
-            coord.ingestEvent({
-                type: "WorkspacePrimaryConfigChanged",
-                outputId: sName,
-                desktopId: deskKey,
-                count: newCount
-            });
-        }
-
-        log("adjustPrimaryCount delta=" + delta + " newCount=" + newCount);
-        osdCall.notify(sName + " Primary Regions: " + newCount, "preferences-system-windows");
-        retileNow();
-    }
-
     function toggleOverlay() {
-        if (overlayDialog.visible) {
+        if (overlayDialog.overlayActive) {
             overlayDialog.hideOverlay();
         } else {
             overlayDialog.showOverlay(Workspace.activeWindow);
         }
     }
 
-    function moveWindowToNextScreen(forward) {
+    function snapActiveWindow(regionId) {
+        var win = Workspace.activeWindow;
+        if (!win || !win.normalWindow) return;
+        var wid = getWindowId(win);
+        var scr = win.output || getScreenForPos(win.frameGeometry) || Workspace.activeScreen;
+        var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
+        var zones = (typeof ReconcilerModule !== "undefined" && ReconcilerModule.computeSnapZones)
+            ? ReconcilerModule.computeSnapZones(area, config.gapOuter, config.gapInner)
+            : [];
+        var targetZone = null;
+        for (var i = 0; i < zones.length; i++) {
+            if (zones[i].id === regionId) {
+                targetZone = zones[i];
+                break;
+            }
+        }
+        if (!targetZone) return;
+
+        var snapResult = commitWindowGeometry(win, targetZone.targetRect, "keyboard_snap");
+        if (snapResult.outcome !== "rejected" && snapResult.normalized) {
+            var coord = getCoordinator();
+            if (coord) {
+                coord.setManualFloating(wid, false);
+                coord.setPreTiled(wid, true);
+                coord.ingestEvent({
+                    type: "WindowSnapCommitted",
+                    windowId: wid,
+                    outputId: getScreenName(scr),
+                    targetRect: {
+                        x: snapResult.normalized.x,
+                        y: snapResult.normalized.y,
+                        width: snapResult.normalized.width,
+                        height: snapResult.normalized.height
+                    },
+                    slotIndex: targetZone.slotIndex,
+                    snapRegion: targetZone.id,
+                    desktopId: getCurrentDesktopKey()
+                });
+            }
+            setSavedTiledGeometry(wid, snapResult.normalized);
+            osdCall.notify("Snapped: " + targetZone.title, "preferences-system-windows");
+            retileNow();
+        }
+    }
+
+    function moveActiveWindowToRegion(direction) {
+        var win = Workspace.activeWindow;
+        if (!win || !win.normalWindow) return;
+        var wid = getWindowId(win);
+        var coord = getCoordinator();
+        var retained = coord ? coord.getRetainedWindow(wid) : null;
+        var currentRegion = (retained && retained.snapRegion) ? retained.snapRegion : "";
+
+        var targetRegion = resolveRegionTransition(currentRegion, direction);
+        snapActiveWindow(targetRegion);
+    }
+
+    function resizeActiveWindow(deltaW, deltaH) {
+        var win = Workspace.activeWindow;
+        if (!win || !win.normalWindow) return;
+        var wid = getWindowId(win);
+        var scr = win.output || getScreenForPos(win.frameGeometry) || Workspace.activeScreen;
+        var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
+        var cur = win.frameGeometry;
+        if (!cur) return;
+
+        var minW = Math.max(200, Math.floor(area.width * 0.15));
+        var minH = Math.max(150, Math.floor(area.height * 0.15));
+        var maxW = area.width - (config.gapOuter * 2);
+        var maxH = area.height - (config.gapOuter * 2);
+
+        var newW = Math.max(minW, Math.min(maxW, cur.width + deltaW));
+        var newH = Math.max(minH, Math.min(maxH, cur.height + deltaH));
+        var newX = cur.x;
+        var newY = cur.y;
+
+        if (newX + newW > area.x + area.width - config.gapOuter) {
+            newX = area.x + area.width - config.gapOuter - newW;
+        }
+        if (newY + newH > area.y + area.height - config.gapOuter) {
+            newY = area.y + area.height - config.gapOuter - newH;
+        }
+        newX = Math.max(area.x + config.gapOuter, newX);
+        newY = Math.max(area.y + config.gapOuter, newY);
+
+        var targetRect = { x: newX, y: newY, width: newW, height: newH };
+        var res = commitWindowGeometry(win, targetRect, "keyboard_resize");
+        if (res.outcome !== "rejected" && res.normalized) {
+            var coord = getCoordinator();
+            if (coord) {
+                coord.setCustomTiledGeometry(wid, res.normalized);
+            }
+            setSavedTiledGeometry(wid, res.normalized);
+        }
+    }
+
+    function findTargetScreenInDirection(currentScreen, direction) {
+        var screens = Workspace.screens || [];
+        if (screens.length <= 1) return null;
+
+        var curArea = Workspace.clientArea(KWin.MaximizeArea, currentScreen, Workspace.currentDesktop);
+        var curCx = curArea.x + curArea.width / 2;
+        var curCy = curArea.y + curArea.height / 2;
+
+        var bestScreen = null;
+        var bestDistance = Infinity;
+
+        for (var i = 0; i < screens.length; i++) {
+            var s = screens[i];
+            if (s === currentScreen) continue;
+            var a = Workspace.clientArea(KWin.MaximizeArea, s, Workspace.currentDesktop);
+            var cx = a.x + a.width / 2;
+            var cy = a.y + a.height / 2;
+
+            var matchesDir = false;
+            var dist = 0;
+
+            if (direction === "left" && cx < curCx) {
+                matchesDir = true;
+                dist = Math.abs(curCx - cx) + Math.abs(curCy - cy) * 2;
+            } else if (direction === "right" && cx > curCx) {
+                matchesDir = true;
+                dist = Math.abs(cx - curCx) + Math.abs(curCy - cy) * 2;
+            } else if (direction === "up" && cy < curCy) {
+                matchesDir = true;
+                dist = Math.abs(curCy - cy) + Math.abs(curCx - cx) * 2;
+            } else if (direction === "down" && cy > curCy) {
+                matchesDir = true;
+                dist = Math.abs(cy - curCy) + Math.abs(curCx - cx) * 2;
+            }
+
+            if (matchesDir && dist < bestDistance) {
+                bestDistance = dist;
+                bestScreen = s;
+            }
+        }
+
+        if (!bestScreen) {
+            var curIdx = screens.indexOf(currentScreen);
+            if (curIdx === -1) curIdx = 0;
+            var nextIdx = (direction === "right" || direction === "down")
+                ? ((curIdx + 1) % screens.length)
+                : ((curIdx - 1 + screens.length) % screens.length);
+            bestScreen = screens[nextIdx];
+        }
+
+        return bestScreen;
+    }
+
+    function moveWindowInDirection(direction) {
         var w = Workspace.activeWindow;
         if (!w || !w.normalWindow) return;
 
@@ -1530,270 +2359,304 @@ Item {
             return;
         }
 
-        var currentScreen = getScreenForPos(w.frameGeometry);
-        var currentIdx = screens.indexOf(currentScreen);
-        if (currentIdx === -1) currentIdx = 0;
+        var currentScreen = null;
+        if (w._targetOutputName) {
+            currentScreen = getScreenByName(w._targetOutputName);
+            if (!currentScreen) {
+                w._targetOutputName = null;
+            }
+        }
+        if (!currentScreen) {
+            currentScreen = getScreenForPos(w.frameGeometry) || Workspace.activeScreen;
+        }
 
-        var nextIdx = forward !== false ? ((currentIdx + 1) % screens.length) : ((currentIdx - 1 + screens.length) % screens.length);
-        var targetScreen = screens[nextIdx];
+        var targetScreen = findTargetScreenInDirection(currentScreen, direction);
+        if (!targetScreen || targetScreen === currentScreen) return;
+
+        var wid = getWindowId(w);
+        if (windowAnimator) {
+            windowAnimator.cancelAnimation(wid, true);
+        }
 
         var toName = getScreenName(targetScreen);
-
         var toArea = Workspace.clientArea(KWin.MaximizeArea, targetScreen, Workspace.currentDesktop);
-        var curW = Math.min(w.frameGeometry.width, toArea.width - (config.gapOuter * 2));
-        var curH = Math.min(w.frameGeometry.height, toArea.height - (config.gapOuter * 2));
+        var minW = Math.max(200, Math.floor(toArea.width * 0.15));
+        var minH = Math.max(150, Math.floor(toArea.height * 0.15));
+        var curW = Math.max(minW, Math.min(toArea.width - (config.gapOuter * 2), w.frameGeometry.width));
+        var curH = Math.max(minH, Math.min(toArea.height - (config.gapOuter * 2), w.frameGeometry.height));
         var newX = toArea.x + Math.floor((toArea.width - curW) / 2);
         var newY = toArea.y + Math.floor((toArea.height - curH) / 2);
+
+        var fromName = getScreenName(currentScreen);
+        var coord = getCoordinator();
+        w._targetOutputName = toName;
+
         var moveResult = commitWindowGeometry(w, { x: newX, y: newY, width: curW, height: curH }, "move_screen");
         if (moveResult.outcome !== "rejected") {
+            if (coord) {
+                coord.ingestEvent({
+                    type: "WindowMovedOutput",
+                    windowId: wid,
+                    fromOutputId: fromName,
+                    toOutputId: toName
+                });
+            }
             osdCall.notify("Window Moved to " + toName, "preferences-desktop-display");
             retileNow();
+        } else {
+            w._targetOutputName = null;
+            if (coord) {
+                var retained = coord.getRetainedWindow(wid);
+                if (retained && retained.outputId !== fromName) {
+                    coord.ingestEvent({
+                        type: "WindowMovedOutput",
+                        windowId: wid,
+                        fromOutputId: retained.outputId,
+                        toOutputId: fromName
+                    });
+                }
+            }
         }
     }
 
-    function cycleOtherScreenLayout() {
+    function moveWindowToNextScreen(forward) {
         var screens = Workspace.screens || [];
-        if (screens.length <= 1) return;
+        if (screens.length <= 1) {
+            osdCall.notify("Single Display Setup", "preferences-desktop-display");
+            return;
+        }
 
-        var currentScreen = getCurrentTargetScreen();
-        var currentIdx = screens.indexOf(currentScreen);
-        if (currentIdx === -1) currentIdx = 0;
+        var w = Workspace.activeWindow;
+        if (!w || !w.normalWindow) return;
 
-        var targetScreen = screens[(currentIdx + 1) % screens.length];
-        var sName = getScreenName(targetScreen);
+        var currentScreen = null;
+        if (w._targetOutputName) {
+            currentScreen = getScreenByName(w._targetOutputName);
+            if (!currentScreen) {
+                w._targetOutputName = null;
+            }
+        }
+        if (!currentScreen) {
+            currentScreen = getScreenForPos(w.frameGeometry) || Workspace.activeScreen;
+        }
 
-        var current = getActiveLayout(targetScreen);
-        var idx = currentLayoutList.indexOf(current);
-        if (idx === -1) idx = 0;
-        idx = (idx + 1) % currentLayoutList.length;
-        var nextLayout = currentLayoutList[idx];
+        var curIdx = screens.indexOf(currentScreen);
+        if (curIdx === -1) curIdx = 0;
+        var nextIdx = forward
+            ? ((curIdx + 1) % screens.length)
+            : ((curIdx - 1 + screens.length) % screens.length);
+        var targetScreen = screens[nextIdx];
+        if (!targetScreen || targetScreen === currentScreen) return;
 
-        setActiveLayout(nextLayout, targetScreen);
-    }
+        var wid = getWindowId(w);
+        if (windowAnimator) {
+            windowAnimator.cancelAnimation(wid, true);
+        }
 
-    function swapScreenLayouts() {
-        var screens = Workspace.screens || [];
-        if (screens.length < 2) return;
+        var toName = getScreenName(targetScreen);
+        var toArea = Workspace.clientArea(KWin.MaximizeArea, targetScreen, Workspace.currentDesktop);
+        var minW = Math.max(200, Math.floor(toArea.width * 0.15));
+        var minH = Math.max(150, Math.floor(toArea.height * 0.15));
+        var curW = Math.max(minW, Math.min(toArea.width - (config.gapOuter * 2), w.frameGeometry.width));
+        var curH = Math.max(minH, Math.min(toArea.height - (config.gapOuter * 2), w.frameGeometry.height));
+        var newX = toArea.x + Math.floor((toArea.width - curW) / 2);
+        var newY = toArea.y + Math.floor((toArea.height - curH) / 2);
 
-        var s0Name = getScreenName(screens[0]);
-        var s1Name = getScreenName(screens[1]);
-        var deskKey = getCurrentDesktopKey();
+        var fromName = getScreenName(currentScreen);
         var coord = getCoordinator();
-        if (!coord) return;
+        w._targetOutputName = toName;
 
-        var ws0 = coord.getOrCreateWorkspace(s0Name, deskKey);
-        var ws1 = coord.getOrCreateWorkspace(s1Name, deskKey);
-
-        var l0 = ws0.activeLayout;
-        var l1 = ws1.activeLayout;
-        var r0 = ws0.primaryRegionRatio;
-        var r1 = ws1.primaryRegionRatio;
-        var c0 = ws0.primaryRegionCount;
-        var c1 = ws1.primaryRegionCount;
-
-        coord.ingestEvent({
-            type: "WorkspaceLayoutChanged",
-            outputId: s0Name,
-            desktopId: deskKey,
-            layout: l1
-        });
-        coord.ingestEvent({
-            type: "WorkspaceLayoutChanged",
-            outputId: s1Name,
-            desktopId: deskKey,
-            layout: l0
-        });
-        coord.ingestEvent({
-            type: "WorkspacePrimaryConfigChanged",
-            outputId: s0Name,
-            desktopId: deskKey,
-            ratio: r1,
-            count: c1
-        });
-        coord.ingestEvent({
-            type: "WorkspacePrimaryConfigChanged",
-            outputId: s1Name,
-            desktopId: deskKey,
-            ratio: r0,
-            count: c0
-        });
-
-        osdCall.notify("Swapped Layouts: " + s0Name + " ↔ " + s1Name, "preferences-desktop-display");
-        retileNow();
+        var moveResult = commitWindowGeometry(w, { x: newX, y: newY, width: curW, height: curH }, "move_screen");
+        if (moveResult.outcome !== "rejected") {
+            if (coord) {
+                coord.ingestEvent({
+                    type: "WindowMovedOutput",
+                    windowId: wid,
+                    fromOutputId: fromName,
+                    toOutputId: toName
+                });
+            }
+            osdCall.notify("Window Moved to " + toName, "preferences-desktop-display");
+            retileNow();
+        } else {
+            w._targetOutputName = null;
+            if (coord) {
+                var retained = coord.getRetainedWindow(wid);
+                if (retained && retained.outputId !== fromName) {
+                    coord.ingestEvent({
+                        type: "WindowMovedOutput",
+                        windowId: wid,
+                        fromOutputId: retained.outputId,
+                        toOutputId: fromName
+                    });
+                }
+            }
+        }
     }
 
     // =========================================================================
-    // 10. Global Keyboard Shortcuts (100% Ctrl-Based, Left-Hand Optimized)
+    // 10. Global Keyboard Shortcuts (Super-Primary Default Bindings)
     // =========================================================================
 
     ShortcutHandler {
         name: "Tessera: Toggle Zone Overlay"
-        text: "Toggle Zone Overlay (KZones-Style)"
-        sequence: "Ctrl+Shift+C"
+        text: "Toggle Zone Overlay"
+        sequence: "Meta+Shift+C"
         onActivated: root.toggleOverlay()
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Next Layout"
-        text: "Cycle to Next Layout"
-        sequence: "Ctrl+Space"
-        onActivated: root.cycleLayout(true)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Previous Layout"
-        text: "Cycle to Previous Layout"
-        sequence: "Ctrl+Shift+Space"
-        onActivated: root.cycleLayout(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Toggle Tiling"
         text: "Toggle Tiling Globally"
-        sequence: "Ctrl+Shift+T"
+        sequence: "Meta+Shift+T"
         onActivated: root.toggleTiling()
     }
 
     ShortcutHandler {
         name: "Tessera: Toggle Window Floating"
         text: "Toggle Active Window Floating"
-        sequence: "Ctrl+Shift+F"
+        sequence: "Meta+Shift+F"
         onActivated: root.toggleActiveFloating()
     }
 
-    // Left-Hand Directional Navigation (WASD)
+    ShortcutHandler {
+        name: "Tessera: Move Window to Left Region"
+        text: "Move Window to Left Snap Region"
+        sequence: "Meta+Left"
+        onActivated: root.moveActiveWindowToRegion("left")
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Move Window to Right Region"
+        text: "Move Window to Right Snap Region"
+        sequence: "Meta+Right"
+        onActivated: root.moveActiveWindowToRegion("right")
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Move Window to Up Region"
+        text: "Move Window to Upper Snap Region"
+        sequence: "Meta+Up"
+        onActivated: root.moveActiveWindowToRegion("up")
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Move Window to Down Region"
+        text: "Move Window to Lower Snap Region"
+        sequence: "Meta+Down"
+        onActivated: root.moveActiveWindowToRegion("down")
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Expand Window Width"
+        text: "Expand Window Width"
+        sequence: "Meta+Shift+Right"
+        onActivated: root.resizeActiveWindow(60, 0)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Shrink Window Width"
+        text: "Shrink Window Width"
+        sequence: "Meta+Shift+Left"
+        onActivated: root.resizeActiveWindow(-60, 0)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Expand Window Height"
+        text: "Expand Window Height"
+        sequence: "Meta+Shift+Down"
+        onActivated: root.resizeActiveWindow(0, 60)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Shrink Window Height"
+        text: "Shrink Window Height"
+        sequence: "Meta+Shift+Up"
+        onActivated: root.resizeActiveWindow(0, -60)
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Move Window to Screen Left"
+        text: "Move Window to Screen Left"
+        sequence: "Meta+Ctrl+Left"
+        onActivated: root.moveWindowInDirection("left")
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Move Window to Screen Right"
+        text: "Move Window to Screen Right"
+        sequence: "Meta+Ctrl+Right"
+        onActivated: root.moveWindowInDirection("right")
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Move Window to Screen Above"
+        text: "Move Window to Screen Above"
+        sequence: "Meta+Ctrl+Up"
+        onActivated: root.moveWindowInDirection("up")
+    }
+
+    ShortcutHandler {
+        name: "Tessera: Move Window to Screen Below"
+        text: "Move Window to Screen Below"
+        sequence: "Meta+Ctrl+Down"
+        onActivated: root.moveWindowInDirection("down")
+    }
+
     ShortcutHandler {
         name: "Tessera: Focus Left Window"
         text: "Focus Left Window (WASD)"
-        sequence: "Ctrl+Shift+A"
+        sequence: "Meta+Alt+A"
         onActivated: root.focusWindow(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Right Window"
         text: "Focus Right Window (WASD)"
-        sequence: "Ctrl+Shift+D"
+        sequence: "Meta+Alt+D"
         onActivated: root.focusWindow(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Up Window"
         text: "Focus Up Window (WASD)"
-        sequence: "Ctrl+Shift+W"
+        sequence: "Meta+Alt+W"
         onActivated: root.focusWindow(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Focus Down Window"
         text: "Focus Down Window (WASD)"
-        sequence: "Ctrl+Shift+S"
+        sequence: "Meta+Alt+S"
         onActivated: root.focusWindow(true)
     }
 
     ShortcutHandler {
         name: "Tessera: Swap Left Window"
         text: "Swap Window Left (Counter-Clockwise)"
-        sequence: "Ctrl+Shift+Q"
+        sequence: "Meta+Alt+Q"
         onActivated: root.swapWindow(false)
     }
 
     ShortcutHandler {
         name: "Tessera: Swap Right Window"
         text: "Swap Window Right (Clockwise)"
-        sequence: "Ctrl+Shift+E"
+        sequence: "Meta+Alt+E"
         onActivated: root.swapWindow(true)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Focus Next Window"
-        text: "Focus Next Window (Vim)"
-        sequence: "Ctrl+Shift+J"
-        onActivated: root.focusWindow(true)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Focus Previous Window"
-        text: "Focus Previous Window (Vim)"
-        sequence: "Ctrl+Shift+K"
-        onActivated: root.focusWindow(false)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Swap Window Forward"
-        text: "Swap Window Forward (Vim)"
-        sequence: "Ctrl+Alt+J"
-        onActivated: root.swapWindow(true)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Swap Window Backward"
-        text: "Swap Window Backward (Vim)"
-        sequence: "Ctrl+Alt+K"
-        onActivated: root.swapWindow(false)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Increase Primary Ratio"
-        text: "Expand Primary Region Ratio"
-        sequence: "Ctrl+Shift+L"
-        onActivated: root.adjustMasterRatio(0.05)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Decrease Primary Ratio"
-        text: "Shrink Primary Region Ratio"
-        sequence: "Ctrl+Shift+H"
-        onActivated: root.adjustMasterRatio(-0.05)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Increase Primary Count"
-        text: "Increase Primary Region Count"
-        sequence: "Ctrl+Shift+I"
-        onActivated: root.adjustMasterCount(1)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Decrease Primary Count"
-        text: "Decrease Primary Region Count"
-        sequence: "Ctrl+Shift+O"
-        onActivated: root.adjustMasterCount(-1)
     }
 
     ShortcutHandler {
         name: "Tessera: Retile Current Workspace"
         text: "Force Retile Workspace"
-        sequence: "Ctrl+Shift+R"
+        sequence: "Meta+Shift+R"
         onActivated: {
             root.loadConfig();
             root.retileNow();
         }
     }
 
-    // Screen Switching & Cross-Monitor Actions (Left-Hand Accessible)
-    ShortcutHandler {
-        name: "Tessera: Move Window to Next Screen"
-        text: "Move Window to Next Screen"
-        sequence: "Ctrl+Shift+Z"
-        onActivated: root.moveWindowToNextScreen(true)
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Cycle Layout on Other Screen"
-        text: "Cycle Layout on Other Screen"
-        sequence: "Ctrl+Shift+X"
-        onActivated: root.cycleOtherScreenLayout()
-    }
-
-    ShortcutHandler {
-        name: "Tessera: Swap Screen Layouts"
-        text: "Swap Screen Layouts"
-        sequence: "Ctrl+Alt+X"
-        onActivated: root.swapScreenLayouts()
-    }
-
     Component.onCompleted: {
-        log("Tessera Declarative Extension loaded with KZones-Style Visual Snap Overlay");
+        log("Tessera Declarative Extension loaded with Visual Snap Overlay");
         loadConfig();
         initRuntimeMode();
         retileNow();
@@ -1801,9 +2664,14 @@ Item {
 
     Component.onDestruction: {
         log("Tessera unloading: cleaning up window hooks");
-        var allWins = Workspace.stackingOrder || [];
-        for (var i = 0; i < allWins.length; i++) {
-            unhookWindow(allWins[i]);
+        if (reconcileTimer && reconcileTimer.running) {
+            reconcileTimer.stop();
+        }
+        if (windowAnimator) {
+            windowAnimator.cancelAllAnimations(false);
+        }
+        if (overlayDialog) {
+            overlayDialog.hideOverlay();
         }
     }
 }

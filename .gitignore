@@ -11,10 +11,6 @@ build/
 out/
 *.tsbuildinfo
 
-# Rust target directories
-target/
-*/target/
-*/*/target/
 
 # Python cache
 __pycache__/

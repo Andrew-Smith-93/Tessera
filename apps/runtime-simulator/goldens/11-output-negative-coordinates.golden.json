@@ -1,5 +1,5 @@
 {
-  "digest": "17049606820a9acd7f3c4f431e8b2aaf4b4e4f179f1b0d81f4f71b686b6c60a3",
+  "digest": "50fbd7c1e13e8e713bb4ad964ae951082f83090045d65dfcc2f52cc638cf9e1a",
   "fixtureName": "11-output-negative-coordinates",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -62,7 +62,7 @@
         }
       },
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

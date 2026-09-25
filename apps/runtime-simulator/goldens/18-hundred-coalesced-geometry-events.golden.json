@@ -1,5 +1,5 @@
 {
-  "digest": "82eecb4d7b7dd0e900118f599469c4805a368b0d081922bfaf9e25815ae15492",
+  "digest": "3317f441357a20be78e98e19b87c7519b1a49bf543ca5988e6dde96253573e53",
   "fixtureName": "18-hundred-coalesced-geometry-events",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

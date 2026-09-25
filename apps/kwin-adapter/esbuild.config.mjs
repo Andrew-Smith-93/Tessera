@@ -12,19 +12,6 @@ const packageAliases = {
 };
 
 async function bundle() {
-  // 1. Standalone KWin Script Adapter
-  await esbuild.build({
-    entryPoints: [resolve(__dirname, "src/index.ts")],
-    bundle: true,
-    platform: "neutral",
-    mainFields: ["module", "main"],
-    alias: packageAliases,
-    target: "es2022",
-    format: "iife",
-    outfile: resolve(__dirname, "../../dist/kwin-adapter.js"),
-    sourcemap: true,
-    treeShaking: true,
-  });
 
   // 2. QML Layouts Bridge for contents/code/layouts.js
   await esbuild.build({
@@ -33,7 +20,7 @@ async function bundle() {
     platform: "neutral",
     mainFields: ["module", "main"],
     alias: packageAliases,
-    target: "es2022",
+    target: "es2016",
     format: "iife",
     globalName: "LayoutsModule",
     footer: {
@@ -51,7 +38,7 @@ async function bundle() {
     platform: "neutral",
     mainFields: ["module", "main"],
     alias: packageAliases,
-    target: "es2022",
+    target: "es2016",
     format: "iife",
     globalName: "RulesEngineModule",
     footer: {
@@ -69,7 +56,7 @@ async function bundle() {
     platform: "neutral",
     mainFields: ["module", "main"],
     alias: packageAliases,
-    target: "es2022",
+    target: "es2016",
     format: "iife",
     globalName: "ReconcilerModule",
     footer: {
@@ -80,7 +67,7 @@ async function bundle() {
     treeShaking: true,
   });
 
-  console.log("✅ Successfully built standalone KWin Adapter and updated layouts.js, rules.js, and reconciler.js");
+  console.log("✅ Successfully updated layouts.js, rules.js, and reconciler.js");
 }
 
 bundle().catch((err) => {

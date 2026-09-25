@@ -238,11 +238,11 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     expect(target.outputId).toBe("Output-A");
   });
 
-  // 16. Snap Zones: Exactly 7 zones
-  it("Snap Zones: Computes exactly 7 zones with correct IDs and types", () => {
+  // 16. Snap Zones: Exactly 12 zones (Maximize, 2 Halves, 4 Quadrants, 5 Pillar regions)
+  it("Snap Zones: Computes exactly 12 zones with correct IDs and types", () => {
     const area: Rect = { x: 0, y: 32, width: 1920, height: 1048 };
     const zones = computeSnapZones(area, 10, 8);
-    expect(zones.length).toBe(7);
+    expect(zones.length).toBe(12);
 
     const ids = zones.map(z => z.id);
     expect(ids).toEqual([
@@ -252,7 +252,12 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
       "top-left",
       "bottom-left",
       "top-right",
-      "bottom-right"
+      "bottom-right",
+      "left-pillar",
+      "center-pillar",
+      "center-top",
+      "center-bottom",
+      "right-pillar"
     ]);
 
     expect(zones[0].type).toBe("maximize");
@@ -262,6 +267,11 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     expect(zones[4].type).toBe("quarter");
     expect(zones[5].type).toBe("quarter");
     expect(zones[6].type).toBe("quarter");
+    expect(zones[7].type).toBe("pillar");
+    expect(zones[8].type).toBe("pillar");
+    expect(zones[9].type).toBe("pillar");
+    expect(zones[10].type).toBe("pillar");
+    expect(zones[11].type).toBe("pillar");
   });
 
   // 17. Snap Zones: Maximize top bar card geometry
@@ -383,7 +393,135 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     expect(matchSnapZoneHover([], { x: 100, y: 100 })).toBe(-1);
   });
 
-  // 24. Geometry Cache: RetainedWindowState stores currentDesiredTiledGeometry upon reconcile
+  // 24. Snap Zones Geometry: Parameterized across all modulo-3 residues, nonzero/negative origins, and stacked center height equality
+  it("Snap Zones Geometry: Parameterized across all modulo-3 residues, nonzero/negative origins, and stacked center height equality", () => {
+    interface GeometryTestCase {
+      area: Rect;
+      gapOuter: number;
+      gapInner: number;
+      label: string;
+    }
+
+    const testCases: GeometryTestCase[] = [
+      // Modulo-3 Residue 0: totalColW = (1920 - 20) - 16 = 1884, 1884 % 3 === 0
+      { area: { x: 0, y: 0, width: 1920, height: 1080 }, gapOuter: 10, gapInner: 8, label: "Residue 0 (standard 1080p, origin 0,0)" },
+      // Modulo-3 Residue 1: totalColW = (1921 - 20) - 16 = 1885, 1885 % 3 === 1, negative screen origin
+      { area: { x: -1920, y: -1080, width: 1921, height: 1080 }, gapOuter: 10, gapInner: 8, label: "Residue 1 (negative origin x:-1920, y:-1080)" },
+      // Modulo-3 Residue 2: totalColW = (1922 - 20) - 16 = 1886, 1886 % 3 === 2, nonzero positive screen origin
+      { area: { x: 2560, y: 144, width: 1922, height: 1080 }, gapOuter: 10, gapInner: 8, label: "Residue 2 (nonzero origin x:2560, y:144)" },
+      // Ultrawide with Residue 1: totalColW = (3440 - 24) - 20 = 3396 (rem 0) vs width 3441 (rem 1) vs 3442 (rem 2)
+      { area: { x: 0, y: 0, width: 3440, height: 1440 }, gapOuter: 12, gapInner: 10, label: "Residue 0 ultrawide (3440x1440)" },
+      { area: { x: -3440, y: 0, width: 3441, height: 1440 }, gapOuter: 12, gapInner: 10, label: "Residue 1 ultrawide negative origin (3441x1440)" },
+      { area: { x: 3840, y: -200, width: 3442, height: 1440 }, gapOuter: 12, gapInner: 10, label: "Residue 2 ultrawide positive/negative origin (3442x1440)" },
+      // Diverse resolutions and gap configurations
+      { area: { x: -2560, y: -1440, width: 2560, height: 1440 }, gapOuter: 15, gapInner: 12, label: "2560x1440 with custom gaps go:15 gi:12" },
+      { area: { x: 100, y: 50, width: 1366, height: 768 }, gapOuter: 0, gapInner: 0, label: "1366x768 zero-gap boundary" },
+      { area: { x: 0, y: 0, width: 3840, height: 2160 }, gapOuter: 16, gapInner: 10, label: "4K UHD 3840x2160" }
+    ];
+
+    for (const tc of testCases) {
+      const { area, gapOuter: go, gapInner: gi } = tc;
+      const zones = computeSnapZones(area, go, gi);
+
+      const leftPillar = zones[7];
+      const centerPillar = zones[8];
+      const centerTop = zones[9];
+      const centerBottom = zones[10];
+      const rightPillar = zones[11];
+
+      const uw = area.width - (go * 2);
+      const uh = area.height - (go * 2);
+      const totalColW = Math.max(0, uw - (2 * gi));
+
+      const wLeft = leftPillar.targetRect.width;
+      const wCenter = centerPillar.targetRect.width;
+      const wRight = rightPillar.targetRect.width;
+
+      // 1. Equal-width contract: max(width) - min(width) <= 1 for all residues
+      const maxColW = Math.max(wLeft, wCenter, wRight);
+      const minColW = Math.min(wLeft, wCenter, wRight);
+      expect(maxColW - minColW, `${tc.label}: width difference must be <= 1`).toBeLessThanOrEqual(1);
+
+      // 2. Outer pillars must be exactly equal in width
+      expect(wLeft, `${tc.label}: outer pillars must have identical width`).toBe(wRight);
+
+      // 3. Sum of all three pillar widths exactly partitions totalColW
+      expect(wLeft + wCenter + wRight, `${tc.label}: column widths must partition totalColW`).toBe(totalColW);
+
+      // 4. Exact X offsets respect screen origin, outer gaps, and inner gaps
+      expect(leftPillar.targetRect.x, `${tc.label}: left pillar x offset`).toBe(area.x + go);
+      expect(centerPillar.targetRect.x, `${tc.label}: center pillar x offset`).toBe(leftPillar.targetRect.x + wLeft + gi);
+      expect(rightPillar.targetRect.x, `${tc.label}: right pillar x offset`).toBe(centerPillar.targetRect.x + wCenter + gi);
+
+      // 5. Right edge of right pillar touches right outer margin exactly
+      expect(rightPillar.targetRect.x + wRight, `${tc.label}: right pillar outer boundary`).toBe(area.x + area.width - go);
+
+      // 6. Outer and center full pillars span full usable height
+      expect(leftPillar.targetRect.height, `${tc.label}: left pillar height`).toBe(uh);
+      expect(rightPillar.targetRect.height, `${tc.label}: right pillar height`).toBe(uh);
+      expect(centerPillar.targetRect.height, `${tc.label}: center pillar full height`).toBe(uh);
+
+      // 7. Stacked center top + gap + bottom exactly equals full center height
+      expect(centerTop.targetRect.height + gi + centerBottom.targetRect.height,
+        `${tc.label}: stacked center heights + gap must equal full center height`).toBe(centerPillar.targetRect.height);
+
+      // 8. Stacked center top and bottom alignment with center pillar
+      expect(centerTop.targetRect.x, `${tc.label}: center top x`).toBe(centerPillar.targetRect.x);
+      expect(centerBottom.targetRect.x, `${tc.label}: center bottom x`).toBe(centerPillar.targetRect.x);
+      expect(centerTop.targetRect.width, `${tc.label}: center top width`).toBe(centerPillar.targetRect.width);
+      expect(centerBottom.targetRect.width, `${tc.label}: center bottom width`).toBe(centerPillar.targetRect.width);
+      expect(centerTop.targetRect.y, `${tc.label}: center top y`).toBe(centerPillar.targetRect.y);
+      expect(centerTop.targetRect.y + centerTop.targetRect.height + gi, `${tc.label}: center bottom y`).toBe(centerBottom.targetRect.y);
+      expect(centerBottom.targetRect.y + centerBottom.targetRect.height, `${tc.label}: center bottom bottom edge`)
+        .toBe(centerPillar.targetRect.y + centerPillar.targetRect.height);
+    }
+  });
+
+  // 25. Snap Zones Hover: 3-Pillar zones 7-11 hover detection and quadrant priority preservation
+  it("Snap Zones Hover: 3-Pillar zones 7-11 hover detection and quadrant priority preservation", () => {
+    const area: Rect = { x: 0, y: 0, width: 1920, height: 1080 };
+    const zones = computeSnapZones(area, 10, 8);
+
+    // Quarters take priority in all 4 corners
+    expect(matchSnapZoneHover(zones, { x: 50, y: 50 })).toBe(3); // top-left
+    expect(zones[matchSnapZoneHover(zones, { x: 50, y: 50 })].id).toBe("top-left");
+
+    expect(matchSnapZoneHover(zones, { x: 50, y: 1000 })).toBe(4); // bottom-left
+    expect(zones[matchSnapZoneHover(zones, { x: 50, y: 1000 })].id).toBe("bottom-left");
+
+    expect(matchSnapZoneHover(zones, { x: 1850, y: 50 })).toBe(5); // top-right
+    expect(zones[matchSnapZoneHover(zones, { x: 1850, y: 50 })].id).toBe("top-right");
+
+    expect(matchSnapZoneHover(zones, { x: 1850, y: 1000 })).toBe(6); // bottom-right
+    expect(zones[matchSnapZoneHover(zones, { x: 1850, y: 1000 })].id).toBe("bottom-right");
+
+    // Left Pillar at mid-height left edge (x: 50, y: 500)
+    const leftPillarMatch = matchSnapZoneHover(zones, { x: 50, y: 500 });
+    expect(leftPillarMatch).toBe(7);
+    expect(zones[leftPillarMatch].id).toBe("left-pillar");
+
+    // Right Pillar at mid-height right edge (x: 1850, y: 500)
+    const rightPillarMatch = matchSnapZoneHover(zones, { x: 1850, y: 500 });
+    expect(rightPillarMatch).toBe(11);
+    expect(zones[rightPillarMatch].id).toBe("right-pillar");
+
+    // Center Top at upper center (x: 960, y: 200)
+    const centerTopMatch = matchSnapZoneHover(zones, { x: 960, y: 200 });
+    expect(centerTopMatch).toBe(9);
+    expect(zones[centerTopMatch].id).toBe("center-top");
+
+    // Center Bottom at lower center (x: 960, y: 800)
+    const centerBottomMatch = matchSnapZoneHover(zones, { x: 960, y: 800 });
+    expect(centerBottomMatch).toBe(10);
+    expect(zones[centerBottomMatch].id).toBe("center-bottom");
+
+    // Center Pillar at mid-height center (x: 960, y: 500)
+    const centerPillarMatch = matchSnapZoneHover(zones, { x: 960, y: 500 });
+    expect(centerPillarMatch).toBe(8);
+    expect(zones[centerPillarMatch].id).toBe("center-pillar");
+  });
+
+  // 26. Geometry Cache: RetainedWindowState stores currentDesiredTiledGeometry upon reconcile
   it("Geometry Cache: RetainedWindowState stores currentDesiredTiledGeometry upon reconcile", () => {
     const coordinator = new RuntimeCoordinator();
     coordinator.getOrCreateScreen(SCREEN_PRIMARY);
@@ -408,7 +546,7 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     expect(winAfter?.currentDesiredTiledGeometry?.width).toBeGreaterThan(100);
   });
 
-  // 25. Geometry Cache: getSavedTiledGeometry and setSavedTiledGeometry accessors
+  // 27. Geometry Cache: getSavedTiledGeometry and setSavedTiledGeometry accessors
   it("Geometry Cache: getSavedTiledGeometry and setSavedTiledGeometry accessors", () => {
     const coordinator = new RuntimeCoordinator();
     coordinator.getOrCreateScreen(SCREEN_PRIMARY);
@@ -430,7 +568,7 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     expect(coordinator.getSavedTiledGeometry("win-cache-2")).toEqual(testRect);
   });
 
-  // 26. Geometry Cache: preMinimizeGeometry saved on minimize
+  // 28. Geometry Cache: preMinimizeGeometry saved on minimize
   it("Geometry Cache: preMinimizeGeometry saved when window is minimized", () => {
     const coordinator = new RuntimeCoordinator();
     coordinator.getOrCreateScreen(SCREEN_PRIMARY);
@@ -452,7 +590,7 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     expect(win?.preMinimizeGeometry).toEqual({ x: 200, y: 150, width: 800, height: 600 });
   });
 
-  // 27. Geometry Cache: getPreMinimizeGeometry and setPreMinimizeGeometry accessors
+  // 29. Geometry Cache: getPreMinimizeGeometry and setPreMinimizeGeometry accessors
   it("Geometry Cache: getPreMinimizeGeometry and setPreMinimizeGeometry accessors", () => {
     const coordinator = new RuntimeCoordinator();
     coordinator.getOrCreateScreen(SCREEN_PRIMARY);
@@ -470,7 +608,7 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     expect(coordinator.getPreMinimizeGeometry("win-minim-2")).toEqual(customMinim);
   });
 
-  // 28. Geometry Cache: isPreTiled tracking and accessors
+  // 30. Geometry Cache: isPreTiled tracking and accessors
   it("Geometry Cache: isPreTiled tracking and accessors", () => {
     const coordinator = new RuntimeCoordinator();
     coordinator.getOrCreateScreen(SCREEN_PRIMARY);
@@ -486,7 +624,7 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     expect(coordinator.isPreTiled("win-pretiled-1")).toBe(false);
   });
 
-  // 29. Geometry Cache: Unmaximizing window restores saved tiled geometry
+  // 31. Geometry Cache: Unmaximizing window restores saved tiled geometry
   it("Geometry Cache: Unmaximizing window restores saved tiled geometry", () => {
     const coordinator = new RuntimeCoordinator();
     coordinator.getOrCreateScreen(SCREEN_PRIMARY);
@@ -517,7 +655,7 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     expect(coordinator.getSavedTiledGeometry("win-max-1")).toEqual(saved);
   });
 
-  // 30. Topology Change & Exclusivity
+  // 32. Topology Change & Exclusivity
   it("Topology Change & Exclusivity: handleTopologyChange relocates windows and reconciles without legacy fallback", () => {
     const coordinator = new RuntimeCoordinator();
     coordinator.getOrCreateScreen(SCREEN_PRIMARY);

@@ -2,9 +2,9 @@
 
 > **Historical Notice (Phase 5B Acceptance Baseline)**:
 > This document records the empirical live KWin/X11 acceptance matrix executed during Phase 5B.
-> In Phase 5D, Tessera's runtime foundation was modernized to use scoped slot ordering and eliminated legacy QML dual authority.
-> All automated tests, simulator trace fixtures (25/25), and invariant checks pass.
-> Live interactive desktop re-verification on an active KWin session is a future live gate reserved for Omega.
+> In Phase 5D, Tessera's runtime foundation was modernized to use scoped slot ordering and bounded retry hysteresis.
+> Current candidate status: 448/448 Vitest suites pass, 25/25 simulator goldens match, 107 Python tests pass. Bounded live drag passed (quadrant/half snap without write loop); remaining interactive gates (live KCM, Wayland, hotplug, games) remain strictly NOT RUN.
+> Live interactive desktop re-verification on an active KWin session is a future live gate reserved for Omega, tracked in [PUBLIC_RELEASE_CHECKLIST.md](PUBLIC_RELEASE_CHECKLIST.md).
 
 ## 1. System & Environment Preflight
 - **Repository**: `Andrew-Smith-93/tiling-window-manager`
@@ -53,12 +53,17 @@
   qdbus6 org.kde.KWin /KWin org.kde.KWin.reconfigure
   ```
 - **Rollback Status**: **PREPARED** (Safely prepared with pristine timestamped backup directory; rollback was not executed during live testing to avoid unnecessary desktop disruption per safety rules).
-- **Recoverable Rollback Procedure**:
-  ```bash
-  # Recoverable rename rollback:
-  mv ~/.local/share/kwin/scripts/tessera ~/.local/share/kwin/scripts/tessera.failed &&   cp -a ~/.local/share/kwin/scripts/tessera.bak.20260921_0605 ~/.local/share/kwin/scripts/tessera &&   qdbus6 org.kde.KWin /KWin org.kde.KWin.reconfigure
-  ```
-- **Execution Scope Distinction**: Live reload testing exercised dynamic script re-initialization via KWin DBus reconfigure (`org.kde.KWin.reconfigure`); full process-level KWin compositor restarts were not triggered.
+- **Recoverable Rollback Procedure (Historical Note & Corrected Recipe)**:
+  - *Historical Phase 5B Recipe (Inadequate for Code Reload)*:
+    ```bash
+    mv ~/.local/share/kwin/scripts/tessera ~/.local/share/kwin/scripts/tessera.failed && cp -a ~/.local/share/kwin/scripts/tessera.bak.20260921_0605 ~/.local/share/kwin/scripts/tessera && qdbus6 org.kde.KWin /KWin org.kde.KWin.reconfigure
+    ```
+    *(Historical flaw: calling only `org.kde.KWin.reconfigure` after replacing package files does not reload QML/JS code into KWin's running memory).*
+  - *Corrected Scripting Lifecycle Recipe*:
+    ```bash
+    mv ~/.local/share/kwin/scripts/tessera ~/.local/share/kwin/scripts/tessera.failed && cp -a ~/.local/share/kwin/scripts/tessera.bak.20260921_0605 ~/.local/share/kwin/scripts/tessera && qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "tessera" && qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start
+    ```
+- **Execution Scope Distinction**: Earlier Phase 5B testing inferred dynamic script code reload from `qdbus6 org.kde.KWin /KWin org.kde.KWin.reconfigure`. Per KWin 6.3 source (`scripting.cpp`), `reconfigure` connects to `Scripting::start` which loads enabled absent scripts and unloads disabled scripts; however, for an already-loaded script package, `loadDeclarativeScript` returns -1 when `isScriptLoaded` is true, so `reconfigure` does not re-parse modified QML/JS sources from disk without an explicit `unloadScript` first (nor does `isScriptLoaded` prove the QML root object succeeded). Consequently, historical claims that `reconfigure` proved live code upgrades, destruction hook lifecycle, or disable toggling in-session were unverified inferences, and cases A7, I1, and K3 are downgraded to NOT RUN (along with K6 which labeled a merely documented recovery procedure as automated pass).
 
 ---
 
@@ -67,7 +72,7 @@
 ### Defect 1: Stale Window Signal Connections & Missing Destruction Cleanup
 - **Symptom**: Journal logs upon script reload reported repeated TypeErrors: `Cannot read property 'visible' of null`.
 - **Root Cause**: In KWin QML scripting, C++ `KWin::Window` instances outlive script reloads. Anonymous closures remained attached to C++ window objects after the parent QML context was destroyed.
-- **Correction**: Implemented `unhookWindow(w)` with explicit `.disconnect()` calls, attached `Component.onDestruction`, and guarded all handlers against null component contexts.
+- **Correction**: Implemented `unhookWindow(w)` with explicit `.disconnect()` calls, attached `Component.onDestruction`, and guarded all handlers against null component contexts. (Note: triggering `reconfigure` updates options for running scripts without reloading already-loaded script packages from disk; exercising in-memory destruction and code replacement requires an explicit script unload via `org.kde.kwin.Scripting.unloadScript`).
 
 ### Defect 2: Intrusive Desktop Master Resizing on Window Border Drag
 - **Symptom**: Window border resizing dynamically mutated `config.masterRatio` on mouse move steps.
@@ -85,7 +90,7 @@
 - **Correction**: Added `coord.setManualFloating(wid, floatingWindows[wid])` in `toggleActiveFloating()` and added non-conflicting `Meta+Shift+F` alternative shortcut handler.
 
 ### Defect 5: Package Author Metadata Deviation & Reversion
-- **Symptom**: `metadata.json` author field was modified from `"Drew"` to `"Andrew Smith"` in commit `4cb46b27`.
+- **Symptom**: `metadata.json` author field was modified from `"Drew"` to a full personal name form in commit `4cb46b27`.
 - **Root Cause**: Unintentional metadata author edit during repository alignment.
 - **Correction**: Reverted `metadata.json` author field back to `"Drew"`. Verified that packaging via `./package.sh` remains completely valid and passes `kpackagetool6` validation.
 
@@ -94,16 +99,16 @@
 ## 5. Live Acceptance Matrix
 
 ### Summary Counts (91 Total Cases)
-- **LIVE PASS**: 41
-- **AUTOMATED PASS**: 33
+- **LIVE PASS**: 38
+- **AUTOMATED PASS**: 32
 - **FAIL**: 0
 - **BLOCKED**: 0
-- **NOT RUN**: 17
+- **NOT RUN**: 21
 
 ### Section Breakdown Table
 | Section | Name | Cases | LIVE PASS | AUTOMATED PASS | FAIL | BLOCKED | NOT RUN |
 |---|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| A | Installation and Startup | 8 | 6 | 1 | 0 | 0 | 1 |
+| A | Installation and Startup | 8 | 5 | 1 | 0 | 0 | 2 |
 | B | Normal Window Tiling | 10 | 8 | 2 | 0 | 0 | 0 |
 | C | Window Minimization and Restoration | 6 | 5 | 1 | 0 | 0 | 0 |
 | D | Fullscreen and Maximization | 8 | 5 | 3 | 0 | 0 | 0 |
@@ -111,10 +116,10 @@
 | F | Visual Snap Overlay & Interactive Snapping | 9 | 2 | 7 | 0 | 0 | 0 |
 | G | Game and Steam Classification | 12 | 0 | 0 | 0 | 0 | 12 |
 | H | Multi-Monitor Topologies | 12 | 7 | 4 | 0 | 0 | 1 |
-| I | Configuration & Script Reload Lifecycle | 7 | 3 | 4 | 0 | 0 | 0 |
+| I | Configuration & Script Reload Lifecycle | 7 | 2 | 4 | 0 | 0 | 1 |
 | J | Legacy Fallback | 6 | 1 | 4 | 0 | 0 | 1 |
-| K | Failure and Recovery | 7 | 2 | 3 | 0 | 0 | 2 |
-| **Total** | **All Sections** | **91** | **41** | **33** | **0** | **0** | **17** |
+| K | Failure and Recovery | 7 | 1 | 2 | 0 | 0 | 4 |
+| **Total** | **All Sections** | **91** | **38** | **32** | **0** | **0** | **21** |
 
 ---
 
@@ -124,10 +129,10 @@
 | A1 | Package installs successfully | **LIVE PASS** | `kpackagetool6 --type KWin/Script --upgrade dist/tessera-v1.0.1.kwinscript` exited 0 |
 | A2 | KWin recognizes the Tessera script | **LIVE PASS** | Verified via `kpackagetool6 --list` and `kwinrc` plugin registry |
 | A3 | Tessera can be enabled | **LIVE PASS** | Enabled in `~/.config/kwinrc` (`tesseraEnabled=true`) |
-| A4 | Tessera initializes without QML or JS errors | **LIVE PASS** | Verified in `journalctl --user -u plasma-kwin_x11` post-reload (0 errors) |
-| A5 | Desktop remains responsive after reload | **LIVE PASS** | Confirmed by Omega; compositor and applications respond normally |
+| A4 | Tessera initializes without QML or JS errors | **LIVE PASS** | Verified in `journalctl --user -u plasma-kwin_x11` during initialization and configuration refresh (0 errors) |
+| A5 | Desktop remains responsive after configuration refresh | **LIVE PASS** | Confirmed by Omega; compositor and applications respond normally during and after configuration refresh |
 | A6 | Disabling Tessera stops its behavior cleanly | **AUTOMATED PASS** | Verified by `qml-source-isolation.test.ts` & `reconciler.test.ts` |
-| A7 | Re-enabling Tessera restores operation | **LIVE PASS** | Verified via DBus `reconfigure` reload |
+| A7 | Re-enabling Tessera restores operation | **NOT RUN** | **DOWNGRADED**: Historical testing claimed LIVE PASS via DBus reconfigure; downgraded to NOT RUN because re-enabling and verifying live interactive restoration on an active session requires controlled verification that remains unexecuted in this phase. |
 | A8 | Rollback procedure is proven or safely rehearsed | **NOT RUN** | **PREPARED** (Timestamped backup ready; destructive revert unexecuted) |
 
 ---
@@ -242,13 +247,13 @@
 ### Section I: Restart and Persistence (7 Cases)
 | ID | Description | Status | Evidence Source |
 |---|---|---|---|
-| I1 | Reloading script does not leave stale event handlers | **LIVE PASS** | `unhookWindow` and `Component.onDestruction` clean cycle verified |
+| I1 | Reloading script does not leave stale event handlers | **NOT RUN** | **DOWNGRADED**: Historical testing inferred handler cleanup from DBus reconfigure; downgraded to NOT RUN because reconfigure does not trigger QML Component.onDestruction or reload package code from disk. |
 | I2 | Reload does not duplicate geometry writes | **AUTOMATED PASS** | Simulator fixture 24 & benchmark verify write idempotency |
-| I3 | Persistent screen ordering survives reload | **LIVE PASS** | Omega observation: layout intact post-reload |
+| I3 | Persistent screen ordering survives configuration refresh | **LIVE PASS** | Omega observation: layout intact post-reconfigure |
 | I4 | Floating state behaves according to persistence semantics | **AUTOMATED PASS** | `reconciler.test.ts` |
 | I5 | Saved tiled geometry behaves according to persistence | **AUTOMATED PASS** | `reconciler.test.ts` |
 | I6 | No duplicate coordinator instance remains active | **AUTOMATED PASS** | Single QML root engine instance lifecycle in KWin Scripting Engine |
-| I7 | KWin logs remain free of repeated runtime exceptions | **LIVE PASS** | 0 new QML exceptions in journalctl post-reload |
+| I7 | KWin logs remain free of repeated runtime exceptions | **LIVE PASS** | 0 new QML exceptions in journalctl during configuration refresh |
 
 ---
 
@@ -269,10 +274,10 @@
 |---|---|---|---|
 | K1 | Missing/invalid configuration falls back safely | **AUTOMATED PASS** | `qml-source-isolation.test.ts` & rules tests verify fallback on invalid JSON |
 | K2 | Rejected operation does not crash KWin | **AUTOMATED PASS** | Fuzz suite & coordinator error handling tests |
-| K3 | Disabling Tessera restores ordinary KWin behavior | **LIVE PASS** | Verified via `kwinrc [Plugins] tesseraEnabled=false/true` and DBus reconfigure |
+| K3 | Disabling Tessera restores ordinary KWin behavior | **NOT RUN** | **DOWNGRADED**: Historical testing claimed LIVE PASS via kwinrc plugin disable and DBus reconfigure; downgraded to NOT RUN because live verification of interactive window behavior following disabling remains unexecuted in this phase. |
 | K4 | Previous package backup can be restored | **NOT RUN** | **PREPARED** (Timestamped backup ready; destructive revert unexecuted) |
 | K5 | Uninstall removes only Tessera-owned files | **NOT RUN** | Uninstallation unexecuted to preserve user environment |
-| K6 | Failed reload has a documented recovery path | **AUTOMATED PASS** | Documented recoverable rollback procedure in Section 3 |
+| K6 | Failed reload has a documented recovery path | **NOT RUN** | **DOWNGRADED**: Historical table labeled documented recovery procedure as AUTOMATED PASS without automated execution; downgraded to NOT RUN because documentation existence does not constitute an automated recovery execution test. |
 | K7 | Rust daemon remains unnecessary | **LIVE PASS** | Standalone QML script runs with zero background daemon process |
 
 ---
@@ -351,4 +356,4 @@ The runtime simulator suite comprises:
    - Application-specific shortcuts that do not request fullscreen (such as Electron web wrappers intercepting `F11` internally) are not themselves proof of a Tessera defect, and heuristics should not be added merely for application shortcut non-compliance.
    - Fullscreen-like and borderless behavior remains governed by observable state, classification rules, and configured policy.
    - Game-specific fullscreen remains pending Section G.
-7. **Recommendation**: **ACCEPT WITH LIMITATIONS**. Core multi-monitor tiling, cross-screen migration, snap preview, minimize/restore, and script reload lifecycle are live-verified and stable. Edge-case application shortcut collisions are documented for Phase 6 refinement.
+7. **Recommendation**: **ACCEPT WITH LIMITATIONS**. Core multi-monitor tiling, cross-screen migration, snap preview, minimize/restore, and live configuration reconfigure are verified and stable (with full script package reload downgraded to NOT RUN pending isolated Scripting lifecycle verification). Edge-case application shortcut collisions are documented for Phase 6 refinement.

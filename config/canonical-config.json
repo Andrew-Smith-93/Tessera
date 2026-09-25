@@ -91,6 +91,18 @@
       "maximum": 60,
       "description": "Polling interval in milliseconds while the snap overlay tracks the pointer"
     },
+    "enableAnimations": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable smooth geometry animations for window tiling transitions"
+    },
+    "animationDurationMs": {
+      "type": "integer",
+      "default": 180,
+      "minimum": 50,
+      "maximum": 1000,
+      "description": "Duration in milliseconds of window geometry transition animations"
+    },
     "ignoreMinimized": {
       "type": "boolean",
       "default": true,
@@ -104,7 +116,7 @@
     },
     "floatFilter": {
       "type": "string",
-      "default": "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1,Steam,steam_app,steamwebhelper",
+      "default": "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1",
       "description": "Comma-separated list of window classes or app IDs to float by default"
     },
     "customRulesJson": {

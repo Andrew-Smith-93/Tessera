@@ -11,7 +11,8 @@ import {
 } from "@tessera/layout-core";
 import type {
   WindowRuleInput,
-  WindowClassificationResult
+  WindowClassificationResult,
+  CustomRule
 } from "@tessera/rules-engine";
 import {
   type RetainedWindowState,
@@ -33,8 +34,14 @@ import {
   DEFAULT_ECHO_EXPIRY_MS,
   rectEqualsWithTolerance
 } from "./coordinator-types.js";
-import { getOrCreateRuleEngine } from "./qml-rules-compat.js";
+import {
+  getOrCreateRuleEngine,
+  validateCustomRules,
+  resetRuleEngineState,
+  recordCustomRules
+} from "./qml-rules-compat.js";
 import { resolveScreenAffinity } from "./screen-affinity.js";
+import { computeSnapZones } from "./snap-zones.js";
 import { TraceRecorder } from "./trace-recorder.js";
 
 interface InFlightEcho {
@@ -63,6 +70,13 @@ const VALID_WORKSPACE_LAYOUTS = new Set([
 ]);
 const UNSAFE_SCOPE_PARTS = new Set(["__proto__", "prototype", "constructor"]);
 
+function resolveSafeActiveLayout(_layout: unknown): WorkspaceLayoutState["activeLayout"] {
+  // All legacy algorithms (primary-stack, monocle, floating, binary-split,
+  // columns, rows) deliberately migrate to the canonical active layout.
+  // Note: supported gameWindowPolicy is distinct and handled per window.
+  return "balanced-grid";
+}
+
 export class RuntimeCoordinator {
   private readonly windows = new Map<RuntimeWindowId, RetainedWindowState>();
   private readonly screens = new Map<string, RetainedScreenState>();
@@ -87,6 +101,9 @@ export class RuntimeCoordinator {
   private lastTransactionReasons: string[] = [];
   private lastAffectedScreenIds: string[] = [];
   private workspaceLayoutConfigError: string | null = null;
+  private lastCustomRuleErrors: string[] = [];
+  private lastValidCustomRules: CustomRule[] = [];
+  private hasPriorValidRules = false;
 
   constructor(
     initialConfig?: Partial<CoordinatorConfig>,
@@ -104,7 +121,7 @@ export class RuntimeCoordinator {
 
     this.config = {
       enableTiling: initialConfig?.enableTiling ?? true,
-      defaultLayout: initialConfig?.defaultLayout ?? "balanced-grid",
+      defaultLayout: resolveSafeActiveLayout(initialConfig?.defaultLayout),
       gapInner: initialConfig?.gapInner ?? 8,
       gapOuter: initialConfig?.gapOuter ?? 10,
       primaryRegionRatio: effRatio,
@@ -114,18 +131,54 @@ export class RuntimeCoordinator {
       perDesktopLayout: initialConfig?.perDesktopLayout ?? true,
       ignoreMinimized: initialConfig?.ignoreMinimized ?? true,
       gameWindowPolicy: initialConfig?.gameWindowPolicy ?? "floating",
-      floatFilter: initialConfig?.floatFilter ?? "tessera,tessera-settings,tessera_settings.py",
+      floatFilter: initialConfig?.floatFilter ?? "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1",
       customRules: initialConfig?.customRules ?? "[]",
       workspaceLayoutsJson: initialConfig?.workspaceLayoutsJson ?? "{\"version\":1,\"scopes\":{}}",
       customGamePatterns: initialConfig?.customGamePatterns ?? [],
       geometryTolerancePx: initialConfig?.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX,
       echoExpiryMs: initialConfig?.echoExpiryMs ?? DEFAULT_ECHO_EXPIRY_MS
     };
+    if (initialConfig?.customRules !== undefined) {
+      const val = validateCustomRules(initialConfig.customRules);
+      if (val.valid) {
+        this.lastValidCustomRules = [...val.rules];
+        this.hasPriorValidRules = val.rules.length > 0;
+        this.lastCustomRuleErrors = [];
+        recordCustomRules(val.rules);
+      } else {
+        this.lastCustomRuleErrors = [...val.errors];
+        this.lastValidCustomRules = [];
+        this.hasPriorValidRules = false;
+      }
+    }
     this.loadWorkspaceLayoutsJson(initialConfig?.workspaceLayoutsJson);
   }
 
   public getConfig(): CoordinatorConfig {
     return { ...this.config };
+  }
+
+  public getLastCustomRuleErrors(): string[] {
+    return [...this.lastCustomRuleErrors];
+  }
+
+  public validateCustomRules(rules: unknown) {
+    return validateCustomRules(rules);
+  }
+
+  public getLastValidCustomRules(): CustomRule[] {
+    return [...this.lastValidCustomRules];
+  }
+
+  public hasPriorValidCustomRules(): boolean {
+    return this.hasPriorValidRules && this.lastValidCustomRules.length > 0;
+  }
+
+  public resetRuleEngineState(): void {
+    resetRuleEngineState();
+    this.lastCustomRuleErrors = [];
+    this.lastValidCustomRules = [];
+    this.hasPriorValidRules = false;
   }
 
   public updateConfig(updates: Partial<CoordinatorConfig>): void {
@@ -137,14 +190,34 @@ export class RuntimeCoordinator {
       ? updates.primaryRegionCount
       : (updates.masterCount !== undefined ? updates.masterCount : this.config.masterCount);
 
-    this.config = {
-      ...this.config,
-      ...updates,
-      primaryRegionRatio: effRatio,
-      primaryRegionCount: effCount,
-      masterRatio: effRatio,
-      masterCount: effCount
-    };
+    if (updates.customRules !== undefined) {
+      const val = validateCustomRules(updates.customRules);
+      if (val.valid) {
+        this.lastValidCustomRules = [...val.rules];
+        if (val.rules.length > 0) {
+          this.hasPriorValidRules = true;
+        } else if (updates.customRules === "[]" || (Array.isArray(updates.customRules) && updates.customRules.length === 0)) {
+          this.hasPriorValidRules = false;
+        }
+        this.lastCustomRuleErrors = [];
+        recordCustomRules(val.rules);
+      } else {
+        this.lastCustomRuleErrors = [...val.errors];
+      }
+    }
+
+    this.config = Object.assign(
+      {},
+      this.config,
+      updates,
+      {
+        defaultLayout: updates.defaultLayout !== undefined ? resolveSafeActiveLayout(updates.defaultLayout) : this.config.defaultLayout,
+        primaryRegionRatio: effRatio,
+        primaryRegionCount: effCount,
+        masterRatio: effRatio,
+        masterCount: effCount
+      }
+    );
     if (previousPerDesktopLayout !== this.config.perDesktopLayout) {
       this.rebuildWorkspaceMemberships();
     }
@@ -192,7 +265,7 @@ export class RuntimeCoordinator {
         scopeKey: key,
         outputId,
         desktopId: effDeskId,
-        activeLayout: (override?.layout as WorkspaceLayoutState["activeLayout"]) || this.config.defaultLayout,
+        activeLayout: resolveSafeActiveLayout(override?.layout || this.config.defaultLayout),
         primaryRegionCount: override?.primaryCount ?? this.config.primaryRegionCount ?? this.config.masterCount,
         primaryRegionRatio: override?.ratio ?? this.config.primaryRegionRatio ?? this.config.masterRatio,
         gaps: { inner: this.config.gapInner, outer: this.config.gapOuter },
@@ -440,7 +513,7 @@ export class RuntimeCoordinator {
     for (const ws of this.workspaces.values()) {
       const override = this.workspaceLayoutOverrides.get(ws.scopeKey) ||
         this.workspaceLayoutOverrides.get(getWorkspaceScopeKey("*", ws.desktopId));
-      ws.activeLayout = (override?.layout as WorkspaceLayoutState["activeLayout"]) || this.config.defaultLayout;
+      ws.activeLayout = resolveSafeActiveLayout(override?.layout || this.config.defaultLayout);
       ws.primaryRegionCount = override?.primaryCount ?? this.config.primaryRegionCount ?? this.config.masterCount;
       ws.primaryRegionRatio = override?.ratio ?? this.config.primaryRegionRatio ?? this.config.masterRatio;
     }
@@ -469,7 +542,7 @@ export class RuntimeCoordinator {
           return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).activeLayout;
         },
         set activeLayout(l) {
-          self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).activeLayout = l;
+          self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).activeLayout = resolveSafeActiveLayout(l);
         },
         get masterCount() {
           return self.getOrCreateWorkspace(input.outputId, this.activeDesktopId).primaryRegionCount;
@@ -625,7 +698,7 @@ export class RuntimeCoordinator {
     const engine = getOrCreateRuleEngine({
       gameWindowPolicy: this.config.gameWindowPolicy,
       userFilterString: this.config.floatFilter,
-      customRules: this.config.customRules,
+      customRules: this.lastValidCustomRules,
       customGamePatterns: this.config.customGamePatterns
     });
 
@@ -701,6 +774,8 @@ export class RuntimeCoordinator {
           lastObservedGeometry: { ...geom },
           lastRequestedGeometry: null,
           lastAppliedTransactionEpoch: 0,
+          unachievableAttempts: 0,
+          lastAttemptObservedGeometry: null,
           currentDesiredTiledGeometry: null,
           preMinimizeGeometry: null,
           isPreTiled: Boolean(winInput.isPreTiled),
@@ -778,6 +853,9 @@ export class RuntimeCoordinator {
         win.tileable = (newClassResult.classification === "tiled");
 
         if (prevTileable !== win.tileable || prevClass !== win.classification) {
+          win.lastRequestedGeometry = null;
+          win.unachievableAttempts = 0;
+          win.lastAttemptObservedGeometry = null;
           this.markScreenDirty(win.outputId, "TileabilityChanged");
           return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
         }
@@ -891,6 +969,9 @@ export class RuntimeCoordinator {
           membershipChanged;
 
         if (layoutAffectingStateChanged) {
+          win.lastRequestedGeometry = null;
+          win.unachievableAttempts = 0;
+          win.lastAttemptObservedGeometry = null;
           const reason = win.fullScreen ? "WindowFullscreenEntered" : (!win.fullScreen && prevClass === "fullscreen" ? "WindowFullscreenExited" : "WindowStateChanged");
           this.markScreenDirty(win.outputId, reason);
           return { dirty: true, affectedScreens: [win.outputId], isEcho: false };
@@ -1095,14 +1176,14 @@ export class RuntimeCoordinator {
         const screen = this.screens.get(event.outputId);
         const deskId = event.desktopId || (screen ? screen.activeDesktopId : "1");
         const ws = this.getOrCreateWorkspace(event.outputId, deskId);
-        ws.activeLayout = event.layout;
+        ws.activeLayout = resolveSafeActiveLayout(event.layout);
         this.markScreenDirty(event.outputId, "ScreenLayoutChanged");
         return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
       }
 
       case "WorkspaceLayoutChanged": {
         const ws = this.getOrCreateWorkspace(event.outputId, event.desktopId);
-        ws.activeLayout = event.layout;
+        ws.activeLayout = resolveSafeActiveLayout(event.layout);
         this.markScreenDirty(event.outputId, "WorkspaceLayoutChanged");
         return { dirty: true, affectedScreens: [event.outputId], isEcho: false };
       }
@@ -1186,7 +1267,11 @@ export class RuntimeCoordinator {
         win.isManualFloating = false;
         win.tileable = true;
         win.classification = "tiled";
+        win.snapRegion = event.snapRegion;
         win.currentDesiredTiledGeometry = { ...event.targetRect };
+        win.customTiledGeometry = null;
+        win.isExplicitSnap = true;
+        win.snapEpoch = this.totalNormalizedEvents;
         this.setSavedTiledGeometry(event.windowId, event.targetRect);
 
         // Populate applicable workspaces
@@ -1235,7 +1320,15 @@ export class RuntimeCoordinator {
     }
 
     const tolerance = this.config.geometryTolerancePx ?? DEFAULT_GEOMETRY_TOLERANCE_PX;
-    if (rectEqualsWithTolerance(entry.target, newGeometry, tolerance)) {
+    const exactMatch = rectEqualsWithTolerance(entry.target, newGeometry, tolerance);
+    // Allow discrete size hint / character cell increment tolerance (same origin, dimension delta <= 32px)
+    const clampedMatch =
+      Math.abs(newGeometry.x - entry.target.x) <= tolerance &&
+      Math.abs(newGeometry.y - entry.target.y) <= tolerance &&
+      Math.abs(newGeometry.width - entry.target.width) <= 32 &&
+      Math.abs(newGeometry.height - entry.target.height) <= 32;
+
+    if (exactMatch || clampedMatch) {
       this.inFlightEchoes.delete(windowId);
       this.suppressedGeometryEchoes++;
       const win = this.windows.get(windowId);
@@ -1267,6 +1360,20 @@ export class RuntimeCoordinator {
    */
   public clearRecordedCommand(windowId: RuntimeWindowId): void {
     this.inFlightEchoes.delete(windowId);
+  }
+
+  /**
+   * Checks whether an in-flight command is currently recorded for the window.
+   */
+  public hasRecordedCommand(windowId: RuntimeWindowId): boolean {
+    return this.inFlightEchoes.has(windowId);
+  }
+
+  /**
+   * Retrieves an in-flight command record if present.
+   */
+  public getRecordedCommand(windowId: RuntimeWindowId): InFlightEcho | undefined {
+    return this.inFlightEchoes.get(windowId);
   }
 
   /**
@@ -1318,6 +1425,521 @@ export class RuntimeCoordinator {
     // Keep screen compat properties in sync
     screen.orderedWindowIds = ordered.map(w => w.id);
     return ordered;
+  }
+
+  private resolveRegionOccupancy(
+    _screen: RetainedScreenState,
+    tileableWindows: readonly RetainedWindowState[],
+    area: Rect,
+    gaps: { inner: number; outer: number }
+  ): Map<RuntimeWindowId, Rect> {
+    const solution = new Map<RuntimeWindowId, Rect>();
+    const zones = computeSnapZones(area, gaps.outer, gaps.inner);
+    const zoneMap = new Map<string, Rect>();
+    for (const z of zones) {
+      zoneMap.set(z.id, z.targetRect);
+    }
+
+    // Register pillar split sub-zones in zoneMap for pure 3-pillar occupancy
+    const leftPillar = zoneMap.get("left-pillar");
+    const rightPillar = zoneMap.get("right-pillar");
+    const hh = Math.floor((area.height - gaps.outer * 2 - gaps.inner) / 2);
+    if (leftPillar) {
+      const topH = hh;
+      const botY = leftPillar.y + topH + gaps.inner;
+      zoneMap.set("left-pillar-top", {
+        x: leftPillar.x,
+        y: leftPillar.y,
+        width: leftPillar.width,
+        height: topH
+      });
+      zoneMap.set("left-pillar-bottom", {
+        x: leftPillar.x,
+        y: botY,
+        width: leftPillar.width,
+        height: Math.max(30, (leftPillar.y + leftPillar.height) - botY)
+      });
+    }
+    if (rightPillar) {
+      const topH = hh;
+      const botY = rightPillar.y + topH + gaps.inner;
+      zoneMap.set("right-pillar-top", {
+        x: rightPillar.x,
+        y: rightPillar.y,
+        width: rightPillar.width,
+        height: topH
+      });
+      zoneMap.set("right-pillar-bottom", {
+        x: rightPillar.x,
+        y: botY,
+        width: rightPillar.width,
+        height: Math.max(30, (rightPillar.y + rightPillar.height) - botY)
+      });
+    }
+
+    // Bounds validation for custom geometry
+    const validateCustomGeometry = (customRect: Rect): Rect | null => {
+      if (!customRect || customRect.width <= 0 || customRect.height <= 0) {
+        return null;
+      }
+      if (
+        customRect.x + customRect.width <= area.x ||
+        customRect.x >= area.x + area.width ||
+        customRect.y + customRect.height <= area.y ||
+        customRect.y >= area.y + area.height
+      ) {
+        return null;
+      }
+      const minW = Math.min(60, area.width);
+      const minH = Math.min(40, area.height);
+      const x = Math.max(area.x, Math.min(area.x + area.width - minW, customRect.x));
+      const y = Math.max(area.y, Math.min(area.y + area.height - minH, customRect.y));
+      const maxW = area.x + area.width - x;
+      const maxH = area.y + area.height - y;
+      const width = Math.max(minW, Math.min(maxW, customRect.width));
+      const height = Math.max(minH, Math.min(maxH, customRect.height));
+      return { x, y, width, height };
+    };
+
+    // Step 1: Infer or assign candidate regions for each window
+    interface WindowCandidate {
+      win: RetainedWindowState;
+      region: string;
+      customRect?: Rect;
+      priority: number;
+      snapEpoch: number;
+    }
+    const candidates: WindowCandidate[] = [];
+
+    const hasRightSnap = tileableWindows.some(w => Boolean(w.snapRegion && (w.snapRegion.includes("right") || w.snapRegion.includes("pillar-2"))));
+    const hasLeftSnap = tileableWindows.some(w => Boolean(w.snapRegion && (w.snapRegion.includes("left") || w.snapRegion.includes("pillar-0"))));
+
+    for (const win of tileableWindows) {
+      if (win.customTiledGeometry) {
+        const validated = validateCustomGeometry(win.customTiledGeometry);
+        if (!validated) {
+          win.customTiledGeometry = null;
+        } else {
+          win.customTiledGeometry = validated;
+          candidates.push({
+            win,
+            region: win.snapRegion || "custom",
+            customRect: validated,
+            priority: 2,
+            snapEpoch: win.snapEpoch || 0
+          });
+          continue;
+        }
+      }
+
+      if (win.snapRegion && zoneMap.has(win.snapRegion)) {
+        candidates.push({
+          win,
+          region: win.snapRegion,
+          priority: win.isExplicitSnap ? 1 : 0.5,
+          snapEpoch: win.snapEpoch || 0
+        });
+        continue;
+      }
+
+      // Infer region from observed geometry or existing slot
+      const geom = win.currentDesiredTiledGeometry || win.frameGeometry;
+      let inferred = "left-half";
+      if (geom && geom.width > 50 && geom.height > 50) {
+        const cx = geom.x + geom.width / 2;
+        const cy = geom.y + geom.height / 2;
+        const isTall = geom.height >= area.height * 0.70;
+        const isFullWidth = geom.width >= area.width * 0.80;
+        if (isFullWidth) {
+          inferred = hasRightSnap ? "left-half" : (hasLeftSnap ? "right-half" : "left-half");
+        } else if (isTall) {
+          if (cx < area.x + area.width * 0.33) {
+            inferred = "left-pillar";
+          } else if (cx > area.x + area.width * 0.66) {
+            inferred = "right-pillar";
+          } else if (geom.width < area.width * 0.40) {
+            inferred = "center-pillar";
+          } else if (cx < area.x + area.width * 0.5) {
+            inferred = "left-half";
+          } else {
+            inferred = "right-half";
+          }
+        } else {
+          if (cx < area.x + area.width * 0.5) {
+            inferred = (cy < area.y + area.height * 0.5) ? "top-left" : "bottom-left";
+          } else {
+            inferred = (cy < area.y + area.height * 0.5) ? "top-right" : "bottom-right";
+          }
+        }
+      } else {
+        const occupiedRegions = new Set(candidates.map(c => c.region));
+        if (!occupiedRegions.has("left-half") && !occupiedRegions.has("top-left") && !occupiedRegions.has("bottom-left")) {
+          inferred = "left-half";
+        } else if (!occupiedRegions.has("right-half") && !occupiedRegions.has("top-right") && !occupiedRegions.has("bottom-right")) {
+          inferred = "right-half";
+        } else if (!occupiedRegions.has("top-right")) {
+          inferred = "top-right";
+        } else if (!occupiedRegions.has("bottom-right")) {
+          inferred = "bottom-right";
+        }
+      }
+
+      win.snapRegion = inferred;
+      candidates.push({
+        win,
+        region: inferred,
+        priority: 0,
+        snapEpoch: 0
+      });
+    }
+
+    // Step 2: Deterministic cross-family geometric collision resolution
+    const rectsOverlap = (r1: Rect, r2: Rect): boolean => {
+      const xOverlap = Math.max(0, Math.min(r1.x + r1.width, r2.x + r2.width) - Math.max(r1.x, r2.x));
+      const yOverlap = Math.max(0, Math.min(r1.y + r1.height, r2.y + r2.height) - Math.max(r1.y, r2.y));
+      return (xOverlap * yOverlap) > 100;
+    };
+
+    // Sort candidates so higher priority windows (custom, then explicit snap, then newest) are prioritized
+    candidates.sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return (b.snapEpoch || 0) - (a.snapEpoch || 0);
+    });
+
+    const getRegionPreferences = (region: string): string[] => {
+      switch (region) {
+        case "left-half":
+          return [
+            "left-half", "left-pillar",
+            "top-left", "bottom-left",
+            "right-half", "right-pillar",
+            "top-right", "bottom-right",
+            "center-pillar", "center-top", "center-bottom"
+          ];
+        case "right-half":
+          return [
+            "right-half", "right-pillar",
+            "top-right", "bottom-right",
+            "left-half", "left-pillar",
+            "top-left", "bottom-left",
+            "center-pillar", "center-top", "center-bottom"
+          ];
+        case "top-left":
+          return [
+            "top-left", "left-pillar-top",
+            "bottom-left", "left-pillar-bottom",
+            "left-pillar", "left-half",
+            "center-bottom", "right-pillar",
+            "right-half", "top-right", "bottom-right",
+            "right-pillar-top", "right-pillar-bottom",
+            "center-pillar", "center-top"
+          ];
+        case "bottom-left":
+          return [
+            "bottom-left", "left-pillar-bottom",
+            "top-left", "left-pillar-top",
+            "left-pillar", "left-half",
+            "center-top", "right-pillar",
+            "right-half", "bottom-right", "top-right",
+            "right-pillar-bottom", "right-pillar-top",
+            "center-pillar", "center-bottom"
+          ];
+        case "top-right":
+          return [
+            "top-right", "right-pillar-top",
+            "bottom-right", "right-pillar-bottom",
+            "right-pillar", "right-half",
+            "center-bottom", "left-pillar",
+            "left-half", "top-left", "bottom-left",
+            "left-pillar-top", "left-pillar-bottom",
+            "center-pillar", "center-top"
+          ];
+        case "bottom-right":
+          return [
+            "bottom-right", "right-pillar-bottom",
+            "top-right", "right-pillar-top",
+            "right-pillar", "right-half",
+            "center-top", "left-pillar",
+            "left-half", "bottom-left", "top-left",
+            "left-pillar-bottom", "left-pillar-top",
+            "center-pillar", "center-bottom"
+          ];
+        case "left-pillar":
+          return [
+            "left-pillar",
+            "center-pillar", "right-pillar",
+            "center-top", "center-bottom",
+            "left-half", "right-half",
+            "top-left", "bottom-left",
+            "top-right", "bottom-right"
+          ];
+        case "right-pillar":
+          return [
+            "right-pillar",
+            "center-pillar", "left-pillar",
+            "center-top", "center-bottom",
+            "right-half", "left-half",
+            "top-right", "bottom-right",
+            "top-left", "bottom-left"
+          ];
+        case "center-pillar":
+          return [
+            "center-pillar", "center-top", "center-bottom",
+            "left-pillar", "right-pillar",
+            "left-half", "right-half",
+            "top-left", "bottom-left",
+            "top-right", "bottom-right"
+          ];
+        case "center-top":
+          return [
+            "center-top", "center-bottom",
+            "left-pillar-top", "right-pillar-top",
+            "left-pillar", "right-pillar",
+            "top-left", "top-right",
+            "left-pillar-bottom", "right-pillar-bottom",
+            "center-pillar", "left-half", "right-half",
+            "bottom-left", "bottom-right"
+          ];
+        case "center-bottom":
+          return [
+            "center-bottom", "center-top",
+            "left-pillar-bottom", "right-pillar-bottom",
+            "left-pillar", "right-pillar",
+            "bottom-left", "bottom-right",
+            "left-pillar-top", "right-pillar-top",
+            "center-pillar", "left-half", "right-half",
+            "top-left", "top-right"
+          ];
+        default:
+          return [region];
+      }
+    };
+
+    const accepted: WindowCandidate[] = [];
+
+    const adaptPeersForCenter = (centerRegion: string) => {
+      // Protect accepted[0] (the newest requested target) from being remapped by peers
+      for (let i = 1; i < accepted.length; i++) {
+        const a = accepted[i];
+        if (centerRegion === "center-top" || centerRegion === "center-pillar") {
+          if (a.region === "top-left") a.region = "left-pillar-top";
+          if (a.region === "top-right") a.region = "right-pillar-top";
+          if (a.region === "left-half") a.region = "left-pillar";
+          if (a.region === "right-half") a.region = "right-pillar";
+        }
+        if (centerRegion === "center-bottom" || centerRegion === "center-pillar") {
+          if (a.region === "bottom-left") a.region = "left-pillar-bottom";
+          if (a.region === "bottom-right") a.region = "right-pillar-bottom";
+          if (a.region === "left-half") a.region = "left-pillar";
+          if (a.region === "right-half") a.region = "right-pillar";
+        }
+      }
+    };
+
+    for (const cand of candidates) {
+      if (accepted.length === 0) {
+        accepted.push(cand);
+        if (!cand.win.isExplicitSnap) {
+          cand.win.snapRegion = cand.region;
+        }
+        continue;
+      }
+
+      // Check customRect if present
+      if (cand.customRect) {
+        const collidesWithAccepted = accepted.some(a => {
+          const aRect = a.customRect || zoneMap.get(a.region) || area;
+          return rectsOverlap(cand.customRect!, aRect);
+        });
+        if (!collidesWithAccepted) {
+          accepted.push(cand);
+          continue;
+        }
+        cand.customRect = undefined;
+        cand.win.customTiledGeometry = null;
+      }
+
+      // Intentional center split: if a window wants center-pillar (or center-top/center-bottom)
+      // and another window already occupies center
+      if (cand.region === "center-pillar") {
+        const existingFull = accepted.find(a => a.region === "center-pillar");
+        if (existingFull) {
+          existingFull.region = "center-top";
+          cand.region = "center-bottom";
+          adaptPeersForCenter("center-top");
+          adaptPeersForCenter("center-bottom");
+          accepted.push(cand);
+          continue;
+        }
+        const existingTop = accepted.find(a => a.region === "center-top");
+        const existingBottom = accepted.find(a => a.region === "center-bottom");
+        if (existingTop && !existingBottom) {
+          const rRect = zoneMap.get("center-bottom");
+          if (rRect && !accepted.some(a => rectsOverlap(rRect, a.customRect || zoneMap.get(a.region) || area))) {
+            cand.region = "center-bottom";
+            adaptPeersForCenter("center-bottom");
+            accepted.push(cand);
+            continue;
+          }
+        }
+        if (existingBottom && !existingTop) {
+          const rRect = zoneMap.get("center-top");
+          if (rRect && !accepted.some(a => rectsOverlap(rRect, a.customRect || zoneMap.get(a.region) || area))) {
+            cand.region = "center-top";
+            adaptPeersForCenter("center-top");
+            accepted.push(cand);
+            continue;
+          }
+        }
+      } else if (cand.region === "center-top") {
+        const existingFull = accepted.find(a => a.region === "center-pillar");
+        if (existingFull) {
+          existingFull.region = "center-bottom";
+          cand.region = "center-top";
+          adaptPeersForCenter("center-top");
+          adaptPeersForCenter("center-bottom");
+          accepted.push(cand);
+          continue;
+        }
+      } else if (cand.region === "center-bottom") {
+        const existingFull = accepted.find(a => a.region === "center-pillar");
+        if (existingFull) {
+          existingFull.region = "center-top";
+          cand.region = "center-bottom";
+          adaptPeersForCenter("center-top");
+          adaptPeersForCenter("center-bottom");
+          accepted.push(cand);
+          continue;
+        }
+      }
+
+      const prefs = getRegionPreferences(cand.region);
+
+      // Pass 1: find an unoccupied region in prefs that does NOT overlap any accepted window
+      let chosen: string | null = null;
+      for (const r of prefs) {
+        const rRect = zoneMap.get(r);
+        if (!rRect) continue;
+        const isOccupied = accepted.some(a => a.region === r);
+        if (isOccupied) continue;
+
+        const collidesWithAny = accepted.some(a => {
+          const aRect = a.customRect || zoneMap.get(a.region) || area;
+          return rectsOverlap(rRect, aRect);
+        });
+        if (!collidesWithAny) {
+          chosen = r;
+          break;
+        }
+      }
+
+      // Pass 2: find a region in prefs where sharing does NOT overlap any OTHER accepted window
+      // AND does not subdivide accepted[0] (the newest requested target) if other accepted windows exist
+      if (!chosen) {
+        for (const r of prefs) {
+          const rRect = zoneMap.get(r);
+          if (!rRect) continue;
+
+          // If there are multiple accepted windows, protect accepted[0] from subdivision
+          if (accepted.length > 1) {
+            const newest = accepted[0];
+            const newestRect = newest.customRect || zoneMap.get(newest.region) || area;
+            if (r === newest.region || rectsOverlap(rRect, newestRect)) {
+              continue; // Protect the newest accepted target from subdivision
+            }
+          }
+
+          const collidesWithOther = accepted.some(a => {
+            if (a.region === r) return false; // same region will be sliced!
+            const aRect = a.customRect || zoneMap.get(a.region) || area;
+            return rectsOverlap(rRect, aRect);
+          });
+          if (!collidesWithOther) {
+            chosen = r;
+            break;
+          }
+        }
+      }
+
+      // Pass 2 fallback: if no region in prefs avoided subdividing accepted[0],
+      // try sharing with one of the older accepted windows
+      if (!chosen && accepted.length > 1) {
+        const newest = accepted[0];
+        const newestRect = newest.customRect || zoneMap.get(newest.region) || area;
+        for (let i = 1; i < accepted.length; i++) {
+          const older = accepted[i];
+          const olderRect = older.customRect || zoneMap.get(older.region) || area;
+          if (!rectsOverlap(olderRect, newestRect) && older.region !== newest.region) {
+            chosen = older.region;
+            break;
+          }
+        }
+      }
+
+      // Pass 3: fail-safe
+      if (!chosen) {
+        if (accepted.length > 1) {
+          chosen = accepted[accepted.length - 1].region;
+        } else {
+          chosen = accepted[0].region;
+        }
+      }
+
+      cand.region = chosen;
+      if (chosen && chosen.startsWith("center")) {
+        adaptPeersForCenter(chosen);
+      }
+      if (!cand.win.isExplicitSnap) {
+        cand.win.snapRegion = chosen;
+      }
+      accepted.push(cand);
+    }
+
+    // Step 4: Final geometry allocation with overcrowding guards and non-zero/non-negative guarantees
+    const finalGroups = new Map<string, WindowCandidate[]>();
+    for (const cand of candidates) {
+      if (!finalGroups.has(cand.region)) finalGroups.set(cand.region, []);
+      finalGroups.get(cand.region)!.push(cand);
+    }
+
+    for (const [region, cands] of finalGroups.entries()) {
+      if (cands.length === 1) {
+        const cand = cands[0];
+        if (cand.customRect) {
+          solution.set(cand.win.id, cand.customRect);
+        } else if (zoneMap.has(region)) {
+          solution.set(cand.win.id, zoneMap.get(region)!);
+        }
+      } else {
+        const baseRect = zoneMap.get(region) || area;
+        const count = cands.length;
+        const totalGaps = (count - 1) * gaps.inner;
+        const availableH = Math.max(0, baseRect.height - totalGaps);
+        const minH = Math.min(30, Math.floor(baseRect.height / count));
+        const rawSliceH = Math.floor(availableH / count);
+        const sliceH = Math.max(minH, rawSliceH);
+
+        for (let i = 0; i < count; i++) {
+          const cand = cands[i];
+          let y = baseRect.y + i * (sliceH + gaps.inner);
+          if (y + sliceH > baseRect.y + baseRect.height) {
+            y = Math.max(baseRect.y, baseRect.y + baseRect.height - sliceH);
+          }
+          const h = (i === count - 1)
+            ? Math.max(minH, (baseRect.y + baseRect.height) - y)
+            : sliceH;
+
+          solution.set(cand.win.id, {
+            x: Math.max(area.x, baseRect.x),
+            y: Math.max(area.y, y),
+            width: Math.max(40, baseRect.width),
+            height: Math.max(minH, h)
+          });
+        }
+      }
+    }
+
+    return solution;
   }
 
   /**
@@ -1376,41 +1998,46 @@ export class RuntimeCoordinator {
       const ids = tileableWindows.map(w => w.id);
       let solution = new Map<RuntimeWindowId, Rect>();
 
-      switch (screen.activeLayout as string) {
-        case "primary-stack":
-        case "master-stack":
-          solution = solvePrimaryStack(area, ids, screen.gaps, {
-            primaryRegionRatio: screen.primaryRegionRatio,
-            primaryRegionCount: screen.primaryRegionCount,
-            masterRatio: screen.masterRatio,
-            masterCount: screen.masterCount
-          });
-          break;
-        case "balanced-grid":
-        case "grid":
-          solution = solveBalancedGrid(area, ids, screen.gaps);
-          break;
-        case "binary-split":
-        case "bsp": {
-          let root = null;
-          for (const wid of ids) {
-            root = insertWindow(root, wid);
+      const hasRegionWindows = tileableWindows.some(w => Boolean(w.snapRegion) || Boolean(w.customTiledGeometry));
+      if (hasRegionWindows) {
+        solution = this.resolveRegionOccupancy(screen, tileableWindows, area, screen.gaps);
+      } else {
+        switch (screen.activeLayout as string) {
+          case "primary-stack":
+          case "master-stack":
+            solution = solvePrimaryStack(area, ids, screen.gaps, {
+              primaryRegionRatio: screen.primaryRegionRatio,
+              primaryRegionCount: screen.primaryRegionCount,
+              masterRatio: screen.masterRatio,
+              masterCount: screen.masterCount
+            });
+            break;
+          case "balanced-grid":
+          case "grid":
+            solution = solveBalancedGrid(area, ids, screen.gaps);
+            break;
+          case "binary-split":
+          case "bsp": {
+            let root = null;
+            for (const wid of ids) {
+              root = insertWindow(root, wid);
+            }
+            solution = solveTree(root, area, screen.gaps);
+            break;
           }
-          solution = solveTree(root, area, screen.gaps);
-          break;
+          case "columns":
+            solution = solveLayout("columns", area, ids, screen.gaps);
+            break;
+          case "rows":
+            solution = solveLayout("rows", area, ids, screen.gaps);
+            break;
+          case "monocle":
+            solution = solveLayout("monocle", area, ids, screen.gaps);
+            break;
+          default:
+            solution = solveBalancedGrid(area, ids, screen.gaps);
+            break;
         }
-        case "columns":
-          solution = solveLayout("columns", area, ids, screen.gaps);
-          break;
-        case "rows":
-          solution = solveLayout("rows", area, ids, screen.gaps);
-          break;
-        case "monocle":
-          solution = solveLayout("monocle", area, ids, screen.gaps);
-          break;
-        default:
-          solution = solveBalancedGrid(area, ids, screen.gaps);
-          break;
       }
 
       // Diff desired vs observed geometry
@@ -1423,7 +2050,36 @@ export class RuntimeCoordinator {
         win.currentDesiredTiledGeometry = { ...desiredRect };
 
         const observedRect = win.lastObservedGeometry;
-        if (rectEqualsWithTolerance(desiredRect, observedRect, tolerance)) {
+        const exactMatch = rectEqualsWithTolerance(desiredRect, observedRect, tolerance);
+        const targetAlreadyRequested =
+          Boolean(win.lastRequestedGeometry) &&
+          rectEqualsWithTolerance(desiredRect, win.lastRequestedGeometry!, tolerance);
+
+        const originMatches =
+          Math.abs(desiredRect.x - observedRect.x) <= tolerance &&
+          Math.abs(desiredRect.y - observedRect.y) <= tolerance;
+
+        const smallClampedSettle =
+          targetAlreadyRequested &&
+          originMatches &&
+          Math.abs(desiredRect.width - observedRect.width) <= 32 &&
+          Math.abs(desiredRect.height - observedRect.height) <= 32;
+
+        const responseIsStable =
+          Boolean(win.lastAttemptObservedGeometry) &&
+          rectEqualsWithTolerance(observedRect, win.lastAttemptObservedGeometry!, tolerance);
+
+        const maxRetries = originMatches ? 1 : 2;
+        const stableUnachieved =
+          targetAlreadyRequested &&
+          responseIsStable &&
+          (win.unachievableAttempts ?? 0) >= maxRetries;
+
+        if (exactMatch || smallClampedSettle || stableUnachieved) {
+          if (exactMatch) {
+            win.unachievableAttempts = 0;
+            win.lastAttemptObservedGeometry = null;
+          }
           skippedWrites++;
           this.skippedIdenticalWrites++;
         } else {
@@ -1433,6 +2089,12 @@ export class RuntimeCoordinator {
             previousRect: { ...observedRect }
           });
           this.totalGeometryWrites++;
+          if (targetAlreadyRequested && responseIsStable) {
+            win.unachievableAttempts = (win.unachievableAttempts || 0) + 1;
+          } else {
+            win.unachievableAttempts = 1;
+          }
+          win.lastAttemptObservedGeometry = { ...observedRect };
           win.lastRequestedGeometry = { ...desiredRect };
           win.lastAppliedTransactionEpoch = epoch;
         }
@@ -1539,6 +2201,23 @@ export class RuntimeCoordinator {
     }
   }
 
+  public getCustomTiledGeometry(windowId: RuntimeWindowId): Rect | null {
+    const win = this.windows.get(windowId);
+    return win?.customTiledGeometry ? { ...win.customTiledGeometry } : null;
+  }
+
+  public setCustomTiledGeometry(windowId: RuntimeWindowId, rect: Rect | null): void {
+    const win = this.windows.get(windowId);
+    if (win) {
+      win.customTiledGeometry = rect ? { ...rect } : null;
+      if (rect) {
+        win.currentDesiredTiledGeometry = { ...rect };
+        this.setSavedTiledGeometry(windowId, rect);
+        this.markScreenDirty(win.outputId, "CustomGeometrySet");
+      }
+    }
+  }
+
   public getPreMinimizeGeometry(windowId: RuntimeWindowId): Rect | null {
     const win = this.windows.get(windowId);
     return win?.preMinimizeGeometry ? { ...win.preMinimizeGeometry } : null;
@@ -1583,13 +2262,16 @@ export class RuntimeCoordinator {
     if (win && isMinimized) {
       win.preMinimizeGeometry = currentGeom ? { ...currentGeom } : { ...win.frameGeometry };
     }
+    const updates: { minimized: boolean; frameGeometry?: Rect } = {
+      minimized: isMinimized
+    };
+    if (currentGeom) {
+      updates.frameGeometry = currentGeom;
+    }
     return this.ingestEvent({
       type: "WindowStateChanged",
       windowId,
-      updates: {
-        minimized: isMinimized,
-        ...(currentGeom ? { frameGeometry: currentGeom } : {})
-      }
+      updates
     });
   }
 

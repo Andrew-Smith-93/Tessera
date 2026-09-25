@@ -5,8 +5,7 @@
         "Icon": "preferences-desktop-virtual",
         "Authors": [
             {
-                "Name": "Drew",
-                "Email": "user@localhost"
+                "Name": "Drew"
             }
         ],
         "Id": "tessera",

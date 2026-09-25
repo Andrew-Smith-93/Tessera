@@ -1,415 +1,250 @@
-# Tessera Runtime Architecture & Convergence Blueprint
+# Tessera Runtime Architecture Specification
 
-> **Phase 0 Documentation**  
-> Authoritative baseline map of runtime entrypoints, generated artifacts, inactive adapters, and migration boundaries.
-
----
-
-## 1. Current QML Entrypoint (Active Runtime)
-
-- **Manifest Declaration**: [`metadata.json`](../metadata.json) specifies:
-  ```json
-  "X-Plasma-API": "declarativescript",
-  "X-Plasma-MainScript": "ui/main.qml"
-  ```
-- **Execution Context**: Loaded directly by KWin 6.3.6 under X11 into the Qt 6.8 QML runtime as a `DeclarativeScript`.
-- **Authoritative File**: [`contents/ui/main.qml`](../contents/ui/main.qml)
-- **Responsibilities**:
-  - Hooks KWin workspace signals (`windowAdded`, `windowRemoved`, `windowActivated`, `currentDesktopChanged`, `screensChanged`).
-  - Manages per-window event connections (`frameGeometryChanged`, `minimizedChanged`, `fullScreenChanged`, `interactiveMoveResizeStarted/Stepped/Finished`).
-  - Renders the KZones-style visual snap overlay via `PlasmaCore.Dialog` (top maximize card, left/right halves, and 4 corner quadrants).
-  - Dispatches native Plasma OSD notifications via DBus (`org.kde.osdService` / `showText`) on layout cycling, retile, and primary region adjustments.
-  - Resolves multi-screen affinity with mouse cursor prioritization (`getCurrentTargetScreen()`).
-  - Retiles managed windows by invoking the layout calculation module.
+> **Authoritative Technical Specification**: This document details the runtime architecture, component structure, data flow, and reconciliation pipeline of Tessera for KDE Plasma 6.
 
 ---
 
-## 2. Generated Layout Bridge
+## 1. System Overview & Architectural Principles
 
-- **Authoritative File**: [`contents/code/layouts.js`](../contents/code/layouts.js)
-- **Role**: High-performance mathematical layout geometry calculation bridge consumed by `main.qml`:
-  ```qml
-  import "../code/layouts.js" as LayoutsModule
-  ```
-- **Build Pipeline**: Generated automatically by `esbuild` from the TypeScript monorepo source ([`apps/kwin-adapter/src/qml-compat.ts`](../apps/kwin-adapter/src/qml-compat.ts)) which imports [`@tessera/layout-core`](../packages/layout-core).
-- **Exported API**:
-  - `Layouts.masterStack(area, count, options)`
-  - `Layouts.balancedGrid(area, count, options)`
-  - `Layouts.grid(area, count, options)`
-  - `Layouts.binarySplit(area, count, options)`
-  - `Layouts.columns(area, count, options)`
-  - `Layouts.rows(area, count, options)`
-  - `Layouts.monocle(area, count, options)`
-  - `Layouts.applyGaps(rect, gapInner, gapOuter, ...)`
-  - `Layouts.supportedLayouts`
-- **Integrity Guarantee**: Enforced in CI and release workflows via `npm run verify:artifacts` (`git diff --exit-code contents/code/layouts.js`). Releases cannot package stale or drifted layout algorithms.
+Tessera is an automatic dynamic tiling window manager designed natively for KDE Plasma 6. It operates strictly as an in-process KWin declarative script with bundled mathematical bridges and native KDE System Settings integration.
+
+### Core Principles
+1. **In-Process KWin Execution**: Tessera executes directly within KWin's QML and JavaScript runtime. Zero background daemons, external services, or standalone helper processes are required or shipped.
+2. **Single Authoritative Coordinator**: All window ordering, slot assignments, geometry diffing, and transaction planning are centralized in `RuntimeCoordinator`. No competing shadow order maps exist.
+3. **Turn-Based Event Coalescing**: Rapid bursts of compositor signals (e.g. multi-window launches or interactive resizing) coalesce into single, debounced reconciliation passes.
+4. **Echo Suppression**: Programmatic window geometry writes are tracked and filtered to eliminate feedback loops and compositor stutter.
+5. **Region Occupancy Model**: Explicit user drag-and-drop snaps to halves, corner quadrants, and 3 equal pillars coexist deterministically with custom user resizes and layout-inferred window placements.
+6. **Cancellation-Safe Animations**: Smooth easing transitions apply only while windows remain valid and managed; closed, fullscreen, or user-dragged windows cancel immediately without stale geometry writes.
+7. **Native KConfigXT Settings**: Configuration is declared via KConfigXT schemas and edited directly in KDE System Settings without external configuration tools.
 
 ---
 
-## 3. Generated Rules Bridge
+## 2. Shipped Component Architecture
 
-- **Authoritative File**: [`contents/code/rules.js`](../contents/code/rules.js)
-- **Role**: Authoritative window classification and filtering bridge consumed by `main.qml`:
-  ```qml
-  import "../code/rules.js" as RulesModule
-  ```
-- **Build Pipeline**: Generated automatically by `esbuild` from the TypeScript monorepo source ([`apps/kwin-adapter/src/qml-rules-compat.ts`](../apps/kwin-adapter/src/qml-rules-compat.ts)) which imports [`@tessera/rules-engine`](../packages/rules-engine).
-- **Exported API**:
-  - `RuleEngine.classify(window, options)`: Returns structured `{ classification, reason, source, matchedRuleId, matchedPattern }`.
-  - `RuleEngine.shouldFloat(window, userFilterString, customRulesJson, gameWindowPolicy)`: Boolean check for legacy/convenience callers.
-  - `RuleEngine.isIgnored(window)`: Boolean check for unmanaged and non-normal surfaces.
-  - `RuleEngine.defaultFloatPatterns`: Immutable list of patterns floated by default (Tessera Control Center).
-- **Game-Safe Classification & Precedence**:
-  1. Unmanaged / non-normal surfaces -> `ignored` (source: `runtime`).
-  2. True fullscreen (`fullScreen === true`) -> `fullscreen` (source: `runtime`; cannot be overridden by user tile rule).
-  3. Explicit user rules (custom rules / user filter) -> `user-rule` (can override default game recognition or fallback).
-  4. Fullscreen-like borderless state (`noBorder === true`, `maximizeMode === 0`, geometry covers >= 98% of physical output with tolerance <= 5px) -> `fullscreen-like` (source: `runtime`).
-  5. Default game recognition (`steam_app_*`, `gamescope`, custom patterns; excludes ordinary Steam client and generic Wine without game identity) -> follows `gameWindowPolicy` (default: `floating`, source: `default-rule`).
-  6. Dialog / transient -> `dialog` (source: `runtime`).
-  7. Default float patterns (Tessera Control Center) -> `floating` (source: `default-rule`).
-  8. Default fallback -> `tiled` (source: `fallback`).
-- **Integrity Guarantee**: Enforced in CI and release workflows via `npm run verify:artifacts` (`git diff --exit-code contents/code/layouts.js contents/code/rules.js`). Releases cannot package stale or drifted rule logic.
-
----
-
-## 4. Generated Reconciler Bridge (Phase 2A)
-
-- **Authoritative File**: [`contents/code/reconciler.js`](../contents/code/reconciler.js)
-- **Role**: Retained state coordinator and coalesced reconciliation pipeline bridge consumed by `main.qml`:
-  ```qml
-  import "../code/reconciler.js" as ReconcilerModule
-  ```
-- **Build Pipeline**: Generated automatically by `esbuild` from the TypeScript monorepo source ([`apps/kwin-adapter/src/qml-reconciler-compat.ts`](../apps/kwin-adapter/src/qml-reconciler-compat.ts)) which imports [`@tessera/layout-core`](../packages/layout-core), [`@tessera/rules-engine`](../packages/rules-engine), and [`RuntimeCoordinator`](../apps/kwin-adapter/src/runtime-coordinator.ts).
-- **Exported API**:
-  - `ReconcilerBridge.createCoordinator(config)`: Factory creating an isolated `RuntimeCoordinator`.
-  - `ReconcilerBridge.getOrCreateCoordinator(config)`: Singleton accessor.
-  - `ReconcilerBridge.toNormalizedWindow(w, screen, usableArea)`: Converts KWin window to serializable `NormalizedWindowInput`.
-  - `ReconcilerBridge.toNormalizedScreen(scr, usableArea, activeDesktop, activeActivity)`: Converts KWin screen and live scope objects to stable serializable IDs.
-  - `ReconcilerBridge.normalizeCommitGeometry(target, bounds)`: Rejects non-finite/non-positive targets and clamps valid rectangles to the selected output's usable area.
-- **Integrity Guarantee**: Enforced in CI and release workflows via `npm run verify:artifacts` (`git diff --exit-code HEAD -- contents/code/layouts.js contents/code/rules.js contents/code/reconciler.js`).
-
----
-
-## 5. Retained State Ownership & Coalesced Reconciliation Architecture
-
-Phase 2A introduces deterministic state retention and a coalesced transaction lifecycle:
-
-### Retained State Ownership
-- **QML Layer (`contents/ui/main.qml`)**: Owns KWin signal connections, the snap overlay, KWin object normalization, coordinator invocation, and the single guarded `win.frameGeometry` commit sink. Transient drag references stay in QML; retained layout, classification, slot, and geometry memory lives only in the coordinator.
-- **TypeScript Coordinator Layer (`apps/kwin-adapter/src/runtime-coordinator.ts`)**: Owns normalized retained state, event reduction, dirty-scope calculation, transaction planning, geometry diffing, echo suppression, and diagnostics counters.
-
-### Event-to-Transaction Lifecycle
-```
-KWin Signal (e.g. windowAdded, fullScreenChanged, frameGeometryChanged)
-  ↓
-Normalize to serializable NormalizedWindowInput / NormalizedEvent
-  ↓
-Coordinator.ingestEvent(event)
-  ├─ Check in-flight echo suppression (suppresses redundant echoes)
-  ├─ Update RetainedWindowState / RetainedScreenState
-  ├─ Reclassify only if classification inputs or config changed
-  └─ Mark affected screen scope dirty & accumulate pending reasons
-  ↓
-QML scheduleReconcile() [Debounced/coalesced via single-shot Timer]
-  ↓
-Coordinator.reconcile()
-  ├─ Snapshot dirty screens (unaffected screens are skipped)
-  ├─ Extract ordered tileable windows (preserving persistentSlotOrder)
-  ├─ Compute desired layout via @tessera/layout-core
-  ├─ Diff desired vs lastObservedGeometry using documented pixel tolerance (1px)
-  ├─ Generate GeometryOperation[] only for genuine delta
-  └─ Increment transaction epoch & record in-flight echoes
-  ↓
-Apply geometry writes to KWin windows (guarded by isArranging flag)
-```
-
-### Dirty-Scope Rules
-1. **Local Window Events**: An event for a window located on Output A (e.g. geometry change, maximize, border change) marks only Output A dirty. Output B is untouched and zero layout calculations are executed for it.
-2. **Output Migration**: Moving a window from Output A to Output B marks both Output A (vacated slot) and Output B (new occupant) dirty.
-3. **Global Configuration Changes**: Changes to inner/outer gaps, primary-region settings, workspace overrides, or display topology invalidate all screens.
-4. **No-Op Elimination**: If a dirty screen computation yields desired geometries that equal observed geometries (within 1px tolerance), zero writes are generated and no feedback loops occur.
-
-### Geometry Echo Suppression
-- When a geometry write is applied, the target rectangle is recorded in `inFlightEchoes` tagged with the current transaction epoch and timestamp.
-- Incoming `frameGeometryChanged` events matching the recorded target (within 1px tolerance and the default 500ms expiry window) are recognized as echoes, updating `lastObservedGeometry` without marking the screen dirty or scheduling a reconciliation pass.
-- Mismatched external geometry changes (e.g. user manually moving a window) are not suppressed and properly invalidate the screen.
-
-### Single Runtime Authority & Elimination of Legacy Dual Authority (Phase 5D)
-- In Phase 5D, `retileLegacyFallback()` and all competing secondary order maps in `contents/ui/main.qml` (`desktopLayouts`, `screenTiledWindows`, `persistentScreenOrder`, `screenLayouts`, `screenMasterRatios`, `screenMasterCounts`) were **permanently deleted**.
-- `RuntimeCoordinator` is the single runtime authority for all layout calculation, event coalescing, collision-safe workspace scoping (`encodeURIComponent(outputId)//encodeURIComponent(desktopId)`), and slot ordering.
-- Visual overlays (`PlasmaCore.Dialog`) remain rendered in QML, but zone geometry calculation, corner quadrant slot mapping, and cursor hover matching are delegated to pure TypeScript modules (`computeSnapZones`, `matchSnapZoneHover`).
-
----
-
-## 6. Geometry Cache & Multi-Screen Affinity (Phase 2B)
-
-Phase 2B completes the convergence of runtime geometry memory, multi-screen affinity resolution, and snap zone calculations into authoritative pure TypeScript:
-
-### Authoritative Runtime Geometry Memory
-- **`RuntimeCoordinator` Ownership**:
-  - `currentDesiredTiledGeometry`: Persists desired layout geometry across all layout computations, unmaximize operations, and drag restore events.
-  - `preMinimizeGeometry`: Captured synchronously on minimize events to preserve exact floating/tiled dimensions prior to being minimized.
-  - `isPreTiled`: Tracks whether a window was tiled prior to minimize, maximize, or manual float operations.
-  - `outputAffinity`: Retains the screen output association for every window across desktop and screen transitions.
-- **QML Compatibility Layer**:
-  - Helper functions `getSavedTiledGeometry(wid)`, `setSavedTiledGeometry(wid, rect)`, `getPreMinimizeGeometry(wid)`, and `setPreMinimizeGeometry(wid, rect)` are thin coordinator delegates; no secondary QML fallback store exists.
-
-### 7-Step Multi-Screen Affinity Precedence Hierarchy
-Implemented in [`apps/kwin-adapter/src/screen-affinity.ts`](../apps/kwin-adapter/src/screen-affinity.ts):
-1. **Explicit Valid Output Identity**: If the window manager or event provides a valid, connected output ID, select it.
-2. **Window Center Point Containment**: If the window center `(cx, cy)` is contained within a screen's usable area or geometry, select that screen.
-3. **Maximum Window Intersection Area**: If the window spans multiple monitors, select the screen with the largest intersection area.
-4. **Previous Retained Affinity**: If no geometry matches, honor the window's previous valid retained output affinity.
-5. **Cursor Position Containment**: If cursor position is provided, select the screen containing `(cursor.x, cursor.y)`.
-6. **Deterministic Nearest-Output Fallback**: Calculate Euclidean distance from the window center (or cursor) to screen rectangles and select the nearest screen. Handles negative coordinates, stacked setups, and gaps between displays.
-7. **Stable Lexical Tie-Breaker**: If multiple screens are equidistant, break ties deterministically by sorting `outputId` lexically.
-
-### Pure Snap Zone Calculation Engine
-Implemented in [`apps/kwin-adapter/src/snap-zones.ts`](../apps/kwin-adapter/src/snap-zones.ts):
-- Pure computation of all 7 KZones-style snap targets and trigger boundaries:
-  - Top Maximize Bar Card (Index 0)
-  - Left Half / Primary Slot (Index 1)
-  - Right Half / Stack Slot (Index 2)
-  - Top-Left Quarter (Index 3)
-  - Bottom-Left Quarter (Index 4)
-  - Top-Right Quarter (Index 5)
-  - Bottom-Right Quarter (Index 6)
-- Pure hover matching (`matchSnapZoneHover`) prioritizing corner quadrants over halves and maximize cards.
-
-
----
-
-## 6. Inactive TypeScript Adapter (Phase 3+ Target)
-
-- **Source Location**: [`apps/kwin-adapter/src/`](../apps/kwin-adapter/src/)
-- **Bundle Output**: `dist/kwin-adapter.js` (standalone self-executing bundle)
-- **Architecture**:
-  - [`TilingEngine`](../apps/kwin-adapter/src/tiling-engine.ts): Type-safe KWin 6.3.6 event coordinator.
-  - [`ScreenStateManager`](../apps/kwin-adapter/src/screen-state.ts): Isolated multi-screen state model.
-  - [`RuntimeCoordinator`](../apps/kwin-adapter/src/runtime-coordinator.ts): State retention and transaction planner.
-- **Current Status**: TypeScript engine is active via generated bridges (`layouts.js`, `rules.js`, `reconciler.js`) in `ui/main.qml`. Standalone adapter mode is reserved for future native TS runner.
-
----
-
-## 7. Pruned Legacy Files (Phase 1B)
-
-During Phase 1B (Runtime Surface Pruning), the following dead candidate files were rigorously audited across all imports, packaging scripts, manifest definitions, and runtime loaders. Having been proven completely inactive, they were permanently pruned from the codebase:
-
-| File | Status | Proof of Inactivity |
-| :--- | :--- | :--- |
-| `contents/code/main.js` | **Pruned** | Legacy 1118-line monolithic JavaScript script from initial prototype. Inactive because `metadata.json` configures KWin in `declarativescript` mode with `ui/main.qml`; ignored by KWin runtime. No imports or packaging dependencies. |
-| `contents/ui/tessera.qml` | **Pruned** | Superseded prototype declarative entrypoint. Inactive because `metadata.json` specifies `"X-Plasma-MainScript": "ui/main.qml"`. Not loaded or referenced anywhere. |
-| `contents/ui/ZoneOverlay.qml`| **Pruned** | Standalone snap overlay experiment only loaded by the dead `tessera.qml`. Inactive because `contents/ui/main.qml` renders the KZones-style visual snap overlay inline via `PlasmaCore.Dialog`. |
-| `contents/ui/TopNotification.qml` | **Pruned** | Notification overlay experiment only loaded by the dead `tessera.qml`. Inactive because `contents/ui/main.qml` uses native Plasma DBus OSD (`org.kde.osdService` / `showText`) and an inline HUD dialog. |
-
-Absence of these files is enforced by automated packaging assertions in `.github/workflows/ci.yml` and unit tests in `tests/test_package_manifest.py`.
-
----
-
-## 8. Deterministic Runtime Simulator (Phase 3)
-
-- **Authoritative Package**: [`apps/runtime-simulator`](../apps/runtime-simulator)
-- **Role**: Headless, offline test runner and trace replay harness that directly consumes the production TypeScript runtime modules:
-  - [`RuntimeCoordinator`](../apps/kwin-adapter/src/runtime-coordinator.ts)
-  - [`@tessera/layout-core`](../packages/layout-core)
-  - [`@tessera/rules-engine`](../packages/rules-engine)
-  - Screen affinity and snap zone geometry solvers.
-- **Execution Architecture**:
-  ```
-  ┌────────────────────────────────────────────────────────┐
-  │                 apps/runtime-simulator                 │
-  │  ┌────────────────────────┐  ┌──────────────────────┐  │
-  │  │ Trace Fixtures (1.0.0) │  │ Seeded PRNG Stress   │  │
-  │  └───────────┬────────────┘  └──────────┬───────────┘  │
-  │              │                          │              │
-  │              ▼                          ▼              │
-  │  ┌──────────────────────────────────────────────────┐  │
-  │  │ RuntimeSimulator Engine & Injectable LogicalClock│  │
-  │  └───────────────────────┬──────────────────────────┘  │
-  │                          │                             │
-  │                          ▼                             │
-  │  ┌──────────────────────────────────────────────────┐  │
-  │  │ Production RuntimeCoordinator (apps/kwin-adapter)│  │
-  │  │   ├── @tessera/layout-core                       │  │
-  │  │   └── @tessera/rules-engine                      │  │
-  │  └───────────────────────┬──────────────────────────┘  │
-  │                          │                             │
-  │                          ▼                             │
-  │  ┌──────────────────────────────────────────────────┐  │
-  │  │ SimulatedKWinSession (Echo Simulation Boundary)  │  │
-  │  │   (immediate, delayed, missing, mismatched, dup) │  │
-  │  └───────────────────────┬──────────────────────────┘  │
-  │                          │                             │
-  │                          ▼                             │
-  │  ┌──────────────────────────────────────────────────┐  │
-  │  │ Canonical JSON Serialization & Invariant Checker │  │
-  │  │   (13 Structural Rules, SHA-256 Digest)          │  │
-  │  └──────────────────────────────────────────────────┘  │
-  └────────────────────────────────────────────────────────┘
-  ```
-- **Guarantees**:
-  - Zero wall-clock dependence via `LogicalClock`.
-  - Turn-based event coalescing and explicit flush boundaries.
-  - Byte-level determinism with deep key-sorted canonical JSON.
-  - Verification enforced in CI via `npm run sim:verify`.
-  - Strictly excluded from release `.kwinscript` bundles.
-
----
-
-## 9. Intended Migration Boundary
-
-Future convergence will separate concerns across strict architectural layers:
+The following diagram illustrates the components shipped in the production Tessera `.kwinscript` package:
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                   KWin Script Host                     │
-│  ┌───────────────────────────┐ ┌────────────────────┐  │
-│  │   apps/kwin-adapter       │ │   contents/ui/     │  │
-│  │   (Realtime Event Loop)   │ │   (QML Overlays)   │  │
-│  └─────────────┬─────────────┘ └─────────┬──────────┘  │
-│                │                         │             │
-│  ┌─────────────▼─────────────────────────▼──────────┐  │
-│  │         packages/layout-core (Pure Math)         │  │
-│  │         packages/rules-engine (Classification)   │  │
-│  │         packages/protocol (Domain Types)         │  │
-│  └──────────────────────────────────────────────────┘  │
-└───────────────────────────▲────────────────────────────┘
-                            │ (Asynchronous Unix Socket / DBus)
-┌───────────────────────────▼────────────────────────────┐
-│          External Tools / Settings GUI (Optional)      │
-│  - Configuration persistence, CLI tooling, DBus / IPC  │
-│  - Zero IPC on KWin layout hot path                    │
-│└───────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                             KDE Plasma 6 / KWin Runtime                              │
+│                                                                                      │
+│  ┌──────────────────────────────────────────────┐  ┌──────────────────────────────┐  │
+│  │           Declarative Script Host            │  │  Native Configuration (KCM)  │  │
+│  │           (contents/ui/main.qml)             │  │  (contents/ui/config.ui)     │  │
+│  │                                              │  │  (contents/config/main.xml)  │  │
+│  │  • KWin Workspace & Window Signals           │  └──────────────┬───────────────┘  │
+│  │  • 12-Zone Visual Snap Overlay               │                 │                  │
+│  │  • Plasma DBus OSD (org.kde.osdService)      │                 │ Reads & Writes   │
+│  │  • Safe Window Animator (cubic easing)       │                 ▼                  │
+│  │  • Central Window Geometry Commit Sink       │◄───── ~/.config/kwinrc             │
+│  │  • 22 Super-Primary Global Shortcuts         │       [Script-tessera]             │
+│  └──────────────────────┬───────────────────────┘                                    │
+│                         │                                                            │
+│                         │ imports ReconcilerModule exclusively                       │
+│                         ▼                                                            │
+│  ┌────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ reconciler.js (Active Runtime Bridge — Compiled via esbuild)                   │  │
+│  │                                                                                │  │
+│  │  • RuntimeCoordinator (Single In-Process Retained State Authority)             │  │
+│  │    ├─ Retained State Management (Screens, Workspaces, Window Slots)            │  │
+│  │    ├─ 7-Step Multi-Screen Affinity Resolution                                  │  │
+│  │    ├─ Region Occupancy Model & Cross-Family Collision Resolution               │  │
+│  │    ├─ Turn-Based Event Coalescing & Dirty-Scope Detection                      │  │
+│  │    ├─ In-Flight Geometry Echo Suppression Filter                               │  │
+│  │    └─ Transaction Planning & Minimal Delta Geometry Operations                 │  │
+│  │                                                                                │  │
+│  │  • Statically Bundled Core Modules (Compiled Inlined):                         │  │
+│  │    ├─ @tessera/layout-core (Balanced Grid, Primary-Stack, BSP, Columns, Rows)  │  │
+│  │    ├─ @tessera/rules-engine (Window Classifier & Policy Resolution)            │  │
+│  │    └─ Snap Zone Math (12 Zones, Cursor Targeting, Region Transitions)          │  │
+│  └────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                      │
+│  ┌────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ Standalone Compatibility Bridges (Packaged in .kwinscript, NOT imported by QML)│  │
+│  │                                                                                │  │
+│  │  • layouts.js: Standalone @tessera/layout-core bridge (isolated tests)         │  │
+│  │  • rules.js:   Standalone @tessera/rules-engine bridge (isolated tests)        │  │
+│  │  (Zero runtime invocation by main.qml; zero shared mutable state)              │  │
+│  └────────────────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 10. Critical Features to Preserve During Migration
+## 3. Shipped Component Specifications
 
-Any subsequent convergence or refactoring MUST preserve the following runtime invariants:
+### 3.1 Declarative Script Host (`contents/ui/main.qml`)
+- **Type**: Qt 6 Quick / QML DeclarativeScript loaded by KWin 6.
+- **Manifest**: Declared in `metadata.json` (`"X-Plasma-API": "declarativescript"`, `"X-Plasma-MainScript": "ui/main.qml"`).
+- **Signal Hooks**:
+  - Workspace level: `windowAdded`, `windowRemoved`, `windowActivated`, `currentDesktopChanged`, `screensChanged`.
+  - Window level: `frameGeometryChanged`, `minimizedChanged`, `fullScreenChanged`, `desktopsChanged`, `activitiesChanged`, `interactiveMoveResizeStarted/Stepped/Finished`.
+- **Visual Snap Overlay**: Renders interactive drop preview targets when dragging windows near screen edges or trigger regions.
+- **OSD Integration**: Dispatches notifications via DBus (`org.kde.osdService /showText`) on region snapping, tiling toggle, floating toggle, and workspace retiling.
+- **Single Commit Sink**: All programmatic window geometry assignments route exclusively through `commitWindowGeometry(win, targetRect, reason, epoch)`.
 
-1. **Cursor-Prioritized Multi-Screen Targeting**: Primary-region count adjustments and layout switches target the monitor under the cursor (`Workspace.cursorPos`). Screen 0 changes never contaminate Screen 1.
-2. **50/50 2-Window Split**: When 2 windows are present, they must split 50/50 side-by-side.
-3. **Zero Primary-Region Balanced Grid**: Setting `primaryRegionCount: 0` delegates to `solveBalancedGrid`.
-4. **Maximized Window Slot Memory**: Maximized windows do not break background tiling. When unmaximized, they must return directly to their designated tile.
-5. **Minimized Window Slot Persistence**: Windows restored from minimize preserve their coordinator-owned workspace slot without reshuffling active windows.
-6. **X11 Echo Suppression**: Programmatic frameGeometry assignments must suppress feedback loops to prevent compositor stutter and oscillation.
-7. **KZones-Style Overlay**: Live mouse-tracking preview cards use the configured 8-60ms polling interval.
-8. **Native DBus OSD**: Plasma OSD feedback accompanies layout and primary-region adjustments; no separate master HUD exists.
+### 3.2 Active Runtime Bridge (`contents/code/reconciler.js`)
+- **Role**: The **sole** active JavaScript runtime bridge imported by `contents/ui/main.qml` (`import "../code/reconciler.js" as ReconcilerModule`).
+- **Source**: Compiled via `esbuild` from `apps/kwin-adapter/src/qml-reconciler-compat.ts` and `apps/kwin-adapter/src/runtime-coordinator.ts`.
+- **Statically Inlines**: Directly bundles `@tessera/layout-core`, `@tessera/rules-engine`, and snap geometry mathematics into a single cohesive runtime bundle.
+- **QML-Owned Coordinator Lifecycle**: The coordinator instance is owned and retained directly by the QML script host (`property var coordinator: null` in `contents/ui/main.qml`). Upon first access or configuration load, `getCoordinator()` calls `ReconcilerModule.ReconcilerBridge.createCoordinator(config)` and caches the instance in `root.coordinator`. The bridge's exported module-level helper `getOrCreateCoordinator(config)` is not consumed by QML; instance lifetime and state persistence are bound directly to the active QML component lifecycle.
+- **Normalizer**: Converts live KWin objects to serializable records (`toNormalizedWindow`, `toNormalizedScreen`).
+- **Workspace Scoping**: Maintains collision-safe workspace scopes (`encodeURIComponent(outputId) + "//" + encodeURIComponent(desktopId)`).
+- **Slot Persistence**: Preserves window slot assignments across minimize, restore, and fullscreen cycles.
+
+### 3.3 Standalone Layout Bridge (`contents/code/layouts.js`)
+- **Role**: Standalone compatibility bridge packaged in `.kwinscript` for isolated contract validation and independent testing.
+- **Source**: Compiled via `esbuild` from `apps/kwin-adapter/src/qml-compat.ts` importing `@tessera/layout-core`.
+- **Runtime Execution**: **None during standard operation.** `main.qml` does not import `layouts.js`; all layout mathematics during active reconciliation execute through the inlined `layout-core` solvers inside `reconciler.js`. Zero shared state exists between `layouts.js` and `RuntimeCoordinator`.
+
+### 3.4 Standalone Window Rules Bridge (`contents/code/rules.js`)
+- **Role**: Standalone compatibility bridge packaged in `.kwinscript` for isolated rule engine testing.
+- **Source**: Compiled via `esbuild` from `apps/kwin-adapter/src/qml-rules-compat.ts` importing `@tessera/rules-engine`.
+- **Runtime Execution**: **None during standard operation.** `main.qml` does not import `rules.js`; window classification during active reconciliation executes through the inlined `rules-engine` modules inside `reconciler.js`. Zero shared state exists between `rules.js` and `RuntimeCoordinator`.
+
+### 3.5 Native Configuration Interface
+- **`contents/config/main.xml`**: Canonical KConfigXT schema declaring types, keys, and default values.
+- **`contents/ui/config.ui`**: Qt Designer form embedded directly in KDE System Settings (Window Management → KWin Scripts → Tessera).
 
 ---
 
-## 11. Cold-Path IPC Protocol V1 (Phase 4)
+## 4. Reconciliation Lifecycle & Data Flow
 
-Phase 4 defines the authoritative, versioned cold-path IPC protocol connecting external components (CLI, configuration GUI, external tools, plugins) to the Tessera runtime:
-
-### Protocol Identity & Framing
-- **Protocol Namespace**: `"tessera.ipc"`
-- **Major Version**: `1`
-- **Minor Version**: `0`
-- **Version Negotiation**: `system.hello` negotiates the mutually supported version range. Unsupported major versions return `UNSUPPORTED_MAJOR_VERSION`, and unsupported minor versions return `UNSUPPORTED_MINOR_VERSION`.
-- **Transport Framing**: Transport-independent streaming byte frames: `[4-byte big-endian length uint32][UTF-8 JSON payload]`.
-- **Maximum Frame Size**: 1 MiB (`1,048,576` bytes). Frames declaring a larger length header are rejected immediately before allocation (`FRAME_TOO_LARGE`).
-- **Zero-Length & Malformed Frames**: Zero-length frames and invalid UTF-8/JSON syntax are rejected with typed `DECODE_ERROR`.
-- **Stream Finalization**: Trailing partial frames at stream termination are detected via `finalize()` and reported as `DECODE_ERROR`.
-
-### Strict Cold-Path Guarantee & Asynchronous Command Queue
-- The IPC protocol is strictly cold-path. Zero IPC frames sit on the KWin window management hot path.
-- Mutation requests (`config.applyPatch`, `runtime.requestReconcile`, `runtime.setLayout`, `runtime.setMasterCount`, `runtime.setMasterRatio`, `runtime.setWindowFloating`) return immediate acknowledgements containing state revisions and command IDs.
-- Commands are enqueued into an internal FIFO asynchronous command queue. No layout computation or coordinator write occurs synchronously during protocol decoding.
-- Work executes only when the runtime advances (`advance()` / `flushCommandQueue()`).
-- Idempotent execution is guaranteed via optional `idempotencyKey` parameter.
-- Stale mutations specifying an outdated `expectedRevision` are rejected with `REVISION_CONFLICT`.
-
-### Security and Resource Limits
-- `MAX_FRAME_SIZE`: 1 MiB (1,048,576 bytes)
-- `MAX_NESTING_DEPTH`: 32 levels
-- `MAX_STRING_LENGTH`: 65,536 characters
-- `MAX_ARRAY_LENGTH`: 10,000 items
-- `MAX_OUTSTANDING_REQUESTS`: 1,000
-- `MAX_SUBSCRIPTION_COUNT`: 100
-
-### Envelope Structure
-Every message adheres to a strictly validated envelope:
-```json
-{
-  "protocol": "tessera.ipc",
-  "majorVersion": 1,
-  "minorVersion": 0,
-  "kind": "request" | "response" | "event",
-  "id": "<opaque-string-id>",
-  "metadata": {}
-}
 ```
-- **Request**: `{ "method": string, "params"?: object }`
-- **Response**: `{ "replyTo": string, "ok": boolean, "result"?: any, "error"?: { "code": string, "message": string, "details"?: any } }`
-- **Event**: `{ "event": string, "data": any }`
+ Compositor Signals             Declarative QML                   RuntimeCoordinator
+────────────────────           ─────────────────                 ────────────────────
+         │                             │                                   │
+Window Created / Moved                 │                                   │
+         ├────────────────────────────►│                                   │
+         │                             │ toNormalizedWindow()              │
+         │                             │ toNormalizedScreen()              │
+         │                             ├──────────────────────────────────►│
+         │                             │                                   │ ingestEvent()
+         │                             │                                   │   ├─ Check EchoFilter
+         │                             │                                   │   ├─ Update Retained State
+         │                             │                                   │   └─ Mark Screen Scope Dirty
+         │                             │                                   │
+         │                       reconcileTimer (60ms debounced)           │
+         │                             ├──────────────────────────────────►│
+         │                             │                                   │ reconcile()
+         │                             │                                   │   ├─ Resolve Screen Affinity
+         │                             │                                   │   ├─ Resolve Region Occupancy
+         │                             │                                   │   ├─ Solve Layout Geometry
+         │                             │                                   │   ├─ Diff vs Observed (>1px)
+         │                             │◄──────────────────────────────────┤   └─ Record In-Flight Echoes
+         │                             │ Emit GeometryOperation[]          │
+         │                             │                                   │
+         │   commitWindowGeometry()    │                                   │
+         │◄────────────────────────────┤                                   │
+         │ (or animateWindow)          │ recordCommand(wid, target, epoch) │
+         │                             ├──────────────────────────────────►│
+         │                             │                                   │ Record expected geometry in EchoFilter
+         │                             │                                   │
+frameGeometryChanged (Echo)            │                                   │
+         ├────────────────────────────►│                                   │
+         │                             │ checkAndHandleEcho(wid, observed) │
+         │                             ├──────────────────────────────────►│
+         │                             │                                   │ Matched echo -> Suppressed!
+         │                             │                                   │ (Redundant retile prevented)
+```
 
-### Complete Redaction Policy
-When identity redaction is enabled (`redactIdentities = true`) or in default diagnostics/trace dumps:
-- `title`: omitted or redacted
-- `resourceClass`: `"[REDACTED]"`
-- `resourceName`: `"[REDACTED]"`
-- `appId`: `"[REDACTED]"`
-- `desktopFileName`: `"[REDACTED]"`
-- `role`: `"[REDACTED]"`
-
-### Capabilities & Handshake Negotiation
-All client interactions begin with a mandatory handshake:
-- **Handshake Method**: `system.hello`
-  - Parameters: `{ "clientName": string, "clientVersion": string, "minMajor"?: number, "maxMajor"?: number, "minMinor"?: number, "maxMinor"?: number, "requestedCapabilities"?: string[] }`
-  - Response: `{ "serverName": "tessera-runtime", "serverVersion": string, "negotiatedMajor": 1, "negotiatedMinor": 0, "capabilities": string[], "maxFrameSize": 1048576, "limits": object }`
-- **V1 Capabilities**:
-  - `state.inspect`: Read retained state snapshot, diagnostics, and capabilities.
-  - `config.mutate`: Validate and apply configuration patches.
-  - `runtime.control`: Enqueue layout reconciliations and runtime layout/master adjustments.
-  - `trace.inspect`: Read and clear execution trace history.
-- **Enforcement**: Methods invoked without negotiating their required capability return `CAPABILITY_NOT_NEGOTIATED`.
-
-### Methods, Events & Error Codes Catalog
-- **Methods**:
-  - `system.hello`: Capability and version handshake.
-  - `state.getSnapshot`: Returns retained screens, windows, configuration, and diagnostics.
-  - `state.getDiagnostics`: Query live coordinator event/transaction counters.
-  - `state.getCapabilities`: Query supported protocol and adapter capabilities.
-  - `config.get`: Returns current active configuration and revision.
-  - `config.validatePatch`: Validates proposed configuration patch against known keys and types.
-  - `config.applyPatch`: Enqueues configuration mutation with optional `expectedRevision` and `idempotencyKey`.
-  - `runtime.requestReconcile`: Enqueues reconciliation pass for forced or dirty screens.
-  - `runtime.setLayout`: Enqueues layout algorithm change for target output.
-  - `runtime.setMasterCount`: Enqueues master count adjustment.
-  - `runtime.setMasterRatio`: Enqueues master split ratio adjustment.
-  - `runtime.setWindowFloating`: Enqueues manual floating mode toggle.
-  - `runtime.getVersion`: Returns runtime engine version and protocol numbers.
-  - `trace.getRecent`: Inspect recent execution trace history (returns `TRACE_DISABLED` if inactive).
-  - `trace.clearRecent`: Clears recent trace history.
-- **Events**:
-  - `runtime.ready`: Broadcast when runtime initialization completes.
-  - `runtime.stateChanged`: Broadcast when screen states or dirty scopes change.
-  - `runtime.transactionCommitted`: Broadcast with the full serializable reconciliation transaction.
-  - `runtime.configurationChanged`: Broadcast when configuration mutations take effect.
-  - `runtime.capabilitiesChanged`: Broadcast when available capabilities update.
-  - `runtime.warning`: Broadcast on recoverable non-fatal runtime warnings.
-- **Error Codes**:
-  `INVALID_ENVELOPE`, `UNSUPPORTED_MAJOR_VERSION`, `UNSUPPORTED_MINOR_VERSION`, `CAPABILITY_NOT_NEGOTIATED`, `UNKNOWN_METHOD`, `INVALID_PAYLOAD`, `FRAME_TOO_LARGE`, `CONFIG_VALIDATION_FAILED`, `REVISION_CONFLICT`, `WINDOW_NOT_FOUND`, `OUTPUT_NOT_FOUND`, `TRACE_DISABLED`, `INTERNAL_ERROR`, `DECODE_ERROR`.
-
-### In-Memory Reference Endpoint & Fuzz Verification
-- **Reference Endpoints**: Provided via `ReferenceServer` and `ReferenceClient` in `@tessera/protocol`. Dedicated `StreamingFrameDecoder` per client session prevents state corruption between concurrent connections.
-- **Deterministic Fuzz Testing**: Byte stream and envelope object fuzzing using Mulberry32 PRNG (seeds 42 and 12345) running 5,000 iterations each to guarantee crash resilience. Zero wall-clock or non-deterministic PRNG.
-- **Package Archive Isolation**: Protocol schemas, fixtures, and tests reside in `packages/protocol` and are strictly excluded from the release `.kwinscript` bundle.
+### Dirty-Scope Calculation Rules
+- **Local Window Events**: An event for a window on Screen A marks only Screen A dirty. Screen B computation is completely bypassed.
+- **Output Migration**: Moving a window between screens marks both the source (vacated slot) and destination (new occupant) scopes dirty.
+- **Configuration Changes**: Global gap or policy adjustments mark all active scopes dirty.
+- **No-Op Pruning**: If computed rectangles match observed rectangles within 1px tolerance, zero writes are issued.
 
 ---
 
-## 12. Self-Contained Runtime Architecture & Daemon Retirement
+## 5. Region Occupancy Model & 12 Snap Zones
 
-Tessera ships strictly as a self-contained KWin QML script plus generated TypeScript/JavaScript runtime (`contents/ui/main.qml`, `contents/code/layouts.js`, `contents/code/rules.js`, `contents/code/reconciler.js`, `contents/config/main.xml`, `contents/ui/config.ui`). Zero native background daemon, binary service, or autostart background process is included or required.
+Tessera implements a deterministic **Region Occupancy Model** that resolves interactions between explicit snaps, custom keyboard/drag resizes, and automatic layout tiling:
 
-### Retired Standalone Companion Daemon
-Earlier exploratory development evaluated an out-of-process companion daemon (`apps/tessera-daemon`) over Unix domain sockets. Because Tessera's declarative QML coordinator and embedded rule/layout solvers execute fully and deterministically within KWin's existing JavaScript/QML environment with sub-millisecond response times, the standalone native daemon was retired prior to release to eliminate unnecessary complexity and external dependencies.
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        12 Visual Snap Zones                            │
+│                                                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                    Top Maximize Bar (maximize)                   │  │
+│  ├─────────────────┬──────────────────────────────┬─────────────────┤  │
+│  │                 │    Center Top (center-top)   │                 │  │
+│  │                 ├──────────────────────────────┤                 │  │
+│  │                 │ Center Bottom (center-bottom)│                 │  │
+│  │                 ├──────────────────────────────┤                 │  │
+│  │   Left Half     │  Center Pillar (full height) │   Right Half    │  │
+│  │  (left-half)    │       (center-pillar)        │  (right-half)   │  │
+│  │                 ├──────────────────────────────┤                 │  │
+│  │                 │         Left Pillar          │   Right Pillar  │  │
+│  │                 │        (left-pillar)         │  (right-pillar) │  │
+│  ├─────────────────┼──────────────────────────────┼─────────────────┤  │
+│  │ Top-Left Corner │                              │Top-Right Corner │  │
+│  │    (top-left)   │                              │   (top-right)   │  │
+│  ├─────────────────┤                              ├─────────────────┤  │
+│  │Bottom-Left Corn.│                              │Bottom-Right Corn│  │
+│  │  (bottom-left)  │                              │  (bottom-right) │  │
+│  └─────────────────┴──────────────────────────────┴─────────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
-### Cold-Path IPC & Protocol V1 Freeze
-The Protocol V1 specification (`packages/protocol`) remains frozen and preserved as the authoritative schema and domain typing reference for potential future external tooling (such as CLI inspection or configuration utilities). However, the production release contains no native daemon service.
+### Geometric Collision Resolution
+When windows belonging to different snap families occupy the same screen:
+- **Left-Half vs. Center-Pillar**: A left-half peer automatically adapts to the left pillar when a center pillar window is committed, avoiding geometric overlap.
+- **Quadrant vs. Center-Split**: A top-left quadrant peer adapts to the top half of the left pillar when center-top is committed.
+- **Custom Resize Priority**: Windows with active custom resize rectangles (`customTiledGeometry`) maintain their dimensions unless superseded by an explicit snap drop.
+- **Overcrowding Safeguard**: Overcrowded regions clamp to valid non-negative, non-zero dimensions with guaranteed minimum bounds (`minW >= 40px`, `minH >= 30px`).
 
-### Distribution Packaging Isolation
-- Release `.kwinscript` bundles contain only KWin declarative artifacts (`contents/` and `metadata.json`).
-- Packaging archives strictly exclude all repository development tooling, tests, fixtures, and source build directories, verified in CI and python tests.
+---
+
+## 6. Safe Window Animation Engine
+
+Smooth transitions between layout states are managed by `windowAnimator` inside `contents/ui/main.qml`:
+
+- **Easing Curve**: Smooth cubic deceleration (`easeOutCubic(t) = 1 - (1 - t)^3`).
+- **Configurable Duration**: Defaults to 180ms, adjustable via `animationDurationMs` in configuration.
+- **Cancellation Safety**:
+  - If a window is unmapped, closed, minimized, switched to fullscreen, or dragged by the user, the active animation cancels immediately **without writing the stale target rectangle**.
+  - Subsequent layout retargeting transitions retarget smoothly from the window's current observed position.
+
+---
+
+## 7. Global Shortcuts Architecture
+
+Tessera registers 22 canonical keyboard shortcuts under KDE Plasma's Global Shortcuts (`kglobalshortcutsrc`). All shortcuts use the Super (<kbd>Meta</kbd>) modifier:
+
+- **Tiling & Overlay Controls**:
+  - `Meta+Shift+C`: Toggle Zone Overlay
+  - `Meta+Shift+T`: Toggle Tiling Globally
+  - `Meta+Shift+F`: Toggle Active Window Floating
+  - `Meta+Shift+R`: Force Retile Current Workspace
+- **Region Snapping & Placement**:
+  - `Meta+Left`: Move Window to Left Snap Region
+  - `Meta+Right`: Move Window to Right Snap Region
+  - `Meta+Up`: Move Window to Upper Snap Region
+  - `Meta+Down`: Move Window to Lower Snap Region
+- **Keyboard Resize**:
+  - `Meta+Shift+Right` / `Meta+Shift+Left`: Expand / Shrink Window Width
+  - `Meta+Shift+Down` / `Meta+Shift+Up`: Expand / Shrink Window Height
+- **Multi-Monitor Migration**:
+  - `Meta+Ctrl+Left` / `Meta+Ctrl+Right`: Move Window to Screen Left / Right
+  - `Meta+Ctrl+Up` / `Meta+Ctrl+Down`: Move Window to Screen Above / Below
+- **Spatial Focus & Window Swapping (WASD)**:
+  - `Meta+Alt+A` / `Meta+Alt+D` / `Meta+Alt+W` / `Meta+Alt+S`: Focus Left / Right / Up / Down
+  - `Meta+Alt+Q` / `Meta+Alt+E`: Swap Window Left / Right
+
+User-customized keybindings and empty bindings are preserved across installer executions. Preserved legacy shortcut keys in `kglobalshortcutsrc` from earlier versions are retained to prevent configuration loss, but remain **dormant** because the active QML runtime only registers the 22 canonical `ShortcutHandler` actions. Opt-in spatial migration (`./install.sh --migrate-spatial-shortcuts`) transfers legacy bindings from retired cyclical actions (such as `Focus Next Window`) to active 2D directional replacements (such as `Focus Right Window`), adopting directional spatial navigation.
+
+---
+
+## 8. Development, Testing & Verification Infrastructure
+
+The repository is organized as a monorepo separating production runtime code from verification tools:
+
+- **Authoritative Modules**:
+  - `packages/layout-core`: Mathematical layout solvers and geometry models.
+  - `packages/rules-engine`: Window classification and rule matching.
+  - `apps/kwin-adapter`: Runtime coordinator, dirty-scope tracking, and snap zone calculations.
+- **Offline Simulation Framework**:
+  - `apps/runtime-simulator`: Headless KWin session emulator with an injectable logical clock. Validates 25 golden trace scenarios and seeded PRNG stress tests across 13 structural invariants.
+- **Contract & Protocol Integrity**:
+  - `packages/protocol`: Frozen Protocol V1 domain schemas (`protocol-v1.freeze.json`).
+- **Packaging Isolation**:
+  - `./package.sh` builds the release `.kwinscript` bundle with a verified 12-entry manifest (including root `LICENSE` for recipient license integration), completely isolating runtime script code from development tools, simulator code, and test suites.

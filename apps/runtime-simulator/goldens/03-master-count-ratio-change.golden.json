@@ -1,14 +1,14 @@
 {
-  "digest": "18ed855eff54d17a4bbb557027d6ed624c0b6921a05307da15d85dfe4fbf70cb",
+  "digest": "d48e4a30d44471f58dbafb76b0863aab34339b9f0e942b6604caa0110b9ae5d1",
   "fixtureName": "03-master-count-ratio-change",
   "finalTick": 0,
   "diagnostics": {
     "totalEvents": 9,
     "totalTransactions": 3,
     "totalLayoutComputations": 3,
-    "totalGeometryWrites": 12,
-    "skippedWrites": 0,
-    "suppressedEchoes": 12,
+    "totalGeometryWrites": 4,
+    "skippedWrites": 8,
+    "suppressedEchoes": 4,
     "previewOnlyOperations": 0,
     "committedSnapOperations": 0,
     "unaffectedScreensRecomputed": 0
@@ -17,10 +17,10 @@
     "diagnostics": {
       "committedSnapOperations": 0,
       "previewOnlyOperations": 0,
-      "skippedWrites": 0,
-      "suppressedEchoes": 12,
+      "skippedWrites": 8,
+      "suppressedEchoes": 4,
       "totalEvents": 9,
-      "totalGeometryWrites": 12,
+      "totalGeometryWrites": 4,
       "totalLayoutComputations": 3,
       "totalTransactions": 3,
       "unaffectedScreensRecomputed": 0
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -73,13 +73,13 @@
         "classification": "tiled",
         "desiredGeometry": {
           "height": 526,
-          "width": 1234,
+          "width": 946,
           "x": 10,
           "y": 10
         },
         "frameGeometry": {
           "height": 526,
-          "width": 1234,
+          "width": 946,
           "x": 10,
           "y": 10
         },
@@ -99,15 +99,15 @@
         "classification": "tiled",
         "desiredGeometry": {
           "height": 526,
-          "width": 1234,
-          "x": 10,
-          "y": 544
+          "width": 946,
+          "x": 964,
+          "y": 10
         },
         "frameGeometry": {
           "height": 526,
-          "width": 1234,
-          "x": 10,
-          "y": 544
+          "width": 946,
+          "x": 964,
+          "y": 10
         },
         "fullScreen": false,
         "id": "win-2",
@@ -125,15 +125,15 @@
         "classification": "tiled",
         "desiredGeometry": {
           "height": 526,
-          "width": 658,
-          "x": 1252,
-          "y": 10
+          "width": 946,
+          "x": 10,
+          "y": 544
         },
         "frameGeometry": {
           "height": 526,
-          "width": 658,
-          "x": 1252,
-          "y": 10
+          "width": 946,
+          "x": 10,
+          "y": 544
         },
         "fullScreen": false,
         "id": "win-3",
@@ -151,14 +151,14 @@
         "classification": "tiled",
         "desiredGeometry": {
           "height": 526,
-          "width": 658,
-          "x": 1252,
+          "width": 946,
+          "x": 964,
           "y": 544
         },
         "frameGeometry": {
           "height": 526,
-          "width": 658,
-          "x": 1252,
+          "width": 946,
+          "x": 964,
           "y": 544
         },
         "fullScreen": false,
@@ -190,7 +190,7 @@
               "y": 100
             },
             "targetRect": {
-              "height": 1060,
+              "height": 526,
               "width": 946,
               "x": 10,
               "y": 10
@@ -205,7 +205,7 @@
               "y": 100
             },
             "targetRect": {
-              "height": 346,
+              "height": 526,
               "width": 946,
               "x": 964,
               "y": 10
@@ -220,10 +220,10 @@
               "y": 100
             },
             "targetRect": {
-              "height": 352,
+              "height": 526,
               "width": 946,
-              "x": 964,
-              "y": 364
+              "x": 10,
+              "y": 544
             },
             "windowId": "win-3"
           },
@@ -235,10 +235,10 @@
               "y": 100
             },
             "targetRect": {
-              "height": 346,
+              "height": 526,
               "width": 946,
               "x": 964,
-              "y": 724
+              "y": 544
             },
             "windowId": "win-4"
           }
@@ -254,72 +254,11 @@
           "HDMI-A-1"
         ],
         "epoch": 2,
-        "operations": [
-          {
-            "previousRect": {
-              "height": 1060,
-              "width": 946,
-              "x": 10,
-              "y": 10
-            },
-            "targetRect": {
-              "height": 1060,
-              "width": 1234,
-              "x": 10,
-              "y": 10
-            },
-            "windowId": "win-1"
-          },
-          {
-            "previousRect": {
-              "height": 346,
-              "width": 946,
-              "x": 964,
-              "y": 10
-            },
-            "targetRect": {
-              "height": 346,
-              "width": 658,
-              "x": 1252,
-              "y": 10
-            },
-            "windowId": "win-2"
-          },
-          {
-            "previousRect": {
-              "height": 352,
-              "width": 946,
-              "x": 964,
-              "y": 364
-            },
-            "targetRect": {
-              "height": 352,
-              "width": 658,
-              "x": 1252,
-              "y": 364
-            },
-            "windowId": "win-3"
-          },
-          {
-            "previousRect": {
-              "height": 346,
-              "width": 946,
-              "x": 964,
-              "y": 724
-            },
-            "targetRect": {
-              "height": 346,
-              "width": 658,
-              "x": 1252,
-              "y": 724
-            },
-            "windowId": "win-4"
-          }
-        ],
+        "operations": [],
         "reasons": [
           "ScreenMasterConfigChanged"
         ],
-        "skippedWrites": 0,
+        "skippedWrites": 4,
         "tick": 0
       },
       {
@@ -327,72 +266,11 @@
           "HDMI-A-1"
         ],
         "epoch": 3,
-        "operations": [
-          {
-            "previousRect": {
-              "height": 1060,
-              "width": 1234,
-              "x": 10,
-              "y": 10
-            },
-            "targetRect": {
-              "height": 526,
-              "width": 1234,
-              "x": 10,
-              "y": 10
-            },
-            "windowId": "win-1"
-          },
-          {
-            "previousRect": {
-              "height": 346,
-              "width": 658,
-              "x": 1252,
-              "y": 10
-            },
-            "targetRect": {
-              "height": 526,
-              "width": 1234,
-              "x": 10,
-              "y": 544
-            },
-            "windowId": "win-2"
-          },
-          {
-            "previousRect": {
-              "height": 352,
-              "width": 658,
-              "x": 1252,
-              "y": 364
-            },
-            "targetRect": {
-              "height": 526,
-              "width": 658,
-              "x": 1252,
-              "y": 10
-            },
-            "windowId": "win-3"
-          },
-          {
-            "previousRect": {
-              "height": 346,
-              "width": 658,
-              "x": 1252,
-              "y": 724
-            },
-            "targetRect": {
-              "height": 526,
-              "width": 658,
-              "x": 1252,
-              "y": 544
-            },
-            "windowId": "win-4"
-          }
-        ],
+        "operations": [],
         "reasons": [
           "ScreenMasterConfigChanged"
         ],
-        "skippedWrites": 0,
+        "skippedWrites": 4,
         "tick": 0
       }
     ]

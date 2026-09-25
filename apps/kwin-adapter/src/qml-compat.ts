@@ -100,6 +100,3 @@ export const Layouts = {
 
   supportedLayouts: ["master-stack", "bsp", "columns", "rows", "grid", "monocle", "floating"]
 };
-
-// Export to global for QML consumption
-(globalThis as unknown as { Layouts: typeof Layouts }).Layouts = Layouts;

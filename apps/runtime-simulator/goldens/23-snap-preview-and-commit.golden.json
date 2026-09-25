@@ -1,5 +1,5 @@
 {
-  "digest": "5e2d6631ef7ac15c754f93c5e6fecd7c3136b49a7da8deb94354422c1352c991",
+  "digest": "4a29572488c78a070efc42dad1ce7117dd7851b6e7f6438275fe16aac982394a",
   "fixtureName": "23-snap-preview-and-commit",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -62,7 +62,7 @@
         }
       },
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

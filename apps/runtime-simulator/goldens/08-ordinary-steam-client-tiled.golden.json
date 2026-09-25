@@ -1,5 +1,5 @@
 {
-  "digest": "103f4139ad66bf1c1e7f707669d2dbbb8f1a47e5b7b7e3053bed0791d0942c60",
+  "digest": "efa620621981909ec691e850b10e1f7666e6ec98eb521bee0fd6ecbc05dd8b1b",
   "fixtureName": "08-ordinary-steam-client-tiled",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

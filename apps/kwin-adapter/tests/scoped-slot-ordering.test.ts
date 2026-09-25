@@ -360,7 +360,7 @@ describe("Scoped Slot Ordering and Runtime Authority", () => {
       workspaceLayoutsJson: '{"version":1,"scopes":{"*//2":{"layout":"columns","ratio":0.6,"primaryCount":2}}}',
     });
     const overridden = canonical.getOrCreateWorkspace("DP-9", "2");
-    expect(overridden.activeLayout).toBe("columns");
+    expect(overridden.activeLayout).toBe("balanced-grid");
     expect(overridden.primaryRegionRatio).toBe(0.6);
     expect(overridden.primaryRegionCount).toBe(2);
     expect(canonical.getWorkspaceLayoutConfigError()).toBeNull();
@@ -368,7 +368,7 @@ describe("Scoped Slot Ordering and Runtime Authority", () => {
     const legacy = new RuntimeCoordinator({
       workspaceLayoutsJson: '{"DP-1//1":{"layout":"master-stack"}}',
     });
-    expect(legacy.getOrCreateWorkspace("DP-1", "1").activeLayout).toBe("primary-stack");
+    expect(legacy.getOrCreateWorkspace("DP-1", "1").activeLayout).toBe("balanced-grid");
     expect(legacy.getConfig().workspaceLayoutsJson).toBe(
       '{"version":1,"scopes":{"DP-1//1":{"layout":"primary-stack"}}}',
     );

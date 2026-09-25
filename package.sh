@@ -110,6 +110,7 @@ import sys
 project_dir = os.environ["PROJECT_DIR"]
 REQUIRED_FILES = [
     "metadata.json",
+    "LICENSE",
     "contents/code/layouts.js",
     "contents/code/reconciler.js",
     "contents/code/rules.js",
@@ -132,6 +133,7 @@ if command -v kpackagetool6 >/dev/null 2>&1; then
     trap 'rm -rf "$BUILD_TMP"' EXIT
     mkdir -p "$BUILD_TMP/contents/code" "$BUILD_TMP/contents/config" "$BUILD_TMP/contents/ui"
     cp "$PROJECT_DIR/metadata.json" "$BUILD_TMP/"
+    cp "$PROJECT_DIR/LICENSE" "$BUILD_TMP/"
     cp "$PROJECT_DIR/contents/code/layouts.js" "$BUILD_TMP/contents/code/"
     cp "$PROJECT_DIR/contents/code/reconciler.js" "$BUILD_TMP/contents/code/"
     cp "$PROJECT_DIR/contents/code/rules.js" "$BUILD_TMP/contents/code/"
@@ -171,9 +173,10 @@ dt = datetime.datetime.fromtimestamp(source_epoch, datetime.timezone.utc)
 second = dt.second - (dt.second % 2)
 fixed_time = (dt.year, dt.month, dt.day, dt.hour, dt.minute, second)
 
-# Exact allowlist of 11 entries: metadata.json first, then explicit directories and files
+# Exact allowlist of 12 entries: metadata.json and LICENSE first, then explicit directories and files
 ALLOWLIST_ENTRIES = [
     ("metadata.json", False, "metadata.json"),
+    ("LICENSE", False, "LICENSE"),
     ("contents/", True, None),
     ("contents/code/", True, None),
     ("contents/code/layouts.js", False, "contents/code/layouts.js"),

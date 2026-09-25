@@ -1,5 +1,5 @@
 {
-  "digest": "09544ccf56c825a08a124844e0ee347282ef67a793d71d01e9321697bcc47eb5",
+  "digest": "e103ca484c12e80ca143bc2e72af0730687b2889f42691887d3076c22669124a",
   "fixtureName": "12-vertically-stacked-outputs",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10
@@ -62,7 +62,7 @@
         }
       },
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

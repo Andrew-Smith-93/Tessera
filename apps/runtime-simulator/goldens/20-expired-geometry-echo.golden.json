@@ -1,5 +1,5 @@
 {
-  "digest": "b1e35bbfa7737dec6ca0c686abfd3b40363394f0a9aa9affa4e4da8a7f1223b6",
+  "digest": "5e19d1a70fc779fb659e143323eb257388a4930ac0918cbf25bf7d7d106fdef7",
   "fixtureName": "20-expired-geometry-echo",
   "finalTick": 298,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

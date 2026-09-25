@@ -620,6 +620,97 @@ describe("Phase 3 Runtime Simulator & Trace Replay", () => {
     expect(result.passed).toBe(false);
     expect(result.violations.some(v => v.code === "TILED_GEOMETRY_OUT_OF_BOUNDS")).toBe(true);
   });
+
+  it("33. Retired layout values cannot silently reactivate a removed algorithm", () => {
+    const retiredLayouts = [
+      "master-stack",
+      "primary-stack",
+      "monocle",
+      "floating",
+      "binary-split",
+      "columns",
+      "rows",
+      "grid"
+    ];
+
+    const sim = new RuntimeSimulator();
+
+    for (const retired of retiredLayouts) {
+      // 1. Initial config with retired layout normalizes to balanced-grid
+      const fix: TraceFixture = {
+        schemaVersion: TRACE_SCHEMA_VERSION,
+        initialConfig: {
+          enableTiling: true,
+          defaultLayout: retired
+        },
+        initialScreens: [
+          {
+            outputId: "HDMI-A-1",
+            geometry: { x: 0, y: 0, width: 1920, height: 1080 },
+            usableArea: { x: 0, y: 0, width: 1920, height: 1080 }
+          }
+        ],
+        events: [
+          {
+            type: "window-discovered",
+            window: {
+              id: "win-1",
+              outputId: "HDMI-A-1",
+              frameGeometry: { x: 50, y: 50, width: 400, height: 300 }
+            }
+          },
+          {
+            type: "window-discovered",
+            window: {
+              id: "win-2",
+              outputId: "HDMI-A-1",
+              frameGeometry: { x: 100, y: 100, width: 400, height: 300 }
+            }
+          },
+          {
+            type: "window-discovered",
+            window: {
+              id: "win-3",
+              outputId: "HDMI-A-1",
+              frameGeometry: { x: 150, y: 150, width: 400, height: 300 }
+            }
+          },
+          { type: "flush" },
+          // 2. Runtime layout-change event targeting retired layout also normalizes
+          {
+            type: "layout-change",
+            outputId: "HDMI-A-1",
+            layout: retired
+          },
+          { type: "flush" }
+        ]
+      };
+
+      const result = sim.run(fix);
+
+      // Verify activeLayout is canonical balanced-grid, never the retired layout name
+      expect(result.retainedScreens[0].activeLayout).toBe("balanced-grid");
+      expect(result.invariants.passed).toBe(true);
+      expect(result.invariants.violations).toHaveLength(0);
+
+      // Verify geometry is balanced-grid, NOT monocle (which would stack all 3 full-screen)
+      const w1 = result.retainedWindows.find(w => w.id === "win-1")!;
+      const w2 = result.retainedWindows.find(w => w.id === "win-2")!;
+      const w3 = result.retainedWindows.find(w => w.id === "win-3")!;
+
+      // Monocle would make all 3 windows have identical frameGeometry
+      expect(w1.frameGeometry).not.toEqual(w2.frameGeometry);
+      expect(w2.frameGeometry).not.toEqual(w3.frameGeometry);
+
+      // Floating would leave windows at their initial discovery geometries
+      expect(w1.frameGeometry).not.toEqual({ x: 50, y: 50, width: 400, height: 300 });
+
+      // All windows must be classified as tiled and strictly partitioned
+      expect(w1.classification).toBe("tiled");
+      expect(w2.classification).toBe("tiled");
+      expect(w3.classification).toBe("tiled");
+    }
+  });
 });
 
 

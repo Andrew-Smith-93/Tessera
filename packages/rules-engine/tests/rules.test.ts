@@ -395,17 +395,246 @@ describe("WindowRuleEngine & Game-Safe Classification", () => {
     expect(kcalc.source).toBe("user-rule");
   });
 
-  // 22. Tessera Control Center default float rule
-  it("floats Tessera Control Center by default (default-rule)", () => {
-    const settings = engine.classify({
+  // 22. Retired Control Center implicit float rule removed; windows with Tessera in title tile by default
+  it("does not float ordinary windows with Tessera in title merely for that string", () => {
+    const docWindow = engine.classify({
       windowId: "25",
+      managed: true,
+      normalWindow: true,
+      resourceClass: "google-chrome",
+      title: "Tessera Documentation - Architecture"
+    });
+    expect(docWindow.classification).toBe("tiled");
+    expect(docWindow.source).toBe("fallback");
+
+    const codeWindow = engine.classify({
+      windowId: "25b",
+      managed: true,
+      normalWindow: true,
+      resourceClass: "code",
+      title: "tessera_settings.py - Visual Studio Code"
+    });
+    expect(codeWindow.classification).toBe("tiled");
+    expect(codeWindow.source).toBe("fallback");
+
+    const retiredSettingsWindow = engine.classify({
+      windowId: "25c",
       managed: true,
       normalWindow: true,
       resourceClass: "tessera-settings",
       title: "Tessera Control Center"
     });
-    expect(settings.classification).toBe("floating");
-    expect(settings.source).toBe("default-rule");
+    expect(retiredSettingsWindow.classification).toBe("tiled");
+    expect(retiredSettingsWindow.source).toBe("fallback");
+  });
+
+  it("preserves explicitly user-customized floatFilter values (user-rule)", () => {
+    const customEngine = new WindowRuleEngine({
+      userFilterString: "custom-tool,my-app,tessera-admin"
+    });
+    const tool = customEngine.classify({
+      windowId: "25d",
+      managed: true,
+      normalWindow: true,
+      resourceClass: "custom-tool",
+      title: "My Special Tool"
+    });
+    expect(tool.classification).toBe("floating");
+    expect(tool.source).toBe("user-rule");
+
+    const admin = customEngine.classify({
+      windowId: "25e",
+      managed: true,
+      normalWindow: true,
+      resourceClass: "tessera-admin",
+      title: "Admin"
+    });
+    expect(admin.classification).toBe("floating");
+    expect(admin.source).toBe("user-rule");
+  });
+
+  // 22b. Shipped floatFilter defaults & Steam/game/browser regression
+  describe("Shipped floatFilter defaults & Steam/game/browser regression", () => {
+    const SHIPPED_DEFAULT_FLOAT_FILTER =
+      "krunner,kcalc,systemsettings,pavucontrol,plasma-desktop,spectacle,kdialog,ksplashqml,org.kde.polkit-kde-authentication-agent-1";
+
+    it("reproduces the defect when buggy legacy floatFilter tokens are present", () => {
+      const buggyEngine = new WindowRuleEngine({
+        userFilterString: "krunner,Steam,steam_app,steamwebhelper"
+      });
+      // Steam client is auto-floated as user-rule (false green previously masked by bare engine)
+      const steamClient = buggyEngine.classify({
+        windowId: "bug-1",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "steam",
+        title: "Steam"
+      });
+      expect(steamClient.classification).toBe("floating");
+      expect(steamClient.source).toBe("user-rule");
+
+      // steamwebhelper is auto-floated as user-rule
+      const webhelper = buggyEngine.classify({
+        windowId: "bug-2",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "steamwebhelper",
+        appId: "steamwebhelper"
+      });
+      expect(webhelper.classification).toBe("floating");
+      expect(webhelper.source).toBe("user-rule");
+
+      // Browser with "Steam" in title is auto-floated as user-rule
+      const browser = buggyEngine.classify({
+        windowId: "bug-3",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "firefox",
+        title: "Steam Community :: Workshop"
+      });
+      expect(browser.classification).toBe("floating");
+      expect(browser.source).toBe("user-rule");
+
+      // Steam game floats via user-rule token, bypassing gameWindowPolicy
+      const gameWithTilePolicy = new WindowRuleEngine({
+        userFilterString: "krunner,Steam,steam_app,steamwebhelper",
+        gameWindowPolicy: "tiled"
+      });
+      const steamGame = gameWithTilePolicy.classify({
+        windowId: "bug-4",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "steam_app_1091500",
+        resourceName: "steam_app_1091500"
+      });
+      expect(steamGame.classification).toBe("floating");
+      expect(steamGame.source).toBe("user-rule");
+    });
+
+    it("classifies ordinary Steam client as tiled under shipped defaults", () => {
+      const shippedEngine = new WindowRuleEngine({
+        userFilterString: SHIPPED_DEFAULT_FLOAT_FILTER
+      });
+      const res = shippedEngine.classify({
+        windowId: "ship-1",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "steam",
+        resourceName: "steam",
+        appId: "steam",
+        title: "Steam"
+      });
+      expect(res.classification).toBe("tiled");
+      expect(res.source).toBe("fallback");
+    });
+
+    it("classifies steamwebhelper as tiled under shipped defaults", () => {
+      const shippedEngine = new WindowRuleEngine({
+        userFilterString: SHIPPED_DEFAULT_FLOAT_FILTER
+      });
+      const res = shippedEngine.classify({
+        windowId: "ship-2",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "steamwebhelper",
+        appId: "steamwebhelper",
+        title: "Steam"
+      });
+      expect(res.classification).toBe("tiled");
+      expect(res.source).toBe("fallback");
+    });
+
+    it("classifies unrelated browser windows with Steam in title as tiled under shipped defaults", () => {
+      const shippedEngine = new WindowRuleEngine({
+        userFilterString: SHIPPED_DEFAULT_FLOAT_FILTER
+      });
+      const firefox = shippedEngine.classify({
+        windowId: "ship-3",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "firefox",
+        title: "Steam Community :: Workshop"
+      });
+      expect(firefox.classification).toBe("tiled");
+      expect(firefox.source).toBe("fallback");
+
+      const chrome = shippedEngine.classify({
+        windowId: "ship-4",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "google-chrome",
+        title: "Steam Store - Great on Deck"
+      });
+      expect(chrome.classification).toBe("tiled");
+      expect(chrome.source).toBe("fallback");
+    });
+
+    it("classifies Steam games according to gameWindowPolicy under shipped defaults", () => {
+      // Default policy is floating
+      const defaultGameEngine = new WindowRuleEngine({
+        userFilterString: SHIPPED_DEFAULT_FLOAT_FILTER,
+        gameWindowPolicy: "floating"
+      });
+      const floatingGame = defaultGameEngine.classify({
+        windowId: "ship-5",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "steam_app_1091500",
+        resourceName: "steam_app_1091500"
+      });
+      expect(floatingGame.classification).toBe("floating");
+      expect(floatingGame.source).toBe("default-rule");
+      expect(floatingGame.matchedPattern).toBe("steam_app_*");
+
+      // User setting gameWindowPolicy to tiled tiles the game
+      const tiledGameEngine = new WindowRuleEngine({
+        userFilterString: SHIPPED_DEFAULT_FLOAT_FILTER,
+        gameWindowPolicy: "tiled"
+      });
+      const tiledGame = tiledGameEngine.classify({
+        windowId: "ship-6",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "steam_app_1091500",
+        resourceName: "steam_app_1091500"
+      });
+      expect(tiledGame.classification).toBe("tiled");
+      expect(tiledGame.source).toBe("default-rule");
+      expect(tiledGame.matchedPattern).toBe("steam_app_*");
+    });
+
+    it("preserves explicit user-customized floatFilter targeting steam", () => {
+      const userCustomEngine = new WindowRuleEngine({
+        userFilterString: `${SHIPPED_DEFAULT_FLOAT_FILTER},steam`
+      });
+      const customSteam = userCustomEngine.classify({
+        windowId: "ship-7",
+        managed: true,
+        normalWindow: true,
+        resourceClass: "steam",
+        title: "Steam"
+      });
+      expect(customSteam.classification).toBe("floating");
+      expect(customSteam.source).toBe("user-rule");
+      expect(customSteam.matchedPattern).toBe("steam");
+    });
+
+    it("preserves auto-floating for shipped default utilities", () => {
+      const shippedEngine = new WindowRuleEngine({
+        userFilterString: SHIPPED_DEFAULT_FLOAT_FILTER
+      });
+      for (const util of ["krunner", "kcalc", "systemsettings", "spectacle", "pavucontrol"]) {
+        const res = shippedEngine.classify({
+          windowId: `util-${util}`,
+          managed: true,
+          normalWindow: true,
+          resourceClass: util,
+          title: util
+        });
+        expect(res.classification).toBe("floating");
+        expect(res.source).toBe("user-rule");
+      }
+    });
   });
 
   // 23. Preserved pre-Phase-1A dialog behavior (tiles by default)

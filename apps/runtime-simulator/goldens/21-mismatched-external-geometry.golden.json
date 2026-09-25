@@ -1,5 +1,5 @@
 {
-  "digest": "20356d64e61c0308073230c724fba08e5fd66b306913c6050bacd8e4c1635a8b",
+  "digest": "997f743642c118db3973bd1c3cf8cd2122a4784bd454effeb185807a338c87c8",
   "fixtureName": "21-mismatched-external-geometry",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

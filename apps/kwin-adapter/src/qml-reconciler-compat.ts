@@ -20,9 +20,11 @@ import {
 import {
   computeSnapZones,
   matchSnapZoneHover,
+  resolveRegionTransition,
   type SnapZoneTarget,
   type SnapZoneType,
-  type SnapZoneId
+  type SnapZoneId,
+  type RegionDirection
 } from "./snap-zones.js";
 
 export type {
@@ -46,8 +48,19 @@ export {
   rectIntersectionArea,
   rectContainsPoint,
   computeSnapZones,
-  matchSnapZoneHover
+  matchSnapZoneHover,
+  resolveRegionTransition,
+  type RegionDirection
 };
+export {
+  RuleEngine,
+  validateCustomRules,
+  getLastRuleValidationErrors,
+  getLastValidCustomRules,
+  hasPriorValidCustomRules,
+  recordCustomRules,
+  resetRuleEngineState
+} from "./qml-rules-compat.js";
 import type { Rect, RuntimeWindowId } from "@tessera/protocol";
 
 function stableObjectId(value: any, fallback: string = ""): string {
@@ -143,7 +156,7 @@ export function evaluateCommitGeometry(
 }
 
 export function toNormalizedWindow(w: any, screen?: any, usableArea?: Rect): NormalizedWindowInput {
-  if (!w) return { id: "unknown", managed: false, normalWindow: false };
+  if (!w || w.deleted === true) return { id: "unknown", managed: false, normalWindow: false };
 
   const wid: RuntimeWindowId = w.internalId
     ? String(w.internalId)
@@ -266,9 +279,8 @@ export const ReconcilerBridge = {
   pointToRectDistance,
   rectIntersectionArea,
   rectContainsPoint,
+  resolveRegionTransition,
   RuntimeCoordinator
 };
 
-// Export for global QML scope
-(globalThis as unknown as { ReconcilerModule: typeof ReconcilerBridge }).ReconcilerModule = ReconcilerBridge;
-(globalThis as unknown as { RuntimeCoordinator: typeof RuntimeCoordinator }).RuntimeCoordinator = RuntimeCoordinator;
+export { RuntimeCoordinator };

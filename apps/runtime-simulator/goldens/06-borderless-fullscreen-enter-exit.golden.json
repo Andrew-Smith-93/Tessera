@@ -1,5 +1,5 @@
 {
-  "digest": "b5c5231d4027838faf2a7b3d55ae11cb67c766ef0fde8e94aa9994a80a094c3b",
+  "digest": "5f83d442f2b816714480171ba35ab443f82052378361953d47cbe1bfc24ed342",
   "fixtureName": "06-borderless-fullscreen-enter-exit",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

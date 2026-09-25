@@ -221,10 +221,10 @@ var LayoutsModule = (() => {
     const result = /* @__PURE__ */ new Map();
     const count = windows.length;
     if (count === 0) return result;
-    const ratio = options?.primaryRegionRatio !== void 0 ? options.primaryRegionRatio : options?.masterRatio !== void 0 ? options.masterRatio : 0.5;
+    const ratio = (options == null ? void 0 : options.primaryRegionRatio) !== void 0 ? options.primaryRegionRatio : (options == null ? void 0 : options.masterRatio) !== void 0 ? options.masterRatio : 0.5;
     const regionCount = Math.max(
       0,
-      options?.primaryRegionCount !== void 0 ? options.primaryRegionCount : options?.masterCount !== void 0 ? options.masterCount : 1
+      (options == null ? void 0 : options.primaryRegionCount) !== void 0 ? options.primaryRegionCount : (options == null ? void 0 : options.masterCount) !== void 0 ? options.masterCount : 1
     );
     if (count === 1) {
       result.set(windows[0], applyGaps(area, gaps, true, true, true, true));
@@ -347,9 +347,10 @@ var LayoutsModule = (() => {
     return ids.map((id) => solution.get(id) || { x: 0, y: 0, width: 0, height: 0 });
   }
   function extractGaps(options) {
+    var _a, _b;
     return {
-      inner: options?.gapInner ?? 8,
-      outer: options?.gapOuter ?? 10
+      inner: (_a = options == null ? void 0 : options.gapInner) != null ? _a : 8,
+      outer: (_b = options == null ? void 0 : options.gapOuter) != null ? _b : 10
     };
   }
   var Layouts = {
@@ -361,8 +362,8 @@ var LayoutsModule = (() => {
       const ids = makeSyntheticIds(count);
       const gaps = extractGaps(options);
       const solution = solveMasterStack(area, ids, gaps, {
-        masterRatio: options?.masterRatio,
-        masterCount: options?.masterCount
+        masterRatio: options == null ? void 0 : options.masterRatio,
+        masterCount: options == null ? void 0 : options.masterCount
       });
       return solutionToArray(solution, ids);
     },
@@ -410,7 +411,6 @@ var LayoutsModule = (() => {
     },
     supportedLayouts: ["master-stack", "bsp", "columns", "rows", "grid", "monocle", "floating"]
   };
-  globalThis.Layouts = Layouts;
   return __toCommonJS(qml_compat_exports);
 })();
 var Layouts = LayoutsModule.Layouts;

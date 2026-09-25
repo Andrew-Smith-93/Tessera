@@ -1,5 +1,5 @@
 {
-  "digest": "28451ac2bce1c1e869b2cefcc2a52d5b4aaa1f3323e5e0b3b24749aec76731e2",
+  "digest": "15128286f18996bb5e71b1a3b8afb29a5bbcfbd89b5549f33293ae66169a2a1b",
   "fixtureName": "09-generic-wine-config-tiled",
   "finalTick": 0,
   "diagnostics": {
@@ -33,7 +33,7 @@
     },
     "retainedScreens": [
       {
-        "activeLayout": "master-stack",
+        "activeLayout": "balanced-grid",
         "gaps": {
           "inner": 8,
           "outer": 10

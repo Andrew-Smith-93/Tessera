@@ -1,5 +1,8 @@
 # Phase 5D Second Pass — Adversarial Integrity Audit & Verification Matrix
 
+> [!NOTE]
+> **Historical Technical Audit Record**: This document records historical root-cause analyses, adversarial attack tests, and defect resolutions conducted during Phase 5D development. It does not represent current operational authority. Current authoritative verification evidence, live gates, and release status are tracked in [PUBLIC_RELEASE_CHECKLIST.md](PUBLIC_RELEASE_CHECKLIST.md) and active test suites.
+
 ## 1. Executive Summary & Audit Scope
 
 This document provides the adversarial integrity audit for **Phase 5D Second Pass** on branch `fix/slot-runtime-settings-integrity-02`, examining the claims of the first-pass implementation (`refactor/slot-runtime-settings-foundation-01`, HEAD `d6210f6fc27a3b0c143a71fe2daba5cf8c3bfb60`).

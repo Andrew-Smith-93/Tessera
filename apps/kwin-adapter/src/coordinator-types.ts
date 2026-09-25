@@ -84,13 +84,19 @@ export interface RetainedWindowState {
   isManualFloating: boolean;
   isDragging: boolean;
   slotIndex?: number;
+  snapRegion?: string;
   lastObservedGeometry: Rect;
   lastRequestedGeometry: Rect | null;
   lastAppliedTransactionEpoch: number;
   currentDesiredTiledGeometry?: Rect | null;
+  customTiledGeometry?: Rect | null;
   preMinimizeGeometry?: Rect | null;
   isPreTiled?: boolean;
   outputAffinity?: string;
+  isExplicitSnap?: boolean;
+  snapEpoch?: number;
+  unachievableAttempts?: number;
+  lastAttemptObservedGeometry?: Rect | null;
 }
 
 export type WorkspaceScopeKey = string; // "${encodeURIComponent(outputId)}//${encodeURIComponent(desktopId)}"
@@ -246,4 +252,4 @@ export type NormalizedEvent =
   | { type: "WorkspacePrimaryConfigChanged"; outputId: string; desktopId: string; count?: number; ratio?: number }
   | { type: "WorkspaceGapsChanged"; outputId: string; desktopId: string; gaps: GapConfig }
   | { type: "GlobalConfigChanged"; config: Partial<CoordinatorConfig> }
-  | { type: "WindowSnapCommitted"; windowId: RuntimeWindowId; outputId: string; targetRect: Rect; slotIndex?: number; timestamp?: number; desktopId?: string };
+  | { type: "WindowSnapCommitted"; windowId: RuntimeWindowId; outputId: string; targetRect: Rect; snapRegion?: string; slotIndex?: number; timestamp?: number; desktopId?: string };

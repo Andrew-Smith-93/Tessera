@@ -7,8 +7,16 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  validate-and-test:
+  build-and-fast-test:
+    name: Monorepo Build, Audit, Types, Simulator & Unit Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -28,13 +36,16 @@ jobs:
       - name: Install Node Dependencies
         run: npm ci
 
+      - name: Audit Production Dependencies
+        run: npm audit --omit=dev
+
       - name: Run TypeScript Unit Tests (Vitest)
         run: npm test
 
       - name: Run TypeScript Typecheck (tsc --build)
         run: npm run typecheck
 
-      - name: Build Monorepo & Standalone Artifacts
+      - name: Build Monorepo & Fresh JavaScript Bridges
         run: npm run build
 
       - name: Verify Generated Artifacts Up-To-Date
@@ -52,7 +63,7 @@ jobs:
 
       - name: Validate Python Syntax & Bytecode Compilation
         run: |
-          python3 -m py_compile tessera-control/*.py tests/*.py
+          python3 -m py_compile tests/*.py
           echo "All Python modules compiled successfully."
 
       - name: Validate JSON Manifests
@@ -65,9 +76,13 @@ jobs:
           python3 -c "import xml.etree.ElementTree as ET; ET.parse('contents/config/main.xml')"
           echo "contents/config/main.xml is valid XML."
 
-      - name: Run Python Unit Tests
+      - name: Run Python Fast Unit & Contract Tests
         run: |
-          python3 -m unittest discover -s tests -p "test_*.py" -v
+          python3 tests/run_fast_tests.py -v
+
+      - name: Verify Installer Test Partition Integrity
+        run: |
+          python3 tests/run_installer_shard.py --verify-shards 3
 
       - name: Test .kwinscript Release Packaging
         run: |
@@ -85,5 +100,68 @@ jobs:
           unzip -l dist/*.kwinscript | grep "contents/ui/main.qml"
           ! unzip -l dist/*.kwinscript | grep -E "contents/code/main\.js|contents/ui/tessera\.qml|contents/ui/ZoneOverlay\.qml|contents/ui/TopNotification\.qml"
           ! unzip -l dist/*.kwinscript | grep -E "apps/|target/|\.rs$|Cargo\."
-          python3 tests/test_package_manifest.py
           echo "Package archive structure verified successfully."
+
+  installer-integration:
+    name: Installer Integration Sandbox (Shard ${{ matrix.display_shard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 0
+            display_shard: "1/3"
+            total_shards: 3
+          - shard: 1
+            display_shard: "2/3"
+            total_shards: 3
+          - shard: 2
+            display_shard: "3/3"
+            total_shards: 3
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.11'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Build Monorepo & Fresh JavaScript Bridges
+        run: npm run build
+
+      - name: Verify Partition Integrity
+        run: python3 tests/run_installer_shard.py --verify-shards ${{ matrix.total_shards }}
+
+      - name: Run Installer Sandbox Shard
+        run: python3 tests/run_installer_shard.py --shard ${{ matrix.shard }} --total-shards ${{ matrix.total_shards }}
+
+  validate-and-test:
+    name: validate-and-test
+    runs-on: ubuntu-latest
+    needs: [build-and-fast-test, installer-integration]
+    if: always()
+    steps:
+      - name: Check Aggregate Status
+        run: |
+          echo "======================================================="
+          echo " Validating Upstream CI Checks & Matrix Shard Statuses "
+          echo "======================================================="
+          echo "build-and-fast-test: ${{ needs.build-and-fast-test.result }}"
+          echo "installer-integration (all shards): ${{ needs.installer-integration.result }}"
+
+          if [ "${{ needs.build-and-fast-test.result }}" != "success" ] || [ "${{ needs.installer-integration.result }}" != "success" ]; then
+            echo "::error::Strict required check 'validate-and-test' failed because upstream jobs or test shards did not all succeed."
+            exit 1
+          fi
+
+          echo "SUCCESS: All parallel jobs and test shards completed with status 'success'."

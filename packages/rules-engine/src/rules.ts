@@ -4,12 +4,142 @@ export type MatchType = "class" | "title" | "role" | "app";
 export type LegacyRuleAction = "tile" | "float";
 export type RuleAction = WindowClassification | LegacyRuleAction;
 
+export const VALID_MATCH_TYPES = ["class", "title", "role", "app"] as const;
+export const VALID_RULE_ACTIONS = ["tile", "float", "monocle", "tiled", "floating", "ignored"] as const;
+
 export interface CustomRule {
   readonly id?: string;
   readonly pattern: string;
   readonly matchType: MatchType;
   readonly action: RuleAction;
   readonly isRegex?: boolean;
+}
+
+export interface RuleValidationResult {
+  readonly valid: boolean;
+  readonly rules: CustomRule[];
+  readonly errors: string[];
+}
+
+export function validateCustomRules(input: unknown): RuleValidationResult {
+  if (input === undefined || input === null) {
+    return { valid: true, rules: [], errors: [] };
+  }
+
+  let rawRules: unknown = input;
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (trimmed === "" || trimmed === "[]") {
+      return { valid: true, rules: [], errors: [] };
+    }
+    try {
+      rawRules = JSON.parse(trimmed);
+    } catch (e: any) {
+      return {
+        valid: false,
+        rules: [],
+        errors: [`Malformed JSON syntax: ${e?.message || String(e)}`]
+      };
+    }
+  }
+
+  if (!Array.isArray(rawRules)) {
+    return {
+      valid: false,
+      rules: [],
+      errors: ["Custom rules must be an array of rule objects"]
+    };
+  }
+
+  const errors: string[] = [];
+  const validRules: CustomRule[] = [];
+
+  for (let i = 0; i < rawRules.length; i++) {
+    const item = rawRules[i];
+    const prefix = `Rule #${i + 1}`;
+
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      errors.push(`${prefix}: must be a non-null object`);
+      continue;
+    }
+
+    const rec = item as Record<string, unknown>;
+
+    // Pattern validation
+    if (typeof rec.pattern !== "string" || rec.pattern.trim().length === 0) {
+      errors.push(`${prefix}: 'pattern' must be a non-empty string`);
+      continue;
+    }
+
+    // MatchType validation
+    const rawMatchType = typeof rec.matchType === "string" ? rec.matchType.toLowerCase() : "";
+    if (!(VALID_MATCH_TYPES as readonly string[]).includes(rawMatchType)) {
+      errors.push(
+        `${prefix}: 'matchType' must be one of: ${VALID_MATCH_TYPES.join(", ")} (got ${JSON.stringify(rec.matchType)})`
+      );
+      continue;
+    }
+
+    // Action validation
+    const rawAction = typeof rec.action === "string" ? rec.action.toLowerCase() : "";
+    if (!(VALID_RULE_ACTIONS as readonly string[]).includes(rawAction)) {
+      errors.push(
+        `${prefix}: 'action' must be one of: ${VALID_RULE_ACTIONS.join(", ")} (got ${JSON.stringify(rec.action)})`
+      );
+      continue;
+    }
+
+    // Regex validation
+    let isRegex = false;
+    if ("isRegex" in rec && rec.isRegex !== undefined) {
+      if (typeof rec.isRegex !== "boolean") {
+        errors.push(`${prefix}: 'isRegex' must be a boolean`);
+        continue;
+      }
+      isRegex = rec.isRegex;
+      if (isRegex) {
+        try {
+          new RegExp(rec.pattern, "i");
+        } catch (e: any) {
+          errors.push(`${prefix}: invalid regular expression '${rec.pattern}': ${e?.message || String(e)}`);
+          continue;
+        }
+      }
+    }
+
+    const validated: {
+      pattern: string;
+      matchType: MatchType;
+      action: RuleAction;
+      isRegex?: boolean;
+      id?: string;
+    } = {
+      pattern: rec.pattern,
+      matchType: rawMatchType as MatchType,
+      action: rawAction as RuleAction
+    };
+    if (isRegex) {
+      validated.isRegex = true;
+    }
+    if (typeof rec.id === "string" && rec.id) {
+      validated.id = rec.id;
+    }
+    validRules.push(validated as CustomRule);
+  }
+
+  if (errors.length > 0) {
+    return {
+      valid: false,
+      rules: [],
+      errors
+    };
+  }
+
+  return {
+    valid: true,
+    rules: validRules,
+    errors: []
+  };
 }
 
 export type GameWindowPolicy = "floating" | "tiled";
@@ -170,13 +300,10 @@ export class WindowRuleEngine {
   private customGamePatterns: string[] = [];
 
   /**
-   * Only Tessera Control Center itself floats by default so user can configure the system.
+   * Default float patterns (retained as an empty frozen array for backward compatibility).
+   * Standalone Control Center is retired; implicit floating exceptions are removed.
    */
-  public static readonly DEFAULT_FLOAT_PATTERNS: readonly string[] = Object.freeze([
-    "tessera",
-    "tessera-settings",
-    "tessera_settings.py"
-  ]);
+  public static readonly DEFAULT_FLOAT_PATTERNS: readonly string[] = Object.freeze([]);
 
   constructor(options: RuleEngineOptions = {}) {
     this.updateOptions(options);
@@ -189,14 +316,30 @@ export class WindowRuleEngine {
         .map(t => t.trim().toLowerCase())
         .filter(t => t.length > 0);
     } else if (options.userFilterPatterns !== undefined) {
-      this.userFilterTokens = options.userFilterPatterns
-        .flatMap(p => p.split(","))
-        .map(t => t.trim().toLowerCase())
-        .filter(t => t.length > 0);
+      const tokens: string[] = [];
+      for (const p of options.userFilterPatterns) {
+        if (typeof p === "string") {
+          const parts = p.split(",");
+          for (const part of parts) {
+            const trimmed = part.trim().toLowerCase();
+            if (trimmed.length > 0) {
+              tokens.push(trimmed);
+            }
+          }
+        }
+      }
+      this.userFilterTokens = tokens;
     }
 
     if (options.customRules !== undefined) {
-      this.customRules = [...options.customRules];
+      if (Array.isArray(options.customRules)) {
+        this.customRules = options.customRules.filter(
+          (r): r is CustomRule => Boolean(r && typeof r === "object" && typeof r.pattern === "string" && r.pattern.trim().length > 0)
+        );
+      } else {
+        const validation = validateCustomRules(options.customRules);
+        this.customRules = validation.valid ? validation.rules : [];
+      }
     }
 
     if (options.gameWindowPolicy !== undefined) {
@@ -287,6 +430,9 @@ export class WindowRuleEngine {
 
     // 3. Explicit user rules (custom rules & user filter)
     for (const rule of this.customRules) {
+      if (!rule || typeof rule !== "object" || typeof rule.pattern !== "string" || !rule.pattern) {
+        continue;
+      }
       let target = "";
       switch (rule.matchType) {
         case "class":
@@ -301,18 +447,21 @@ export class WindowRuleEngine {
         case "role":
           target = role;
           break;
+        default:
+          continue;
       }
 
       let matched = false;
+      const patLower = rule.pattern.toLowerCase();
       if (rule.isRegex) {
         try {
           const re = new RegExp(rule.pattern, "i");
           matched = re.test(target);
         } catch {
-          matched = target.includes(rule.pattern.toLowerCase());
+          matched = target.includes(patLower);
         }
       } else {
-        matched = target.includes(rule.pattern.toLowerCase());
+        matched = target.includes(patLower);
       }
 
       if (matched) {
@@ -365,21 +514,7 @@ export class WindowRuleEngine {
       };
     }
 
-    // 6. Default float patterns (Tessera Control Center)
-    // Note: Standard dialogs and normal transient windows tile by default per pre-Phase-1A behavior
-    // unless matched by custom rules or default float patterns.
-    for (const pat of WindowRuleEngine.DEFAULT_FLOAT_PATTERNS) {
-      if (rClass.includes(pat) || rName.includes(pat) || appId.includes(pat) || title.includes(pat)) {
-        return {
-          classification: "floating",
-          reason: `Matched default float pattern (${pat})`,
-          source: "default-rule",
-          matchedPattern: pat
-        };
-      }
-    }
-
-    // 7. Default fallback: Everything else tiles!
+    // 6. Default fallback: Everything else tiles!
     return {
       classification: "tiled",
       reason: "Default tiling fallback",

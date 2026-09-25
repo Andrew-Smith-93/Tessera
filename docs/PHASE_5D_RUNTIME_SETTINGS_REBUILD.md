@@ -1,5 +1,8 @@
 # Phase 5D — Slot-Based Runtime and Settings Foundation Rebuild
 
+> [!NOTE]
+> **Historical Technical Audit Record**: This document is a historical record of the Phase 5D architectural rebuild. It documents earlier development milestones (including intermediate tools retired prior to release) and does not represent current operational authority. Current authoritative architecture, configuration schemas, and release gates are maintained in [PUBLIC_RELEASE_CHECKLIST.md](PUBLIC_RELEASE_CHECKLIST.md), [RUNTIME_ARCHITECTURE.md](RUNTIME_ARCHITECTURE.md), and `config/canonical-config.json`.
+
 ## 1. Executive Summary & Objective
 
 Phase 5D resolves the architectural deficiencies identified during Phase 5B and Phase 5C before beginning Phase 6:
@@ -53,7 +56,7 @@ In Phase 5D:
 ### 3.1 Multi-Monitor Drag Preview Isolation
 - **Symptom**: In multi-monitor setups, hovering a dragged window over snap zones on monitor 2 caused windows on monitor 1 to warp, jump, or take the whole screen.
 - **Root Cause**: `previewProspectiveLayout` in `main.qml` calculated prospective frames using `activeScreenGeom` (often monitor 1) and directly mutated `other.frameGeometry` on live windows across all screens during drag hover.
-- **Resolution**: Removed premature live geometry mutations during drag hover. The visual KZones-style snap card overlay already clearly indicates prospective target bounds without destabilizing peer windows. Real window retiling only executes upon `WindowSnapCommitted`.
+- **Resolution**: Removed premature live geometry mutations during drag hover. The visual snap card overlay already clearly indicates prospective target bounds without destabilizing peer windows. Real window retiling only executes upon `WindowSnapCommitted`.
 
 ### 3.2 Corner Snap Zone Slot Inversion
 - **Symptom**: Snapping a window to top-right worked, but dragging to bottom-right inverted top and bottom right windows.

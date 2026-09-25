@@ -1,0 +1,16 @@
+# Default repository owner
+* @Andrew-Smith-93
+
+# CI/CD and automation workflows
+/.github/workflows/ @Andrew-Smith-93
+
+# Core KWin runtime files and generated bridges
+/contents/ @Andrew-Smith-93
+/metadata.json @Andrew-Smith-93
+
+# Frozen Protocol V1 specifications and schemas
+/packages/protocol/ @Andrew-Smith-93
+
+# Packaging and distribution build tools
+/package.sh @Andrew-Smith-93
+/packaging/ @Andrew-Smith-93
