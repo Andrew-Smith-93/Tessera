@@ -253,10 +253,10 @@ describe("QML source isolation and runtime authority", () => {
     expect(content).toMatch(/3-Pillar Zones[\s\S]*?y:\s*modelData\s*\?\s*\(modelData\.rect\.y\s*-\s*overlayDialog\.originY\)\s*:\s*0/);
   });
 
-  it("enforces pre-mapped click-through overlay architecture and logical active state isolation", () => {
-    // 1. overlayDialog must be pre-mapped (visible: true) at component creation
+  it("enforces unmapped-when-idle click-through overlay architecture and logical active state isolation", () => {
+    // 1. overlayDialog must be unmapped when idle (visible: overlayActive)
     const dialogHeader = content.match(/PlasmaCore\.Dialog\s*\{\s*id:\s*overlayDialog[\s\S]*?mainItem:\s*Item/)?.[0] || "";
-    expect(dialogHeader).toMatch(/visible:\s*true/);
+    expect(dialogHeader).toMatch(/visible:\s*overlayActive/);
     expect(dialogHeader).toMatch(/outputOnly:\s*true/);
     expect(dialogHeader).toMatch(/type:\s*PlasmaCore\.Dialog\.OnScreenDisplay/);
     expect(dialogHeader).toMatch(/flags:\s*Qt\.BypassWindowManagerHint\s*\|\s*Qt\.FramelessWindowHint/);
@@ -273,7 +273,7 @@ describe("QML source isolation and runtime authority", () => {
     expect(hideOverlayBlock).toMatch(/overlayActive\s*=\s*false/);
     expect(hideOverlayBlock).not.toMatch(/\bvisible\s*=/);
 
-    // 3. overlayTimer must run on overlayActive, NOT on overlayDialog.visible (prevents runaway polling while pre-mapped)
+    // 3. overlayTimer must run on overlayActive, NOT on overlayDialog.visible (prevents runaway polling while unmapped)
     const mainItemBlock = content.match(/mainItem:\s*Item\s*\{\s*id:\s*overlayContainer[\s\S]*?Timer\s*\{[\s\S]*?\n\s{12}\}/)?.[0] || "";
     expect(mainItemBlock).toMatch(/running:\s*overlayDialog\.overlayActive/);
     expect(mainItemBlock).not.toMatch(/running:\s*overlayDialog\.visible/);

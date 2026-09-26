@@ -532,7 +532,7 @@ Item {
         }
 
         function animateWindow(win, targetRect, epoch, durationMs) {
-            if (!win) return;
+            if (!win || !win.managed || !win.normalWindow || win.deleted) return;
             var wid = getWindowId(win);
             if (!wid) return;
 
@@ -739,7 +739,7 @@ Item {
     }
 
     function commitWindowGeometry(win, targetRect, reason, epoch) {
-        if (!win || !targetRect) return { outcome: "rejected", normalized: null };
+        if (!win || !targetRect || win.deleted || !win.managed || !win.normalWindow) return { outcome: "rejected", normalized: null };
 
         var coord = getCoordinator();
         if (!coord) {
@@ -921,7 +921,7 @@ Item {
                         break;
                     }
                 }
-                if (!targetWin || targetWin.deleted) continue;
+                if (!targetWin || targetWin.deleted || !targetWin.managed || !targetWin.normalWindow) continue;
                 if (targetWin === currentDraggingWindow) continue;
 
                 if (targetWin.maximizeMode !== 0) {
@@ -977,7 +977,8 @@ Item {
         backgroundHints: PlasmaCore.Types.NoBackground
         flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint
         hideOnWindowDeactivate: false
-        visible: true
+        property bool overlayActive: false
+        visible: overlayActive
         outputOnly: true
         opacity: 1
 
@@ -988,8 +989,6 @@ Item {
 
         x: originX
         y: originY
-
-        property bool overlayActive: false
 
         property var snapZones: []
         property int hoveredZoneIndex: -1
@@ -1026,7 +1025,7 @@ Item {
         }
 
         function computeZones(w) {
-            var screen = w ? (w.output || getScreenForPos(w.frameGeometry)) : Workspace.activeScreen;
+            var screen = (w && w.managed && w.normalWindow && !w.deleted) ? (w.output || getScreenForPos(w.frameGeometry)) : Workspace.activeScreen;
             computeZonesForScreen(screen);
         }
 
@@ -1378,7 +1377,7 @@ Item {
             id: overlayContainer
             width: overlayDialog.virtualWidth
             height: overlayDialog.virtualHeight
-            visible: true
+            visible: overlayDialog.overlayActive
             opacity: overlayDialog.overlayActive ? 1.0 : 0.0
 
             // Cursor tracking & snap refresh rate (16ms = smooth 60 FPS)
@@ -2114,7 +2113,7 @@ Item {
 
     function toggleActiveFloating() {
         var w = Workspace.activeWindow;
-        if (!w) return;
+        if (!w || !w.managed || !w.normalWindow || w.deleted) return;
 
         var wid = getWindowId(w);
         var coord = getCoordinator();
@@ -2180,7 +2179,7 @@ Item {
         if (order.length <= 1) return;
 
         var curWin = Workspace.activeWindow;
-        if (!curWin) return;
+        if (!curWin || !curWin.managed || !curWin.normalWindow || curWin.deleted) return;
         var curWid = getWindowId(curWin);
         var currentIdx = order.indexOf(curWid);
         if (currentIdx === -1) return;
@@ -2202,7 +2201,7 @@ Item {
 
     function snapActiveWindow(regionId) {
         var win = Workspace.activeWindow;
-        if (!win || !win.normalWindow) return;
+        if (!win || !win.managed || !win.normalWindow || win.deleted) return;
         var wid = getWindowId(win);
         var scr = win.output || getScreenForPos(win.frameGeometry) || Workspace.activeScreen;
         var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
@@ -2247,7 +2246,7 @@ Item {
 
     function moveActiveWindowToRegion(direction) {
         var win = Workspace.activeWindow;
-        if (!win || !win.normalWindow) return;
+        if (!win || !win.managed || !win.normalWindow || win.deleted) return;
         var wid = getWindowId(win);
         var coord = getCoordinator();
         var retained = coord ? coord.getRetainedWindow(wid) : null;
@@ -2259,7 +2258,7 @@ Item {
 
     function resizeActiveWindow(deltaW, deltaH) {
         var win = Workspace.activeWindow;
-        if (!win || !win.normalWindow) return;
+        if (!win || !win.managed || !win.normalWindow || win.deleted) return;
         var wid = getWindowId(win);
         var scr = win.output || getScreenForPos(win.frameGeometry) || Workspace.activeScreen;
         var area = Workspace.clientArea(KWin.MaximizeArea, scr, Workspace.currentDesktop);
@@ -2351,7 +2350,7 @@ Item {
 
     function moveWindowInDirection(direction) {
         var w = Workspace.activeWindow;
-        if (!w || !w.normalWindow) return;
+        if (!w || !w.managed || !w.normalWindow || w.deleted) return;
 
         var screens = Workspace.screens || [];
         if (screens.length <= 1) {
@@ -2427,7 +2426,7 @@ Item {
         }
 
         var w = Workspace.activeWindow;
-        if (!w || !w.normalWindow) return;
+        if (!w || !w.managed || !w.normalWindow || w.deleted) return;
 
         var currentScreen = null;
         if (w._targetOutputName) {

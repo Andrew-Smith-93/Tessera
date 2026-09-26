@@ -129,11 +129,18 @@ export interface CommitGeometryEvaluation {
 }
 
 export function evaluateCommitGeometry(
-  win: { deleted?: boolean; managed?: boolean; frameGeometry?: Rect } | null | undefined,
+  win: { deleted?: boolean; managed?: boolean; normalWindow?: boolean; frameGeometry?: Rect } | null | undefined,
   targetRect: any,
   bounds?: Rect
 ): CommitGeometryEvaluation {
-  if (!win || win.deleted === true || win.managed === false || !win.frameGeometry || !targetRect) {
+  if (
+    !win ||
+    win.deleted === true ||
+    win.managed !== true ||
+    win.normalWindow === false ||
+    !win.frameGeometry ||
+    !targetRect
+  ) {
     return { outcome: "rejected", normalized: null };
   }
 

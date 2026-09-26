@@ -71,8 +71,10 @@ describe("QML compatibility normalization", () => {
     // 2. Rejects destroyed window
     expect(evaluateCommitGeometry({ deleted: true, managed: true, frameGeometry: { x: 0, y: 0, width: 500, height: 500 } }, validTarget, validBounds).outcome).toBe("rejected");
 
-    // 3. Rejects unmanaged window
+    // 3. Rejects unmanaged window (explicit false or undefined) and non-normal window
     expect(evaluateCommitGeometry({ managed: false, frameGeometry: { x: 0, y: 0, width: 500, height: 500 } }, validTarget, validBounds).outcome).toBe("rejected");
+    expect(evaluateCommitGeometry({ frameGeometry: { x: 0, y: 0, width: 500, height: 500 } } as any, validTarget, validBounds).outcome).toBe("rejected");
+    expect(evaluateCommitGeometry({ managed: true, normalWindow: false, frameGeometry: { x: 0, y: 0, width: 500, height: 500 } }, validTarget, validBounds).outcome).toBe("rejected");
 
     // 4. Rejects window without frameGeometry
     expect(evaluateCommitGeometry({ managed: true }, validTarget, validBounds).outcome).toBe("rejected");

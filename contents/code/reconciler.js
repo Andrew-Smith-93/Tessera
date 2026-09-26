@@ -3637,7 +3637,7 @@ var ReconcilerModule = (() => {
     return normalized;
   }
   function evaluateCommitGeometry(win, targetRect, bounds) {
-    if (!win || win.deleted === true || win.managed === false || !win.frameGeometry || !targetRect) {
+    if (!win || win.deleted === true || win.managed !== true || win.normalWindow === false || !win.frameGeometry || !targetRect) {
       return { outcome: "rejected", normalized: null };
     }
     const normalized = normalizeCommitGeometry(targetRect, bounds);
