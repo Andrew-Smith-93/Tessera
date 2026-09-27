@@ -5,9 +5,9 @@
 
 ## 1. Audit Scope & Executive Summary
 
-This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/tiling-window-manager`) for a possible future transition from a private repository to a public open-source project under **Phase 5C**.
+This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/Tessera`) for a possible future transition from a private repository to a public open-source project under **Phase 5C**.
 
-- **Repository**: `Andrew-Smith-93/tiling-window-manager`
+- **Repository**: `Andrew-Smith-93/Tessera`
 - **Audit Branch**: `audit/pre-publication-safety-privacy-01`
 - **Parent Commit**: `353dafd324abba1722a247e00f5d212bc1ee088a`
 - **Repository Visibility**: **PRIVATE** (remains strictly private; no public toggle performed)
@@ -79,7 +79,7 @@ This audit assesses the readiness of **Tessera** (`Andrew-Smith-93/tiling-window
 
 ## 6. GitHub-Side Exposure Surface
 
-Read-only inspection of the GitHub remote (`Andrew-Smith-93/tiling-window-manager`):
+Read-only inspection of the GitHub remote (`Andrew-Smith-93/Tessera`):
 
 | Surface | Current State | Exposure Risk upon Public Transition |
 | :--- | :--- | :--- |

@@ -5,13 +5,13 @@ pkgver=1.0.1.r0
 pkgrel=1
 pkgdesc="Modern dynamic tiling window manager for KDE Plasma 6"
 arch=('any')
-url="https://github.com/Andrew-Smith-93/tiling-window-manager"
+url="https://github.com/Andrew-Smith-93/Tessera"
 license=('GPL-3.0-or-later')
 depends=('kwin' 'plasma-workspace')
 makedepends=('git')
 provides=('kwin-script-tessera')
 conflicts=('kwin-script-tessera')
-source=("$_pkgname::git+https://github.com/Andrew-Smith-93/tiling-window-manager.git")
+source=("$_pkgname::git+https://github.com/Andrew-Smith-93/Tessera.git")
 sha256sums=('SKIP')
 
 pkgver() {

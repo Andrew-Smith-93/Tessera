@@ -7,7 +7,7 @@
 > Live interactive desktop re-verification on an active KWin session is a future live gate reserved for Omega, tracked in [PUBLIC_RELEASE_CHECKLIST.md](PUBLIC_RELEASE_CHECKLIST.md).
 
 ## 1. System & Environment Preflight
-- **Repository**: `Andrew-Smith-93/tiling-window-manager`
+- **Repository**: `Andrew-Smith-93/Tessera`
 - **Parent Commit**: `d670262d4c4429a3ae73ace5a2c37309731399a2`
 - **Correction Branch**: `fix/live-kwin-x11-core-acceptance-02`
 - **Session Type**: `x11` (`XDG_SESSION_TYPE=x11`)

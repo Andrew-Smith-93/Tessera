@@ -15,7 +15,7 @@ Before reporting an issue or asking for support, please review the documentation
 ## 🐛 Reporting Bugs
 
 If you have encountered unexpected behavior, geometry issues, or configuration errors:
-1. Check existing [GitHub Issues](https://github.com/Andrew-Smith-93/tiling-window-manager/issues) to see if the issue has already been reported.
+1. Check existing [GitHub Issues](https://github.com/Andrew-Smith-93/Tessera/issues) to see if the issue has already been reported.
 2. Open a new issue using the **Bug Report** template.
 3. Be sure to provide your KDE Plasma version, KWin version, session type (X11 or Wayland), and sanitized logs.
 4. **Privacy Warning**: Never post sensitive information, personal tokens, passwords, or unsanitized home directory paths in public issue tickets.

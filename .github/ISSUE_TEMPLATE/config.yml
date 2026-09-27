@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: GitHub Discussions / Community Support
-    url: https://github.com/Andrew-Smith-93/tiling-window-manager/discussions
+    url: https://github.com/Andrew-Smith-93/Tessera/discussions
     about: Ask questions, share workflow ideas, or discuss layouts with the community.
   - name: Security Vulnerability Reporting
-    url: https://github.com/Andrew-Smith-93/tiling-window-manager/blob/main/SECURITY.md
+    url: https://github.com/Andrew-Smith-93/Tessera/blob/main/SECURITY.md
     about: Review our security policy and reporting guidelines in SECURITY.md (do not open public issues).

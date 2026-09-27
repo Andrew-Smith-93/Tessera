@@ -4,7 +4,7 @@
 
 [![Platform: KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6.0+-3daee9.svg?logo=kde&logoColor=white)](https://kde.org/plasma-desktop/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![CI](https://github.com/Andrew-Smith-93/tiling-window-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/Andrew-Smith-93/tiling-window-manager/actions/workflows/ci.yml)
+[![CI](https://github.com/Andrew-Smith-93/Tessera/actions/workflows/ci.yml/badge.svg)](https://github.com/Andrew-Smith-93/Tessera/actions/workflows/ci.yml)
 
 > [!IMPORTANT]
 > **Pre-Release Candidate Branch (`fix/phase-5d-independent-verification-03`)**:
@@ -97,8 +97,8 @@ Tessera provides 12 distinct snap drop zones that support both standard halves/q
 Clone the repository, install dependencies, compile fresh bridges, and run the transactional installer:
 
 ```bash
-git clone https://github.com/Andrew-Smith-93/tiling-window-manager.git
-cd tiling-window-manager
+git clone https://github.com/Andrew-Smith-93/Tessera.git
+cd Tessera
 npm ci
 npm run build
 ./install.sh
