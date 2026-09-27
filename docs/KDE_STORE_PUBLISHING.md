@@ -42,7 +42,7 @@ dist/tessera-v<Version>.kwinscript
    - **Version**: Matches `KPlugin.Version` in `metadata.json` (e.g. `1.0.1`)
    - **Summary**: `Dynamic tiling window manager script and native configuration interface for KDE Plasma 6.`
    - **License**: `GPL-3.0-or-later` (matching `metadata.json` and package metadata)
-   - **Homepage / Source Code**: `https://github.com/Andrew-Smith-93/tiling-window-manager`
+   - **Homepage / Source Code**: `https://github.com/Andrew-Smith-93/Tessera`
 4. **Description**:
    - You can copy and paste the Markdown content from `README.md`. Highlight the key features:
      - 7 internal/compatibility layout engines (Balanced Grid default, Primary + Stack, Binary Split, Columns, Rows, Monocle, Floating; user-facing preset menus and cycling shortcuts retired)

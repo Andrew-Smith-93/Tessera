@@ -32,8 +32,8 @@ Tessera is built as a self-contained KDE Plasma 6 KWin declarative script with a
 ### Setup
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Andrew-Smith-93/tiling-window-manager.git
-   cd tiling-window-manager
+   git clone https://github.com/Andrew-Smith-93/Tessera.git
+   cd Tessera
    ```
 
 2. Install dependencies cleanly:

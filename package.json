@@ -5,11 +5,11 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Andrew-Smith-93/tiling-window-manager.git"
+    "url": "git+https://github.com/Andrew-Smith-93/Tessera.git"
   },
-  "homepage": "https://github.com/Andrew-Smith-93/tiling-window-manager#readme",
+  "homepage": "https://github.com/Andrew-Smith-93/Tessera#readme",
   "bugs": {
-    "url": "https://github.com/Andrew-Smith-93/tiling-window-manager/issues"
+    "url": "https://github.com/Andrew-Smith-93/Tessera/issues"
   },
   "workspaces": [
     "packages/*",

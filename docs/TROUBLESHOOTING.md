@@ -39,8 +39,8 @@ Tessera's installer (`./install.sh`) and uninstaller (`./uninstall.sh`) are desi
 ### Fresh Installation
 From the root of a cloned repository:
 ```bash
-git clone https://github.com/Andrew-Smith-93/tiling-window-manager.git
-cd tiling-window-manager
+git clone https://github.com/Andrew-Smith-93/Tessera.git
+cd Tessera
 npm ci
 npm run build
 ./install.sh
