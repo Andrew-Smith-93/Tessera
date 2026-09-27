@@ -99,14 +99,15 @@ Before repository visibility is changed from private to public, or any release i
 > **PUBLICATION GATED**: Tag creation, public release publication, and asset distribution are strictly gated on explicit maintainer authorization. Automated CI workflows must validate locally and in draft mode first without performing unauthorized public release actions.
 
 > [!NOTE]
-> **Maintainer Directive — Gate C on Standby**:
-> Per explicit maintainer direction ("If private makes this not work 100%, keep Gate C on standby."), creating release tag `v1.0.1` and triggering the release workflow remain on standby while repository verification and privacy evaluation proceed under private visibility.
+> **Maintainer Directive — Gate C Execution**:
+> Per explicit maintainer direction ("We can now go into Gate C"), release tag `v1.0.1` was created and pushed to `Andrew-Smith-93/Tessera`. The GitHub Actions release workflow ran with full test pass and generated the draft release assets.
 
 - [x] **Local Package Verification**: Ran `./package.sh` locally and verified the generated `dist/tessera-v1.0.1.kwinscript` package (72K) against the 12-entry allowlist and bit-for-bit `LICENSE` match (all 14 tests passing in `tests/test_package_manifest.py`).
-- [ ] **CI Draft Validation (On Standby)**: Validate that CI passes all tests and verify that the release workflow in draft mode produces:
-  1. `${plugin_id}-v${plugin_version}.kwinscript` (currently `tessera-v1.0.1.kwinscript`, derived from `metadata.json`) with exact 12-entry manifest.
+- [x] **CI Draft Validation**: Automated release workflow in GitHub Actions (Run ID `36344239175`) passed the entire test matrix and produced:
+  1. `tessera-v1.0.1.kwinscript` (72K) with exact 12-entry manifest and byte-for-byte identical checksum to local build (`e2c42a9b468430891e2a6931c5dfe7f97898b0974b8a6069e600b633d44a1471`).
   2. `SHA256SUMS.txt` matching the official `.kwinscript` bundle.
-- [ ] **Explicit Release Authorization (Pending Standby Release)**: Creating a public git tag, publishing a GitHub release, or uploading to distribution channels (KDE Store, AUR) requires separate, explicit maintainer authorization.
+  3. GitHub Draft Release `v1.0.1` created with automated changelog notes.
+- [x] **Draft Release Creation Complete**: Release tag `v1.0.1` pushed and verified in draft status on GitHub (`Andrew-Smith-93/Tessera`). Publishing to public distribution channels (KDE Store, AUR, or toggling release out of draft) remains available at maintainer convenience.
 
 ### Gate D: Live Interactive Desktop Verification
 
