@@ -7,6 +7,12 @@ When published to the KDE Store (subject to store CDN caching and search indexin
 2. **KDE Discover Software Center** (under Plasma Add-ons, subject to backend metadata synchronization)
 3. **Pling.com** / **Store.kde.org** web listings
 
+> [!NOTE]
+> **Live KDE Store Listing**:
+> - **Product URL**: [store.kde.org/p/2375512](https://store.kde.org/p/2375512/)
+> - **Product ID**: `2375512`
+> - **Category**: `KWin Scripts` (Plasma 6)
+
 ---
 
 ## Step 1: Generate the Distribution Package

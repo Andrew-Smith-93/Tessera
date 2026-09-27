@@ -5,12 +5,14 @@
 [![Platform: KDE Plasma 6](https://img.shields.io/badge/KDE_Plasma-6.0+-3daee9.svg?logo=kde&logoColor=white)](https://kde.org/plasma-desktop/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![CI](https://github.com/Andrew-Smith-93/Tessera/actions/workflows/ci.yml/badge.svg)](https://github.com/Andrew-Smith-93/Tessera/actions/workflows/ci.yml)
+[![KDE Store](https://img.shields.io/badge/KDE_Store-2375512-3daee9.svg?logo=kde&logoColor=white)](https://store.kde.org/p/2375512/)
+[![Release: v1.0.1](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/Andrew-Smith-93/Tessera/releases/tag/v1.0.1)
 
 > [!IMPORTANT]
-> **Pre-Release Candidate Branch (`fix/phase-5d-independent-verification-03`)**:
-> Tessera is currently undergoing pre-release architectural hardening and independent verification.
-> - **Automated Verification**: Monorepo TypeScript suites (448/448 passed across 29 suites locally on current worktree; committed `c8483b5` verified at 430/430 by exact-SHA CI run 35830555211; fresh CI required after commit), Python unit/contract/sandbox tests (82 fast tests passed locally across 8 modules; 25 installer integration tests partitioned across 3 shards: 9, 8, 8; total 107 tests across 9 modules passed locally on current worktree; committed `c8483b5` verified by exact-SHA CI run 35830555211; fresh CI required after commit), protocol freeze checks, and golden simulation traces (25/25 matching) pass cleanly. Detailed evidence stratification is audited in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
-> - **Live Desktop Boundary**: The 7-file candidate was loaded live in KWin with clean QML root initialization without SEGV or coordinator errors (`isScriptLoaded: true`, KWin PID stable). In a bounded live drag test using a disposable plain xterm window, drag committed left-half and top-left quadrant snap without the previous repeated-write feedback loop, and pre-existing window geometries remained untouched. Direct capture confirmed visible snap cards/pillar during drag before overlay was toggled off. These bounded observations do not constitute full runtime behavior acceptance: interactive snap-region multi-window occupancy, animation cubic interpolation & cancellation, KCM GUI bidirectional settings sync, Wayland session compatibility, physical display hotplug, and Steam/Wine game policy enforcement remain strictly **NOT RUN** or **NOT PROVEN**. Principal governance and decision gates are tracked in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
+> **Release Verification & Public Baseline (`v1.0.1`)**:
+> Tessera v1.0.1 has completed release verification and public transition.
+> - **Automated Verification**: Monorepo TypeScript suites (448/448 passed across 29 suites), Python unit/contract/sandbox tests (82 fast tests passed locally across 8 modules; 25 installer integration tests partitioned across 3 shards: 9, 8, 8; total 107 tests across 9 modules passed), protocol freeze checks, and golden simulation traces (25/25 matching) pass cleanly. Detailed evidence stratification is audited in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
+> - **Live Desktop Boundary**: Candidate v1.0.1 was loaded live in KWin with clean QML root initialization without SEGV or coordinator errors (`isScriptLoaded: true`, KWin PID stable). In live 3-screen desktop testing (X11), interactive window drag-and-drop committed left-half, top-left quadrant, and pillar snaps with exact single writes and clean echo suppression (`suppressedEchoes=5`). Certain live boundaries (Wayland session compatibility, physical display cable hotplug, and visual dark/light theme side-by-side audit) remain explicit live gates. Principal governance and decision gates are tracked in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
 
 ---
 
@@ -254,6 +256,10 @@ To provide rigorous technical transparency, repository evidence is categorized i
 ## 🛍️ Distribution & Publishing
 
 The repository produces an upload-ready `.kwinscript` bundle via `./package.sh`.
+
+Official releases and store listings:
+- **KDE Store Listing**: [store.kde.org/p/2375512](https://store.kde.org/p/2375512/) (Product ID `2375512`)
+- **GitHub Release**: [v1.0.1](https://github.com/Andrew-Smith-93/Tessera/releases/tag/v1.0.1)
 
 Store publication, AUR availability, and release upload are separate maintainer actions and are not claimed by this repository state. Maintainers should refer to [docs/KDE_STORE_PUBLISHING.md](docs/KDE_STORE_PUBLISHING.md) for the publishing checklist.
 
