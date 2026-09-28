@@ -229,6 +229,7 @@ All configuration lives in native KDE interfaces. Open **KDE System Settings →
 - **Layout & Spacing**: Configure inner gap (default: 8px) and outer margin (default: 10px) sizes. User-facing layout preset menus, layout-cycling shortcuts, and primary ratio controls are retired; legacy stored layout algorithms (such as Primary + Stack, Monocle, Floating, Binary Split, Columns, and Rows) are automatically normalized to the canonical Balanced Grid layout by the runtime reconciler, while per-window floating is managed separately via window rules and game policies.
 - **Window Rules**: Add window classes or application IDs to float automatically, and configure game window policy (`floating`, `tiled`, `monocle`).
 - **Performance**: Adjust reconciliation debounce duration (default: 60ms, range 0–1000ms), animation duration (default: 180ms), and snap overlay polling interval (default: 16ms).
+- **Shortcuts**: View starting keybindings and the Quadrant & Three-Pillar visual layout reference, with step-by-step guidance on customizing keybindings in KDE System Settings.
 
 Configuration values are stored in standard KDE configuration files:
 - Script settings: `~/.config/kwinrc` under the `[Script-tessera]` group.
@@ -303,6 +304,7 @@ Contributions, bug reports, and layout proposals are welcome!
 - 🏛️ [Runtime Architecture](docs/RUNTIME_ARCHITECTURE.md): Detailed component specifications and data flow.
 - 🛡️ [Security Policy](SECURITY.md): Vulnerability intake and handling procedures.
 - 💬 [Support Guidelines](.github/SUPPORT.md): How to get help and report issues.
+- 📋 [Changelog](CHANGELOG.md): Version history, new features, and release notes.
 - 📜 [Code of Conduct](CODE_OF_CONDUCT.md): Community standards and pledge.
 
 ---

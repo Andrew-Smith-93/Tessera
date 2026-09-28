@@ -50,10 +50,10 @@ dist/tessera-v<Version>.kwinscript
    - **License**: `GPL-3.0-or-later` (matching `metadata.json` and package metadata)
    - **Homepage / Source Code**: `https://github.com/Andrew-Smith-93/Tessera`
 4. **Description**:
-   - You can copy and paste the Markdown content from `README.md`. Highlight the key features:
+   - For an enhanced, formatted product description ready for copy-pasting, see [docs/KDE_STORE_LISTING_DESCRIPTION.md](KDE_STORE_LISTING_DESCRIPTION.md). It highlights:
      - 7 internal/compatibility layout engines (Balanced Grid default, Primary + Stack, Binary Split, Columns, Rows, Monocle, Floating; user-facing preset menus and cycling shortcuts retired)
      - Coalesced reconciliation, dirty-scope tracking, and geometry echo suppression
-     - Native KDE System Settings configuration (`config.ui` + `main.xml`)
+     - Native KDE System Settings configuration (`config.ui` + `main.xml`) with dedicated Shortcuts tab
      - 12 visual snap overlay zones and Region Occupancy collision model
      - 22 customizable Super-primary shortcuts and safe window animations
 5. **Media & Screenshots**:
@@ -69,7 +69,8 @@ dist/tessera-v<Version>.kwinscript
 1. In the **Files** section of your product page, click **Add File**.
 2. Upload `dist/tessera-v<Version>.kwinscript` (derived from `metadata.json`).
 3. Set the download name to `tessera-v<Version>.kwinscript`.
-4. Click **Save & Publish** (only after explicit maintainer release authorization).
+4. In the **Changelog** field, paste the formatted release notes from [docs/APP_STORE_CHANGELOG.md](APP_STORE_CHANGELOG.md).
+5. Click **Save & Publish** (only after explicit maintainer release authorization).
 
 ---
 
