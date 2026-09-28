@@ -340,7 +340,7 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "category": "LEGACY_COMPATIBILITY",
         "total_occurrences": 1,
         "lines": {
-            "89af9378bf6cb43da12a01a6d24bf28b61fc851a003f9aefe8610966a4f16ab8": {"occ": 1, "repeat": 1, "positions": [138]},
+            "89af9378bf6cb43da12a01a6d24bf28b61fc851a003f9aefe8610966a4f16ab8": {"occ": 1, "repeat": 1, "positions": [152]},
         }
     },
     "docs/BASELINE_SETTINGS_DRIFT_MATRIX.md": {

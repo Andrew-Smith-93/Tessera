@@ -152,6 +152,7 @@ function setupVMEnvironment(opts: { enableAnimations?: boolean; animationDuratio
     config,
     currentDraggingWindow: null,
     activeAnimations: {},
+    targetOutputsByWid: {},
     activeCount: 0,
     animTimer,
     isAnimating: function(wid: string) { return !!this.activeAnimations[wid]; },
@@ -218,6 +219,8 @@ function setupVMEnvironment(opts: { enableAnimations?: boolean; animationDuratio
   vm.createContext(ctx);
 
   const functionNames = [
+    "setTargetOutputName",
+    "getTargetOutputName",
     "cancelAnimation",
     "cancelAllAnimations",
     "cancelInvalidAnimations",
@@ -452,6 +455,37 @@ describe("Production QML Keyboard Screen Movement & Affinity", () => {
     env.ctx.performReconciliation();
     expect(win._targetOutputName).toBeNull();
     expect(env.coordinator.getRetainedWindow("win-1")?.outputId).toBe("HDMI-A-1");
+  });
+
+  it("production performReconciliation resolves target affinity from targetOutputsByWid when C++ window wrapper drops expando properties", () => {
+    const env = setupVMEnvironment({ enableAnimations: true, animationDurationMs: 180 });
+    const win = createMockWindow("win-1", { x: 1920, y: 800, width: 960, height: 600 }, SCREEN_2);
+    env.ctx.Workspace.activeWindow = win;
+    env.ctx.Workspace.stackingOrder = [win];
+
+    // Initial reconciliation on SCREEN_2 ("DP-1")
+    env.ctx.performReconciliation();
+    expect(env.coordinator.getRetainedWindow("win-1")?.outputId).toBe("DP-1");
+
+    // Simulate snap drop commit to DP-1:
+    // In KWin 6 QJSEngine, newly wrapped QJSValue for KWin::Window has NO ad-hoc expando properties.
+    env.ctx.setTargetOutputName("win-1", "DP-1");
+    delete (win as any)._targetOutputName;
+
+    // Window animator is active (drop animation running)
+    env.ctx.activeAnimations["win-1"] = {
+      win,
+      targetX: 2400,
+      targetY: 540,
+      targetW: 960,
+      targetH: 540,
+      startTime: Date.now(),
+      duration: 180
+    };
+
+    // Reconcile: must NOT fall back to frameGeometry or emit WindowMovedOutput
+    env.ctx.performReconciliation();
+    expect(env.coordinator.getRetainedWindow("win-1")?.outputId).toBe("DP-1");
   });
 
   it("pending animation is cancelled before initiating monitor move", () => {
