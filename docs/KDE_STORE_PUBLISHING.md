@@ -27,7 +27,7 @@ This generates:
 ```
 dist/tessera-v<Version>.kwinscript
 ```
-*(A standard `.kwinscript` bundle formatted for KDE Plasma 6, e.g. `dist/tessera-v1.0.1.kwinscript` derived from `metadata.json`).*
+*(A standard `.kwinscript` bundle formatted for KDE Plasma 6, e.g. `dist/tessera-v1.0.2.kwinscript` derived from `metadata.json`).*
 
 ---
 
@@ -45,7 +45,7 @@ dist/tessera-v<Version>.kwinscript
    - Navigate to: `KWin Scripts` (or `Plasma 6 Extensions / KWin Scripts`).
 3. **Product Information**:
    - **Name**: `Tessera - Dynamic Tiling Window Manager for KDE Plasma 6`
-   - **Version**: Matches `KPlugin.Version` in `metadata.json` (e.g. `1.0.1`)
+   - **Version**: Matches `KPlugin.Version` in `metadata.json` (e.g. `1.0.2`)
    - **Summary**: `Dynamic tiling window manager script and native configuration interface for KDE Plasma 6.`
    - **License**: `GPL-3.0-or-later` (matching `metadata.json` and package metadata)
    - **Homepage / Source Code**: `https://github.com/Andrew-Smith-93/Tessera`

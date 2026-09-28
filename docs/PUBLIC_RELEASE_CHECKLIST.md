@@ -95,14 +95,14 @@ Before repository visibility is changed from private to public, or any release i
 ### Gate C: Release Asset Verification & Public Distribution
 > [!NOTE]
 > **Maintainer Directive — Gate C Execution & Live Publication**:
-> Per explicit maintainer direction ("We can now go into Gate C"), release tag `v1.0.1` was created and pushed to `Andrew-Smith-93/Tessera`. The GitHub Actions release workflow ran with full test pass and generated the release assets. The release was published to GitHub Releases and the KDE Store.
+> - **v1.0.1**: Released and published to GitHub Releases and KDE Store (Product ID `2375512`).
+> - **v1.0.2**: Released and published to GitHub Releases with Shortcuts configuration tab, multi-screen snap stability fix, monitor affinity state preservation, and live multi-screen screenshot documentation.
 
-- [x] **Local Package Verification**: Ran `./package.sh` locally and verified the generated `dist/tessera-v1.0.1.kwinscript` package (72K) against the 12-entry allowlist and bit-for-bit `LICENSE` match (all 14 tests passing in `tests/test_package_manifest.py`).
-- [x] **CI Release Validation**: Automated release workflow in GitHub Actions (Run ID `36344239175`) passed the entire test matrix and produced:
-  1. `tessera-v1.0.1.kwinscript` (72K) with exact 12-entry manifest and byte-for-byte identical checksum to local build (`e2c42a9b468430891e2a6931c5dfe7f97898b0974b8a6069e600b633d44a1471`).
-  2. `SHA256SUMS.txt` matching the official `.kwinscript` bundle.
-  3. Official GitHub Release `v1.0.1` published at `https://github.com/Andrew-Smith-93/Tessera/releases/tag/v1.0.1`.
-- [x] **KDE Store Publication**: Product published live on the KDE Store at [store.kde.org/p/2375512](https://store.kde.org/p/2375512/) (Product ID `2375512`) in category `KWin Scripts` with package asset `tessera-v1.0.1.kwinscript` and official branding asset `tessera-logo.png`.
+- [x] **Local Package Verification (v1.0.1 & v1.0.2)**: Ran `./package.sh` locally and verified generated packages (`dist/tessera-v1.0.1.kwinscript` and `dist/tessera-v1.0.2.kwinscript`, 76K) against the 12-entry allowlist and bit-for-bit `LICENSE` match (all 14 tests passing in `tests/test_package_manifest.py`).
+- [x] **CI Release Validation**:
+  1. `v1.0.1`: Automated release workflow in GitHub Actions (Run ID `36344239175`) passed the entire test matrix and produced `tessera-v1.0.1.kwinscript` (72K).
+  2. `v1.0.2`: Automated release workflow in GitHub Actions (Run ID `36438838604`) passed the entire test matrix and produced `tessera-v1.0.2.kwinscript` (76K) and `SHA256SUMS.txt`. Official GitHub Release `v1.0.2` published at `https://github.com/Andrew-Smith-93/Tessera/releases/tag/v1.0.2`.
+- [x] **KDE Store Publication (v1.0.1 Live; v1.0.2 Gated Upload Checklist)**: Product published live on the KDE Store at [store.kde.org/p/2375512](https://store.kde.org/p/2375512/) (Product ID `2375512`) in category `KWin Scripts`. v1.0.2 distribution package and changelog prepared for maintainer upload.
 
 ### Gate D: Live Interactive Desktop Verification
 
@@ -235,3 +235,57 @@ Before repository visibility is changed from private to public, or any release i
 | `docs/PRE_PUBLICATION_AUDIT.md`<br>*(`docs/`)* | `historical` | • Documents earlier pre-publication audit findings (SEC-01 to SEC-07), historical CI dependency audit baseline, and sanitization history | • Historical snapshot; points current governance authority to `PUBLIC_RELEASE_CHECKLIST.md` | **Historical Audit Snapshot** *(not current authority)* |
 | `docs/LIVE_KWIN_X11_ACCEPTANCE.md`<br>*(`docs/`)* | `historical` | • Documents Phase 5B acceptance testing under KDE Plasma 6.3.6 (X11) on an earlier Rust/Cargo baseline | • Historical snapshot; does NOT constitute evidence for the current TypeScript/QML declarative codebase | **Historical Baseline Snapshot** *(not current authority)* |
 | `docs/BASELINE_SETTINGS_DRIFT_MATRIX.md`<br>*(`docs/`)* | `historical` | • Documents historical settings drift analysis prior to Phase 5D canonicalization | • Historical snapshot; points current settings authority to `config/canonical-config.json` and `contents/config/main.xml` | **Historical Baseline Snapshot** *(not current authority)* |
+
+---
+
+## 6. Release v1.0.2 Update Checklist & Multi-Monitor Milestone Verification
+
+### 6.1 Objective & Architectural Scope
+Tessera v1.0.2 delivers targeted multi-monitor dynamic tiling stability and configuration transparency:
+1. **Vertical Multi-Screen Snap Relocation Fix**: Resolves an issue on multi-monitor setups with vertically stacked displays (such as an Acer display above a Wacom tablet) where dragging a window to snap zones (notably bottom-right) on the top monitor could trigger false output migration and retile onto the bottom monitor.
+2. **Persistent Monitor Affinity State**: Implemented `targetOutputsByWid` state dictionary directly within QML to preserve monitor affinity across KWin 6 C++ `QJSValue` wrapper recreation when inspecting `Workspace.stackingOrder`.
+3. **Animation Output Ingestion Guard**: Window output migration is guarded during active animations (`!isAnimating`).
+4. **Corner Snap Trigger Boundaries**: Extended corner quadrant snap trigger zones to display boundaries, eliminating 1-pixel deadbands.
+5. **Configuration Dialog Shortcuts Tab**: Added native `tabShortcuts` to `contents/ui/config.ui` displaying ASCII layout diagrams and all 22 starting keybindings with native KDE shortcut customization instructions.
+6. **Real-World Multi-Screen Asset**: Incorporated live 3-monitor desktop screenshot (`docs/screenshots/tessera-multiscreen-live.png`) into `README.md` and app store listings.
+
+### 6.2 Pull Request & Issue Audit
+- [x] **PR #8**: Dependabot bump `typescript` from 5.9.3 to 6.0.3 (merged).
+- [x] **PR #12**: `feat(config)`: Add Shortcuts tab to `config.ui`, app store changelog, and enhanced store description (merged).
+- [x] **PR #13**: `fix(reconciler)`: Resolve vertical multi-screen snap drop and output migration (merged).
+- [x] **PR #14**: `fix(reconciler)`: Preserve target output affinity in QML state dictionary against QJSValue wrapper recreation (merged).
+- [x] **PR #15**: `chore(release)`: Prepare v1.0.2 release, update README with multi-screen screenshot and changelogs (merged).
+- [x] **Issue & PR Backlog**: 0 open pull requests; 0 open issues; 100% of pull requests verified through green CI before merge.
+
+### 6.3 Automated Evidence & Test Suite (v1.0.2)
+- [x] **Monorepo TypeScript Suite**: 452/452 passing across 29 test files under Vitest 5.0.1.
+- [x] **TypeScript Compilation**: `tsc --build` and `npm run bundle:kwin` compile cleanly with zero errors.
+- [x] **Python Package Manifest**: 14/14 tests passing (`tests/test_package_manifest.py`).
+- [x] **Python Fast Test Suite**: 82/82 tests passing (`tests/run_fast_tests.py`), including repository hygiene, documentation truth, and markdown link integrity (0 broken links).
+- [x] **Runtime Simulator Goldens**: 25/25 traces match byte-for-byte (`npm run sim:verify`).
+- [x] **Sandboxed Installer Integration**: 25/25 installer integration tests partitioned across 3 shards (9, 8, 8) pass with zero duplicate or skipped tests.
+- [x] **Dependency Security Audit**: 0 vulnerabilities across all dependencies (`npm audit`).
+
+### 6.4 Live Interactive Desktop Verification (3 Physical Screens)
+- [x] **Package Load & Runtime Hooks**: Staged v1.0.2 package installed and loaded live via KWin scripting DBus interface without SEGV or coordinator errors.
+- [x] **Stacking & Output Preservation**: Windows dragged to bottom-right quadrant of top screen (`DP-4`) remain on `DP-4` and do not relocate to bottom screen (`HDMI-1-1`).
+- [x] **Single-Write Commits & Echo Suppression**: Geometry commits remain single writes per drop; echo suppression verifies clean suppression (`suppressedEchoes=5`).
+- [x] **Configuration Dialog Verification**: Opening native KWin System Settings Tessera configuration displays the new Shortcuts tab cleanly.
+
+### 6.5 Distribution & Release Artifacts
+- [x] **Deterministic Package**: `dist/tessera-v1.0.2.kwinscript` (76K) generated deterministically via `./package.sh`.
+- [x] **GitHub Actions Release Run**: Run ID `36438838604` completed cleanly and generated release assets.
+- [x] **GitHub Release Published**: Published official [Release v1.0.2](https://github.com/Andrew-Smith-93/Tessera/releases/tag/v1.0.2) with attached `.kwinscript` and checksums.
+
+### 6.6 Maintainer Action Checklist for KDE Store (Product 2375512)
+- [ ] Log in to [store.kde.org/p/2375512](https://store.kde.org/p/2375512/).
+- [ ] Navigate to the **Files** tab:
+  - [ ] Click **Add File** and upload `dist/tessera-v1.0.2.kwinscript`.
+  - [ ] Set version field to `1.0.2`.
+  - [ ] In the changelog field, paste the text from `docs/APP_STORE_CHANGELOG.md` under `Version 1.0.2`.
+- [ ] Navigate to the **Media** tab:
+  - [ ] Upload `docs/screenshots/tessera-multiscreen-live.png` showcasing live dynamic tiling across 3 screens.
+- [ ] Navigate to the **Description** tab:
+  - [ ] (Optional) Update marketing description with copy from `docs/KDE_STORE_LISTING_DESCRIPTION.md`.
+- [ ] Click **Save Changes**.
+
