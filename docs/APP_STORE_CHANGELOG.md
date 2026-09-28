@@ -9,17 +9,23 @@ When uploading a new `.kwinscript` bundle or updating product details on [store.
 
 ---
 
-## Version 1.0.2 (Upcoming / Next Update)
+## Version 1.0.2 (Current Release)
 
 ### Highlights
-- **Configuration Shortcuts Tab**: Added a dedicated "Shortcuts" tab inside the KDE System Settings configuration dialog! You can now view the visual Quadrant & Three-Pillar layout diagram and review all 22 starting keybindings without leaving the settings window.
+- **Configuration Shortcuts Tab**: Added a dedicated "Shortcuts" tab inside the KDE System Settings configuration dialog (`config.ui`)! You can now view the visual Quadrant & Three-Pillar layout diagram and review all 22 starting keybindings without leaving the settings window.
+- **Multi-Monitor Vertical Snap Fix**: Resolved an issue on multi-monitor setups with vertically stacked displays where windows dragged to snap zones (such as the bottom-right quadrant) on an upper screen could falsely migrate to the screen below.
+- **Robust Monitor Affinity State**: Implemented persistent window output state tracking in QML to preserve monitor affinity during window animations and drag-and-drop actions.
 - **Shortcut Customization Guide**: Step-by-step instructions on customizing, reassigning, and resetting keybindings natively in KDE System Settings (Shortcuts → KWin).
-- **Store & Documentation Enhancements**: Complete changelog integration and refined feature walkthroughs for new users.
+- **Store & Documentation Enhancements**: Complete changelog integration, verified multi-screen screenshot asset, and refined feature walkthroughs.
 
 ### Detailed Changes
 - Added `tabShortcuts` to `config.ui` with workflow layout ASCII diagram and directory of all 22 starting keybindings.
+- Introduced `targetOutputsByWid` state dictionary in `main.qml` to prevent KWin 6 C++ wrapper recreation from dropping monitor affinity.
+- Guarded `WindowMovedOutput` events during active window animations.
+- Upgraded `toNormalizedScreen` to preserve `usableArea` geometry when screen geometry is not yet populated.
+- Eliminated 1-pixel rounding deadbands on corner quadrant snap trigger zones.
 - Direct guidance on reassigning shortcuts via System Settings → Shortcuts → KWin.
-- Verified 100% adherence to KDE Plasma 6 KConfig and UI contracts.
+- 100% adherence to KDE Plasma 6 KConfig and UI contracts verified with 452 automated Vitest tests and 82 contract tests.
 
 ---
 
