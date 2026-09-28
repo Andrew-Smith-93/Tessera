@@ -108,9 +108,9 @@ All shortcuts use the Super (<kbd>Meta</kbd>) key as their primary modifier, int
 5. Enable the **Tessera** checkbox and click **Apply**.
 
 ### Method 2: Manual Package Installation
-Download `tessera-v1.0.1.kwinscript` from the **Files** section and run:
+Download `tessera-v1.0.2.kwinscript` from the **Files** section and run:
 ```bash
-kpackagetool6 --type KWin/Script --install tessera-v1.0.1.kwinscript
+kpackagetool6 --type KWin/Script --install tessera-v1.0.2.kwinscript
 ```
 Then enable in **System Settings → KWin Scripts**.
 
@@ -125,7 +125,14 @@ Then enable in **System Settings → KWin Scripts**.
 
 ## 📋 Changelog
 
-### v1.0.1 (Current Release)
+### v1.0.2 (Current Release)
+- **Shortcuts Tab in KCM Settings**: Inspect starting keybindings and visual layout diagrams directly within KDE System Settings.
+- **Multi-Monitor Vertical Snap Fix**: Resolved window drop displacement on vertically stacked displays.
+- **Persistent Monitor Affinity State**: Guarded window screen affinity against KWin 6 C++ wrapper recreation during drag-and-drop.
+- **Corner Quadrant Precision**: Removed 1-pixel deadbands on screen boundaries.
+- **Full Test Suite & Quality**: 452 Vitest tests and 82 fast Python tests verifying all layout engines and lifecycle invariants.
+
+### v1.0.1
 - Official public release on KDE Store and GitHub.
 - Multi-monitor overlay unmapping fix eliminating display blackouts under X11.
 - Complete 22 Super shortcuts, 12 visual snap zones, and Quadrant / 3-Pillar layout.

@@ -6,19 +6,22 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![CI](https://github.com/Andrew-Smith-93/Tessera/actions/workflows/ci.yml/badge.svg)](https://github.com/Andrew-Smith-93/Tessera/actions/workflows/ci.yml)
 [![KDE Store](https://img.shields.io/badge/KDE_Store-2375512-3daee9.svg?logo=kde&logoColor=white)](https://store.kde.org/p/2375512/)
-[![Release: v1.0.1](https://img.shields.io/badge/release-v1.0.1-blue.svg)](https://github.com/Andrew-Smith-93/Tessera/releases/tag/v1.0.1)
+[![Release: v1.0.2](https://img.shields.io/badge/release-v1.0.2-blue.svg)](https://github.com/Andrew-Smith-93/Tessera/releases/tag/v1.0.2)
 
 > [!IMPORTANT]
-> **Release Verification & Public Baseline (`v1.0.1`)**:
-> Tessera v1.0.1 has completed release verification and public transition.
-> - **Automated Verification**: Monorepo TypeScript suites (448/448 passed across 29 suites), Python unit/contract/sandbox tests (82 fast tests passed locally across 8 modules; 25 installer integration tests partitioned across 3 shards: 9, 8, 8; total 107 tests across 9 modules passed), protocol freeze checks, and golden simulation traces (25/25 matching) pass cleanly. Detailed evidence stratification is audited in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
-> - **Live Desktop Boundary**: Candidate v1.0.1 was loaded live in KWin with clean QML root initialization without SEGV or coordinator errors (`isScriptLoaded: true`, KWin PID stable). In live 3-screen desktop testing (X11), interactive window drag-and-drop committed left-half, top-left quadrant, and pillar snaps with exact single writes and clean echo suppression (`suppressedEchoes=5`). Certain live boundaries (Wayland session compatibility, physical display cable hotplug, and visual dark/light theme side-by-side audit) remain explicit live gates. Principal governance and decision gates are tracked in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
+> **Release Verification & Public Baseline (`v1.0.2`)**:
+> Tessera v1.0.2 has completed release verification and public transition.
+> - **Automated Verification**: Monorepo TypeScript suites (452/452 passed across 29 suites), Python unit/contract/sandbox tests (82 fast tests passed locally across 8 modules; 25 installer integration tests partitioned across 3 shards: 9, 8, 8; total 107 tests across 9 modules passed), protocol freeze checks, and golden simulation traces (25/25 matching) pass cleanly. Detailed evidence stratification is audited in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
+> - **Live Desktop Boundary**: Candidate v1.0.2 was loaded live in KWin with clean QML root initialization without SEGV or coordinator errors (`isScriptLoaded: true`, KWin PID stable). In live 3-screen desktop testing (X11), interactive window drag-and-drop committed left-half, top-left quadrant, and pillar snaps with exact single writes and clean echo suppression (`suppressedEchoes=5`). Certain live boundaries (Wayland session compatibility, physical display cable hotplug, and visual dark/light theme side-by-side audit) remain explicit live gates. Principal governance and decision gates are tracked in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md).
 
 ---
 
 ## 🌟 What is Tessera?
 
 Tessera brings keyboard-driven dynamic tiling to KDE Plasma 6 without replacing your desktop environment, display manager, or compositor.
+
+![Tessera Live Multi-Screen Dynamic Tiling](docs/screenshots/tessera-multiscreen-live.png)
+*Live Tessera dynamic tiling running across a 3-monitor desktop in KDE Plasma 6, featuring balanced grid, 3-column pillars, and quadrant snap splits.*
 
 Built as a **pure KWin declarative script**, Tessera executes directly within KWin's process, operates alongside native KDE Plasma panels and widgets, and is configured entirely through standard **KDE System Settings**. It is centered on an intuitive **Quadrant and Three-Pillar Workflow** designed for both traditional displays and modern ultrawide monitors.
 
@@ -260,7 +263,7 @@ The repository produces an upload-ready `.kwinscript` bundle via `./package.sh`.
 
 Official releases and store listings:
 - **KDE Store Listing**: [store.kde.org/p/2375512](https://store.kde.org/p/2375512/) (Product ID `2375512`)
-- **GitHub Release**: [v1.0.1](https://github.com/Andrew-Smith-93/Tessera/releases/tag/v1.0.1)
+- **GitHub Release**: [v1.0.2](https://github.com/Andrew-Smith-93/Tessera/releases/tag/v1.0.2)
 
 Store publication, AUR availability, and release upload are separate maintainer actions and are not claimed by this repository state. Maintainers should refer to [docs/KDE_STORE_PUBLISHING.md](docs/KDE_STORE_PUBLISHING.md) for the publishing checklist.
 

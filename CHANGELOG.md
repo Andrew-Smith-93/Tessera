@@ -7,10 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.0.2] - 2026-09-28
+
 ### Added
 - **Shortcuts & Layout Tab in Configuration**: Added a dedicated "Shortcuts" tab in the native KWin configuration dialog (`config.ui`). It displays the visual Quadrant and Three-Pillar layout diagram, a complete categorized directory of all 22 starting keybindings, and step-by-step guidance on customizing shortcuts in KDE System Settings.
 - **App Store Changelog Guide**: Added `docs/APP_STORE_CHANGELOG.md` with compact, user-centric release notes tailored for the KDE Store, Discover, and AppStream.
 - **Enhanced KDE Store Description**: Added `docs/KDE_STORE_LISTING_DESCRIPTION.md` providing rich marketing copy, feature spotlights, workflow diagrams, and keybinding cheat sheets for store listings.
+- **Live Multi-Screen Screenshot Asset**: Added `docs/screenshots/tessera-multiscreen-live.png` showcasing real-world 3-screen desktop dynamic tiling across standard and ultrawide geometries.
+
+### Fixed
+- **Multi-Monitor Vertical Snap Relocation Fix**: Resolved an issue on vertically stacked displays where windows dragged to snap zones (specifically bottom-right) on a top monitor (`DP-4`) could falsely migrate and retile onto vertically adjacent monitors (`HDMI-1-1`).
+- **Persistent Target Output Affinity State**: Introduced a root QML state dictionary `targetOutputsByWid` to preserve window monitor affinity across transient KWin 6 `QJSValue` C++ wrapper recreations when inspecting `Workspace.stackingOrder`.
+- **Animation Output Ingestion Guard**: Explicitly guarded `WindowMovedOutput` events with `!isAnimating` to prevent intermediate animation geometries from triggering unwanted output migrations.
+- **Screen Geometry Fallback**: Upgraded `toNormalizedScreen` to preserve `usableArea` coordinates when `screen.geometry` is undefined.
+- **Corner Trigger Deadband Elimination**: Extended corner quadrant snap trigger zones to exact display edge boundaries `area.x + area.width` and `area.y + area.height`.
+
+### Changed
+- **Documentation & Release Artifacts**: Updated `README.md`, `metadata.json`, and packaging definitions for the v1.0.2 release.
 
 ---
 
