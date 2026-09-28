@@ -126,6 +126,7 @@ export function computeSnapZones(
   });
 
   // 5. Bottom-Left Quarter (Index 4)
+  const blTriggerY = area.y + Math.floor(area.height * 0.68);
   zones.push({
     type: "quarter",
     id: "bottom-left",
@@ -136,12 +137,13 @@ export function computeSnapZones(
     rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
     targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
     triggerX: area.x,
-    triggerY: area.y + Math.floor(area.height * 0.68),
+    triggerY: blTriggerY,
     triggerW: Math.floor(area.width * 0.22),
-    triggerH: Math.floor(area.height * 0.32)
+    triggerH: (area.y + area.height) - blTriggerY
   });
 
   // 6. Top-Right Quarter (Index 5)
+  const trTriggerX = area.x + Math.floor(area.width * 0.78);
   zones.push({
     type: "quarter",
     id: "top-right",
@@ -151,13 +153,15 @@ export function computeSnapZones(
     slotIndex: 1,
     rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: Math.max(60, hh - 70) },
     targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: hh },
-    triggerX: area.x + Math.floor(area.width * 0.78),
+    triggerX: trTriggerX,
     triggerY: area.y,
-    triggerW: Math.floor(area.width * 0.22),
+    triggerW: (area.x + area.width) - trTriggerX,
     triggerH: Math.floor(area.height * 0.32)
   });
 
   // 7. Bottom-Right Quarter (Index 6)
+  const brTriggerX = area.x + Math.floor(area.width * 0.78);
+  const brTriggerY = area.y + Math.floor(area.height * 0.68);
   zones.push({
     type: "quarter",
     id: "bottom-right",
@@ -167,10 +171,10 @@ export function computeSnapZones(
     slotIndex: 2,
     rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
     targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
-    triggerX: area.x + Math.floor(area.width * 0.78),
-    triggerY: area.y + Math.floor(area.height * 0.68),
-    triggerW: Math.floor(area.width * 0.22),
-    triggerH: Math.floor(area.height * 0.32)
+    triggerX: brTriggerX,
+    triggerY: brTriggerY,
+    triggerW: (area.x + area.width) - brTriggerX,
+    triggerH: (area.y + area.height) - brTriggerY
   });
 
   // 8. Left Pillar (Index 7)

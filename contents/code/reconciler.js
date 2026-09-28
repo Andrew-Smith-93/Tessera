@@ -1161,6 +1161,7 @@ var ReconcilerModule = (() => {
       triggerW: Math.floor(area.width * 0.22),
       triggerH: Math.floor(area.height * 0.32)
     });
+    const blTriggerY = area.y + Math.floor(area.height * 0.68);
     zones.push({
       type: "quarter",
       id: "bottom-left",
@@ -1171,10 +1172,11 @@ var ReconcilerModule = (() => {
       rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
       targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
       triggerX: area.x,
-      triggerY: area.y + Math.floor(area.height * 0.68),
+      triggerY: blTriggerY,
       triggerW: Math.floor(area.width * 0.22),
-      triggerH: Math.floor(area.height * 0.32)
+      triggerH: area.y + area.height - blTriggerY
     });
+    const trTriggerX = area.x + Math.floor(area.width * 0.78);
     zones.push({
       type: "quarter",
       id: "top-right",
@@ -1184,11 +1186,13 @@ var ReconcilerModule = (() => {
       slotIndex: 1,
       rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: Math.max(60, hh - 70) },
       targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: hh },
-      triggerX: area.x + Math.floor(area.width * 0.78),
+      triggerX: trTriggerX,
       triggerY: area.y,
-      triggerW: Math.floor(area.width * 0.22),
+      triggerW: area.x + area.width - trTriggerX,
       triggerH: Math.floor(area.height * 0.32)
     });
+    const brTriggerX = area.x + Math.floor(area.width * 0.78);
+    const brTriggerY = area.y + Math.floor(area.height * 0.68);
     zones.push({
       type: "quarter",
       id: "bottom-right",
@@ -1198,10 +1202,10 @@ var ReconcilerModule = (() => {
       slotIndex: 2,
       rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
       targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
-      triggerX: area.x + Math.floor(area.width * 0.78),
-      triggerY: area.y + Math.floor(area.height * 0.68),
-      triggerW: Math.floor(area.width * 0.22),
-      triggerH: Math.floor(area.height * 0.32)
+      triggerX: brTriggerX,
+      triggerY: brTriggerY,
+      triggerW: area.x + area.width - brTriggerX,
+      triggerH: area.y + area.height - brTriggerY
     });
     zones.push({
       type: "pillar",
@@ -3710,18 +3714,25 @@ var ReconcilerModule = (() => {
   }
   function toNormalizedScreen(scr, usableArea, activeDesktop, activeActivity) {
     const outputId = (scr == null ? void 0 : scr.name) ? String(scr.name) : "default";
-    const geom = (scr == null ? void 0 : scr.geometry) ? {
-      x: Number(scr.geometry.x || 0),
-      y: Number(scr.geometry.y || 0),
-      width: Number(scr.geometry.width || 0),
-      height: Number(scr.geometry.height || 0)
-    } : { x: 0, y: 0, width: 1920, height: 1080 };
+    const rawGeom = scr == null ? void 0 : scr.geometry;
+    const hasGeom = rawGeom && typeof rawGeom.x === "number" && typeof rawGeom.width === "number";
     const area = usableArea ? {
       x: Number(usableArea.x || 0),
       y: Number(usableArea.y || 0),
       width: Number(usableArea.width || 0),
       height: Number(usableArea.height || 0)
-    } : geom;
+    } : hasGeom ? {
+      x: Number(rawGeom.x || 0),
+      y: Number(rawGeom.y || 0),
+      width: Number(rawGeom.width || 0),
+      height: Number(rawGeom.height || 0)
+    } : { x: 0, y: 0, width: 1920, height: 1080 };
+    const geom = hasGeom ? {
+      x: Number(rawGeom.x || 0),
+      y: Number(rawGeom.y || 0),
+      width: Number(rawGeom.width || 0),
+      height: Number(rawGeom.height || 0)
+    } : area;
     return {
       outputId,
       name: (scr == null ? void 0 : scr.name) ? String(scr.name) : outputId,
