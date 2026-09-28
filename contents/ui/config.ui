@@ -371,7 +371,114 @@ Invalid edits retain last valid runtime rules without crashing or discarding.</s
        </item>
       </layout>
      </widget>
-    </widget>
+     <widget class="QWidget" name="tabShortcuts">
+      <attribute name="title">
+       <string>Shortcuts</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="shortcutsTabLayout">
+       <property name="spacing">
+        <number>10</number>
+       </property>
+       <item>
+        <widget class="QGroupBox" name="grpCustomizationGuide">
+         <property name="title">
+          <string>Customizing Keybindings in KDE Plasma</string>
+         </property>
+         <layout class="QVBoxLayout" name="guideLayout">
+          <item>
+           <widget class="QLabel" name="lblCustomizationInstructions">
+            <property name="text">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
+&lt;p&gt;&lt;b&gt;All 22 Tessera keybindings are registered as native KDE Global Shortcuts.&lt;/b&gt;&lt;/p&gt;
+&lt;p&gt;To customize, rebind, or resolve collisions with other Plasma actions:&lt;br/&gt;
+1. Open &lt;b&gt;System Settings → Shortcuts → KWin&lt;/b&gt;.&lt;br/&gt;
+2. Search for &lt;b&gt;Tessera&lt;/b&gt; to view and edit all shortcuts.&lt;br/&gt;
+3. Click any shortcut to set a custom sequence or reset to default.&lt;/p&gt;
+&lt;p&gt;&lt;i&gt;Your custom shortcut assignments are preserved automatically across script updates.&lt;/i&gt;&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="grpLayoutReference">
+         <property name="title">
+          <string>Workflow &amp;amp; Layout Reference (Starting Keybindings)</string>
+         </property>
+         <layout class="QVBoxLayout" name="layoutRefLayout">
+          <item>
+           <widget class="QLabel" name="lblAsciiLayout">
+            <property name="text">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;pre style=&quot;font-family: monospace; font-size: 11px;&quot;&gt;
+┌───────────────────┬───────────────────┐     ┌──────────────┬──────────────┬──────────────┐
+│  Top-Left (50%)   │  Top-Right (50%)  │     │              │  Center Top  │              │
+│  [Meta + Up]      │                   │     │  Left Pillar ├──────────────┤ Right Pillar │
+├───────────────────┼───────────────────┤     │  (33%)       │Center Bottom │ (33%)        │
+│ Bottom-Left (50%) │Bottom-Right (50%) │     │ [Meta + Left]│ (focal 50%)  │[Meta + Right]│
+│  [Meta + Down]    │                   │     │              │              │              │
+└───────────────────┴───────────────────┘     └──────────────┴──────────────┴──────────────┘
+          4-Corner Quadrants                       3-Column Pillars (Center Stacked/Full)&lt;/pre&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="grpStartingKeybindings">
+         <property name="title">
+          <string>Directory of Starting Keybindings</string>
+         </property>
+         <layout class="QVBoxLayout" name="catalogLayout">
+          <item>
+           <widget class="QTextBrowser" name="txtStartingKeybindings">
+            <property name="html">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
+&lt;table border=&quot;0&quot; cellpadding=&quot;3&quot; cellspacing=&quot;2&quot; width=&quot;100%&quot;&gt;
+&lt;tr&gt;&lt;th align=&quot;left&quot;&gt;&lt;b&gt;Action&lt;/b&gt;&lt;/th&gt;&lt;th align=&quot;left&quot;&gt;&lt;b&gt;Starting Sequence&lt;/b&gt;&lt;/th&gt;&lt;th align=&quot;left&quot;&gt;&lt;b&gt;Description&lt;/b&gt;&lt;/th&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td colspan=&quot;3&quot;&gt;&lt;hr/&gt;&lt;b&gt;Tiling &amp;amp; Window State&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Toggle Zone Overlay&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Shift+C&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Show/hide 12 interactive snap zones&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Toggle Tiling&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Shift+T&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Toggle automatic tiling globally&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Toggle Window Floating&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Shift+F&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Toggle floating state for active window&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Retile Current Workspace&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Shift+R&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Recompute and apply layout geometry&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td colspan=&quot;3&quot;&gt;&lt;hr/&gt;&lt;b&gt;Snap &amp;amp; Region Navigation&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Move Window to Left Region&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Left&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Snap window to left half / pillar&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Move Window to Right Region&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Right&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Snap window to right half / pillar&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Move Window to Up Region&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Up&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Snap window to upper quadrant / half&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Move Window to Down Region&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Down&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Snap window to lower quadrant / half&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td colspan=&quot;3&quot;&gt;&lt;hr/&gt;&lt;b&gt;Keyboard Resizing&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Expand Window Width&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Shift+Right&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Increase width of active window&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Shrink Window Width&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Shift+Left&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Decrease width of active window&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Expand Window Height&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Shift+Down&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Increase height of active window&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Shrink Window Height&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Shift+Up&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Decrease height of active window&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td colspan=&quot;3&quot;&gt;&lt;hr/&gt;&lt;b&gt;Spatial Focus &amp;amp; Window Swap&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Focus Left Window&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Alt+A&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Focus adjacent window to the left&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Focus Right Window&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Alt+D&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Focus adjacent window to the right&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Focus Up Window&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Alt+W&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Focus adjacent window above&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Focus Down Window&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Alt+S&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Focus adjacent window below&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Swap Left Window&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Alt+Q&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Swap positions with window to the left&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Swap Right Window&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Alt+E&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Swap positions with window to the right&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td colspan=&quot;3&quot;&gt;&lt;hr/&gt;&lt;b&gt;Multi-Screen Navigation&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Move Window to Screen Left&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Ctrl+Left&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Move window to display on the left&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Move Window to Screen Right&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Ctrl+Right&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Move window to display on the right&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Move Window to Screen Above&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Ctrl+Up&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Move window to display above&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td&gt;Move Window to Screen Below&lt;/td&gt;&lt;td&gt;&lt;code&gt;Meta+Ctrl+Down&lt;/code&gt;&lt;/td&gt;&lt;td&gt;Move window to display below&lt;/td&gt;&lt;/tr&gt;
+&lt;/table&gt;
+&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
    </item>
   </layout>
  </widget>
