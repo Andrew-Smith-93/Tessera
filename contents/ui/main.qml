@@ -471,9 +471,8 @@ Item {
                     coord.clearRecordedCommand(wid);
                 }
                 if (animWin) {
-                    animWin._targetOutputName = null;
                     if (coord) {
-                        var obsScr = animWin.output || (animWin.frameGeometry ? getScreenForPos(animWin.frameGeometry) : null);
+                        var obsScr = (animWin.frameGeometry ? getScreenForPos(animWin.frameGeometry) : null) || animWin.output;
                         if (obsScr) {
                             var obsName = getScreenName(obsScr);
                             var retained = coord.getRetainedWindow(wid);
@@ -487,6 +486,7 @@ Item {
                             }
                         }
                     }
+                    animWin._targetOutputName = null;
                 }
             }
         }
@@ -767,6 +767,9 @@ Item {
         }
 
         var normalized = evalResult.normalized;
+        if (targetScr) {
+            win._targetOutputName = getScreenName(targetScr);
+        }
         try {
             coord.recordCommand(wid, normalized, epoch || 0);
             if (config.enableAnimations && windowAnimator && reason !== "drag_start") {
@@ -853,11 +856,13 @@ Item {
                 if (!wScr) {
                     winObj._targetOutputName = null;
                 } else if (!windowAnimator || !windowAnimator.isAnimating(wid)) {
-                    var obsScr = winObj.output || (winObj.frameGeometry ? getScreenForPos(winObj.frameGeometry) : null);
+                    var obsScr = (winObj.frameGeometry ? getScreenForPos(winObj.frameGeometry) : null) || winObj.output;
                     if (obsScr && obsScr !== wScr) {
                         var obsArea = Workspace.clientArea(KWin.MaximizeArea, obsScr, Workspace.currentDesktop);
                         var fg = winObj.frameGeometry;
-                        if (fg && obsArea && (fg.x + fg.width <= obsArea.x + obsArea.width && fg.x >= obsArea.x)) {
+                        if (fg && obsArea &&
+                            (fg.x >= obsArea.x - 5 && (fg.x + fg.width) <= (obsArea.x + obsArea.width + 5)) &&
+                            (fg.y >= obsArea.y - 5 && (fg.y + fg.height) <= (obsArea.y + obsArea.height + 5))) {
                             winObj._targetOutputName = null;
                             wScr = obsScr;
                         }
@@ -865,7 +870,7 @@ Item {
                 }
             }
             if (!wScr) {
-                wScr = winObj.output || getScreenForPos(winObj.frameGeometry);
+                wScr = (winObj.frameGeometry ? getScreenForPos(winObj.frameGeometry) : null) || winObj.output;
             }
             var wArea = wScr ? Workspace.clientArea(KWin.MaximizeArea, wScr, Workspace.currentDesktop) : null;
             var normWin = ReconcilerModule.ReconcilerBridge.toNormalizedWindow(winObj, wScr, wArea);
@@ -1128,6 +1133,7 @@ Item {
             });
 
             // 5. Bottom-Left Quarter (Index 4)
+            var blTriggerY = area.y + Math.floor(area.height * 0.68);
             zones.push({
                 type: "quarter",
                 id: "bottom-left",
@@ -1138,12 +1144,13 @@ Item {
                 rect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
                 targetRect: { x: area.x + go, y: area.y + go + hh + gi, width: hw, height: uh - hh - gi },
                 triggerX: area.x,
-                triggerY: area.y + Math.floor(area.height * 0.68),
+                triggerY: blTriggerY,
                 triggerW: Math.floor(area.width * 0.22),
-                triggerH: Math.floor(area.height * 0.32)
+                triggerH: (area.y + area.height) - blTriggerY
             });
 
             // 6. Top-Right Quarter (Index 5)
+            var trTriggerX = area.x + Math.floor(area.width * 0.78);
             zones.push({
                 type: "quarter",
                 id: "top-right",
@@ -1153,13 +1160,15 @@ Item {
                 slotIndex: 1,
                 rect: { x: area.x + go + hw + gi, y: area.y + go + 70, width: uw - hw - gi, height: Math.max(60, hh - 70) },
                 targetRect: { x: area.x + go + hw + gi, y: area.y + go, width: uw - hw - gi, height: hh },
-                triggerX: area.x + Math.floor(area.width * 0.78),
+                triggerX: trTriggerX,
                 triggerY: area.y,
-                triggerW: Math.floor(area.width * 0.22),
+                triggerW: (area.x + area.width) - trTriggerX,
                 triggerH: Math.floor(area.height * 0.32)
             });
 
             // 7. Bottom-Right Quarter (Index 6)
+            var brTriggerX = area.x + Math.floor(area.width * 0.78);
+            var brTriggerY = area.y + Math.floor(area.height * 0.68);
             zones.push({
                 type: "quarter",
                 id: "bottom-right",
@@ -1169,10 +1178,10 @@ Item {
                 slotIndex: 2,
                 rect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
                 targetRect: { x: area.x + go + hw + gi, y: area.y + go + hh + gi, width: uw - hw - gi, height: uh - hh - gi },
-                triggerX: area.x + Math.floor(area.width * 0.78),
-                triggerY: area.y + Math.floor(area.height * 0.68),
-                triggerW: Math.floor(area.width * 0.22),
-                triggerH: Math.floor(area.height * 0.32)
+                triggerX: brTriggerX,
+                triggerY: brTriggerY,
+                triggerW: (area.x + area.width) - brTriggerX,
+                triggerH: (area.y + area.height) - brTriggerY
             });
 
             // 8. Left Pillar (Index 7)
@@ -1733,6 +1742,9 @@ Item {
                         if (typeof w.setMaximize === "function") {
                             w.setMaximize(false, false);
                         }
+                        var scr = getScreenForPos(target.targetRect);
+                        var sName = getScreenName(scr);
+                        w._targetOutputName = sName;
                         var snapResult = commitWindowGeometry(w, target.targetRect, "snap_drop");
                         if (snapResult.outcome !== "rejected" && snapResult.normalized) {
                             if (coordinator) {
@@ -1740,8 +1752,6 @@ Item {
                                 coordinator.setPreTiled(wid, true);
                             }
 
-                            var scr = getScreenForPos(target.targetRect);
-                            var sName = getScreenName(scr);
                             var coord = getCoordinator();
                             if (coord) {
                                 coord.ingestEvent({

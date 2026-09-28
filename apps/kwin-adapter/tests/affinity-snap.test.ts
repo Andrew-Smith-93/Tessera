@@ -12,6 +12,7 @@ import {
   matchSnapZoneHover,
   type SnapZoneTarget
 } from "../src/snap-zones.js";
+import { toNormalizedScreen } from "../src/qml-reconciler-compat.js";
 import type { NormalizedScreenInput, NormalizedWindowInput } from "../src/coordinator-types.js";
 import type { Rect, Point } from "@tessera/protocol";
 
@@ -687,5 +688,114 @@ describe("Phase 2B Screen Affinity, Snap Zones & Geometry Cache Invariants", () 
     // Persistent order on primary screen contains the relocated window
     const primaryScreen = coordinator.getRetainedScreen("HDMI-A-1");
     expect(primaryScreen?.persistentOrder).toContain("win-topo-1");
+  });
+
+  // 33. Multi-screen vertical stack affinity & snap edge coverage (reproducing Acer DP-4 + Wacom HDMI-1-1)
+  it("Vertical Stack Multi-Screen: corner snap zones extend to screen boundaries without deadbands", () => {
+    const screenAcer: NormalizedScreenInput = {
+      outputId: "DP-4",
+      name: "DP-4",
+      geometry: { x: 1920, y: 0, width: 1920, height: 1080 },
+      usableArea: { x: 1920, y: 0, width: 1920, height: 1080 },
+      activeDesktopId: "1"
+    };
+    const screenWacom: NormalizedScreenInput = {
+      outputId: "HDMI-1-1",
+      name: "HDMI-1-1",
+      geometry: { x: 1920, y: 1080, width: 1920, height: 1080 },
+      usableArea: { x: 1920, y: 1080, width: 1920, height: 1080 },
+      activeDesktopId: "1"
+    };
+
+    // 1. Cursor resolution at the bottom-right corner of Acer (1920+1920-1=3839, 1080-1=1079)
+    const target = resolveCursorTargetScreen([SCREEN_PRIMARY, screenAcer, screenWacom], { x: 3839, y: 1079 });
+    expect(target.outputId).toBe("DP-4");
+
+    // 2. Snap zones on Acer must cover up to exact edge (3840, 1080)
+    const zones = computeSnapZones(screenAcer.usableArea!, 10, 10);
+    const brZone = zones.find(z => z.id === "bottom-right");
+    expect(brZone).toBeDefined();
+    expect(brZone!.triggerX + brZone!.triggerW).toBe(3840);
+    expect(brZone!.triggerY + brZone!.triggerH).toBe(1080);
+
+    // 3. Hovering at pixel (3500, 1079) matches bottom-right quadrant of Acer
+    const matched = matchSnapZoneHover(zones, { x: 3500, y: 1079 });
+    expect(matched).toBe(6); // index 6 is bottom-right
+    expect(zones[matched].id).toBe("bottom-right");
+  });
+
+  // 34. Snap drop with overhanging drag position maintains target screen affinity without cross-screen relocation
+  it("Vertical Stack Multi-Screen: snap drop on top screen retains target screen despite overhanging drag center", () => {
+    const coordinator = new RuntimeCoordinator();
+    const screenAcer: NormalizedScreenInput = {
+      outputId: "DP-4",
+      name: "DP-4",
+      geometry: { x: 1920, y: 0, width: 1920, height: 1080 },
+      usableArea: { x: 1920, y: 0, width: 1920, height: 1080 },
+      activeDesktopId: "1"
+    };
+    const screenWacom: NormalizedScreenInput = {
+      outputId: "HDMI-1-1",
+      name: "HDMI-1-1",
+      geometry: { x: 1920, y: 1080, width: 1920, height: 1080 },
+      usableArea: { x: 1920, y: 1080, width: 1920, height: 1080 },
+      activeDesktopId: "1"
+    };
+
+    coordinator.getOrCreateScreen(SCREEN_PRIMARY);
+    coordinator.getOrCreateScreen(screenAcer);
+    coordinator.getOrCreateScreen(screenWacom);
+
+    // Window being dragged by titlebar near bottom of Acer:
+    // Window y is 800, height 600 -> center is 1100 (which falls into Wacom's y range 1080..2160)
+    coordinator.ingestEvent({
+      type: "WindowDiscovered",
+      window: {
+        id: "win-overhang-1",
+        outputId: "DP-4",
+        resourceClass: "terminal",
+        frameGeometry: { x: 2880, y: 800, width: 960, height: 600 },
+        isDragging: true
+      }
+    });
+    coordinator.reconcile();
+
+    // User drops window into bottom-right snap zone on Acer
+    const zones = computeSnapZones(screenAcer.usableArea!, 10, 10);
+    const brZone = zones.find(z => z.id === "bottom-right")!;
+    coordinator.ingestEvent({
+      type: "WindowSnapCommitted",
+      windowId: "win-overhang-1",
+      outputId: "DP-4",
+      targetRect: brZone.targetRect,
+      slotIndex: brZone.slotIndex,
+      snapRegion: brZone.id,
+      desktopId: "1"
+    });
+
+    const tx = coordinator.reconcile();
+    expect(tx).not.toBeNull();
+
+    // Window MUST be placed on DP-4 (Acer), NOT HDMI-1-1 (Wacom)
+    const win = coordinator.getRetainedWindow("win-overhang-1");
+    expect(win?.outputId).toBe("DP-4");
+    expect(win?.outputAffinity).toBe("DP-4");
+    expect(win?.snapRegion).toBe("bottom-right");
+    expect(win?.currentDesiredTiledGeometry?.y).toBeLessThan(1080);
+    expect(win?.currentDesiredTiledGeometry?.y).toBeGreaterThan(0);
+    expect(Math.abs((win?.currentDesiredTiledGeometry?.y || 0) - brZone.targetRect.y)).toBeLessThanOrEqual(1);
+  });
+
+  // 35. toNormalizedScreen fallback preserves usableArea position when scr.geometry is missing
+  it("toNormalizedScreen: preserves usableArea coordinates when scr.geometry is undefined", () => {
+    const rawScrWithoutGeom = {
+      name: "HDMI-1-1"
+    };
+    const usableArea: Rect = { x: 1920, y: 1080, width: 1920, height: 1080 };
+    const norm = toNormalizedScreen(rawScrWithoutGeom, usableArea, "1");
+
+    expect(norm.outputId).toBe("HDMI-1-1");
+    expect(norm.geometry).toEqual(usableArea);
+    expect(norm.usableArea).toEqual(usableArea);
   });
 });

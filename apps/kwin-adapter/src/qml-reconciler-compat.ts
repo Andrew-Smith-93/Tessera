@@ -231,19 +231,27 @@ export function toNormalizedScreen(
   activeActivity?: any
 ): NormalizedScreenInput {
   const outputId = scr?.name ? String(scr.name) : "default";
-  const geom: Rect = scr?.geometry ? {
-    x: Number(scr.geometry.x || 0),
-    y: Number(scr.geometry.y || 0),
-    width: Number(scr.geometry.width || 0),
-    height: Number(scr.geometry.height || 0)
-  } : { x: 0, y: 0, width: 1920, height: 1080 };
+  const rawGeom = scr?.geometry;
+  const hasGeom = rawGeom && typeof rawGeom.x === "number" && typeof rawGeom.width === "number";
 
   const area: Rect = usableArea ? {
     x: Number(usableArea.x || 0),
     y: Number(usableArea.y || 0),
     width: Number(usableArea.width || 0),
     height: Number(usableArea.height || 0)
-  } : geom;
+  } : (hasGeom ? {
+    x: Number(rawGeom.x || 0),
+    y: Number(rawGeom.y || 0),
+    width: Number(rawGeom.width || 0),
+    height: Number(rawGeom.height || 0)
+  } : { x: 0, y: 0, width: 1920, height: 1080 });
+
+  const geom: Rect = hasGeom ? {
+    x: Number(rawGeom.x || 0),
+    y: Number(rawGeom.y || 0),
+    width: Number(rawGeom.width || 0),
+    height: Number(rawGeom.height || 0)
+  } : area;
 
   return {
     outputId,

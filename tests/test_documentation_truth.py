@@ -332,8 +332,8 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "total_occurrences": 3,
         "lines": {
             "3b2c23bcfaf8ab9172994c9f1e9fc482aa405294e9182ab8d5cef963b282d5c5": {"occ": 1, "repeat": 1, "positions": [338]},
-            "570ee0074f90a904d28262d3f6060f6fcfc9d551f2689463077e629a97a1c17a": {"occ": 1, "repeat": 1, "positions": [1805]},
-            "cdbc7b1fbbf63b99af56367ed69243c5904f6f99f4d5c232a4b883ec779a0eb2": {"occ": 1, "repeat": 1, "positions": [3282]},
+            "570ee0074f90a904d28262d3f6060f6fcfc9d551f2689463077e629a97a1c17a": {"occ": 1, "repeat": 1, "positions": [1809]},
+            "cdbc7b1fbbf63b99af56367ed69243c5904f6f99f4d5c232a4b883ec779a0eb2": {"occ": 1, "repeat": 1, "positions": [3286]},
         }
     },
     "contents/ui/main.qml": {
