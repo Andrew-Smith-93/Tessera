@@ -37,9 +37,23 @@ Item {
     // 2. State Tracking
     // =========================================================================
     property var wasDraggingMaximized: ({}) // windowId -> boolean
+    property var targetOutputsByWid: ({})   // windowId -> target screen name string
     property bool isArranging: false
     property var currentDraggingWindow: null
     property string lastRuleValidationError: ""
+
+    function setTargetOutputName(wid, screenName) {
+        if (!wid) return;
+        if (screenName) {
+            targetOutputsByWid[wid] = screenName;
+        } else {
+            delete targetOutputsByWid[wid];
+        }
+    }
+
+    function getTargetOutputName(wid) {
+        return (wid && targetOutputsByWid[wid]) ? targetOutputsByWid[wid] : null;
+    }
 
     // Runtime Mode: "reconciler" (single runtime authority)
     property string runtimeMode: "reconciler"
@@ -486,6 +500,7 @@ Item {
                             }
                         }
                     }
+                    setTargetOutputName(wid, null);
                     animWin._targetOutputName = null;
                 }
             }
@@ -694,6 +709,7 @@ Item {
                     if (coord) {
                         coord.clearRecordedCommand(c.wid);
                     }
+                    setTargetOutputName(c.wid, null);
                     win._targetOutputName = null;
                     if (coord) {
                         var obsScrFail = win.output || (win.frameGeometry ? getScreenForPos(win.frameGeometry) : null);
@@ -767,8 +783,10 @@ Item {
         }
 
         var normalized = evalResult.normalized;
-        if (targetScr) {
-            win._targetOutputName = getScreenName(targetScr);
+        if (targetScr && (reason === "snap_drop" || reason === "move_screen" || reason === "move_region")) {
+            var targetScrName = getScreenName(targetScr);
+            setTargetOutputName(wid, targetScrName);
+            win._targetOutputName = targetScrName;
         }
         try {
             coord.recordCommand(wid, normalized, epoch || 0);
@@ -805,6 +823,8 @@ Item {
         } catch (err) {
             coord.clearRecordedCommand(wid);
             if (windowAnimator) windowAnimator.cancelAnimation(wid, true);
+            setTargetOutputName(wid, null);
+            win._targetOutputName = null;
             return { outcome: "rejected", normalized: null };
         }
     }
@@ -850,12 +870,17 @@ Item {
             var winObj = allWins[wIdx];
             if (!winObj || !winObj.managed || !winObj.normalWindow || winObj.deleted) continue;
             var wid = getWindowId(winObj);
+            var retained = coord.getRetainedWindow(wid);
+            var isAnimating = Boolean(windowAnimator && windowAnimator.isAnimating(wid));
+            var targetOutName = winObj._targetOutputName || getTargetOutputName(wid);
             var wScr = null;
-            if (winObj._targetOutputName) {
-                wScr = getScreenByName(winObj._targetOutputName);
+
+            if (targetOutName) {
+                wScr = getScreenByName(targetOutName);
                 if (!wScr) {
+                    setTargetOutputName(wid, null);
                     winObj._targetOutputName = null;
-                } else if (!windowAnimator || !windowAnimator.isAnimating(wid)) {
+                } else if (!isAnimating) {
                     var obsScr = (winObj.frameGeometry ? getScreenForPos(winObj.frameGeometry) : null) || winObj.output;
                     if (obsScr && obsScr !== wScr) {
                         var obsArea = Workspace.clientArea(KWin.MaximizeArea, obsScr, Workspace.currentDesktop);
@@ -863,12 +888,16 @@ Item {
                         if (fg && obsArea &&
                             (fg.x >= obsArea.x - 5 && (fg.x + fg.width) <= (obsArea.x + obsArea.width + 5)) &&
                             (fg.y >= obsArea.y - 5 && (fg.y + fg.height) <= (obsArea.y + obsArea.height + 5))) {
+                            setTargetOutputName(wid, null);
                             winObj._targetOutputName = null;
                             wScr = obsScr;
                         }
                     }
                 }
+            } else if (isAnimating && retained && retained.outputId) {
+                wScr = getScreenByName(retained.outputId);
             }
+
             if (!wScr) {
                 wScr = (winObj.frameGeometry ? getScreenForPos(winObj.frameGeometry) : null) || winObj.output;
             }
@@ -877,11 +906,10 @@ Item {
             normWin.isManualFloating = coord.isManualFloating(wid);
             normWin.isDragging = (winObj === currentDraggingWindow);
 
-            var retained = coord.getRetainedWindow(wid);
             if (!retained) {
                 coord.ingestEvent({ type: "WindowDiscovered", window: normWin });
             } else {
-                if (normWin.outputId && retained.outputId !== normWin.outputId) {
+                if (!isAnimating && normWin.outputId && retained.outputId !== normWin.outputId) {
                     coord.ingestEvent({
                         type: "WindowMovedOutput",
                         windowId: wid,
@@ -1672,6 +1700,10 @@ Item {
         delete w._tesseraHooks;
         delete w._tesseraHooked;
         delete w._targetOutputName;
+        try {
+            var unhookWid = getWindowId(w);
+            if (unhookWid) setTargetOutputName(unhookWid, null);
+        } catch (e) {}
     }
 
     function hookWindow(w) {
@@ -1686,6 +1718,8 @@ Item {
         var onMoveResizeStarted = function() {
             if (!root || !root.coordinator) return;
             var wid = getWindowId(w);
+            setTargetOutputName(wid, null);
+            delete w._targetOutputName;
             if (windowAnimator) {
                 windowAnimator.cancelAnimation(wid, true);
             }
@@ -1744,6 +1778,7 @@ Item {
                         }
                         var scr = getScreenForPos(target.targetRect);
                         var sName = getScreenName(scr);
+                        setTargetOutputName(wid, sName);
                         w._targetOutputName = sName;
                         var snapResult = commitWindowGeometry(w, target.targetRect, "snap_drop");
                         if (snapResult.outcome !== "rejected" && snapResult.normalized) {
@@ -1773,6 +1808,9 @@ Item {
                             setSavedTiledGeometry(wid, snapResult.normalized);
 
                             osdCall.notify("Snapped: " + target.title, "preferences-system-windows");
+                        } else {
+                            setTargetOutputName(wid, null);
+                            w._targetOutputName = null;
                         }
                     }
                 } else {
@@ -1931,7 +1969,10 @@ Item {
 
         var onOutputChanged = function() {
             if (!root || !root.coordinator || isArranging) return;
-            if (w._targetOutputName && getScreenName(w.output) === w._targetOutputName) {
+            var wid = getWindowId(w);
+            var targetOut = getTargetOutputName(wid) || w._targetOutputName;
+            if (targetOut && getScreenName(w.output) === targetOut) {
+                setTargetOutputName(wid, null);
                 w._targetOutputName = null;
             }
             scheduleReconcile("WindowOutputChanged");
@@ -2369,9 +2410,12 @@ Item {
         }
 
         var currentScreen = null;
-        if (w._targetOutputName) {
-            currentScreen = getScreenByName(w._targetOutputName);
+        var wid = getWindowId(w);
+        var targetOut = getTargetOutputName(wid) || w._targetOutputName;
+        if (targetOut) {
+            currentScreen = getScreenByName(targetOut);
             if (!currentScreen) {
+                setTargetOutputName(wid, null);
                 w._targetOutputName = null;
             }
         }
@@ -2382,7 +2426,6 @@ Item {
         var targetScreen = findTargetScreenInDirection(currentScreen, direction);
         if (!targetScreen || targetScreen === currentScreen) return;
 
-        var wid = getWindowId(w);
         if (windowAnimator) {
             windowAnimator.cancelAnimation(wid, true);
         }
@@ -2398,6 +2441,7 @@ Item {
 
         var fromName = getScreenName(currentScreen);
         var coord = getCoordinator();
+        setTargetOutputName(wid, toName);
         w._targetOutputName = toName;
 
         var moveResult = commitWindowGeometry(w, { x: newX, y: newY, width: curW, height: curH }, "move_screen");
@@ -2413,6 +2457,7 @@ Item {
             osdCall.notify("Window Moved to " + toName, "preferences-desktop-display");
             retileNow();
         } else {
+            setTargetOutputName(wid, null);
             w._targetOutputName = null;
             if (coord) {
                 var retained = coord.getRetainedWindow(wid);
@@ -2439,9 +2484,12 @@ Item {
         if (!w || !w.managed || !w.normalWindow || w.deleted) return;
 
         var currentScreen = null;
-        if (w._targetOutputName) {
-            currentScreen = getScreenByName(w._targetOutputName);
+        var wid = getWindowId(w);
+        var targetOut = getTargetOutputName(wid) || w._targetOutputName;
+        if (targetOut) {
+            currentScreen = getScreenByName(targetOut);
             if (!currentScreen) {
+                setTargetOutputName(wid, null);
                 w._targetOutputName = null;
             }
         }
@@ -2457,7 +2505,6 @@ Item {
         var targetScreen = screens[nextIdx];
         if (!targetScreen || targetScreen === currentScreen) return;
 
-        var wid = getWindowId(w);
         if (windowAnimator) {
             windowAnimator.cancelAnimation(wid, true);
         }
@@ -2473,6 +2520,7 @@ Item {
 
         var fromName = getScreenName(currentScreen);
         var coord = getCoordinator();
+        setTargetOutputName(wid, toName);
         w._targetOutputName = toName;
 
         var moveResult = commitWindowGeometry(w, { x: newX, y: newY, width: curW, height: curH }, "move_screen");
@@ -2488,6 +2536,7 @@ Item {
             osdCall.notify("Window Moved to " + toName, "preferences-desktop-display");
             retileNow();
         } else {
+            setTargetOutputName(wid, null);
             w._targetOutputName = null;
             if (coord) {
                 var retained = coord.getRetainedWindow(wid);

@@ -158,6 +158,7 @@ function setupVMEnvironment(sourceOverride?: string): TestVMEnvironment {
     config,
     currentDraggingWindow: null,
     activeAnimations: {},
+    targetOutputsByWid: {},
     activeCount: 0,
     writingWindowId: null,
     animTimer,
@@ -200,6 +201,8 @@ function setupVMEnvironment(sourceOverride?: string): TestVMEnvironment {
   vm.createContext(ctx);
 
   const functionNames = [
+    "setTargetOutputName",
+    "getTargetOutputName",
     "cancelAnimation",
     "cancelAllAnimations",
     "cancelInvalidAnimations",
