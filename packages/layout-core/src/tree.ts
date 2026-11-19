@@ -1,4 +1,4 @@
-import type { Rect, RuntimeWindowId } from "@tessera/protocol";
+import type { Rect, RuntimeWindowId } from "@movement/protocol";
 
 export type SplitDirection = "horizontal" | "vertical";
 

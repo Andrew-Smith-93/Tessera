@@ -1,5 +1,5 @@
 """
-Automated unit tests for Tessera package manifest and runtime surface integrity.
+Automated unit tests for Movement package manifest and runtime surface integrity.
 
 Validates:
 1. contents/ui/main.qml is the sole declarative runtime entrypoint in metadata.json.
@@ -63,9 +63,8 @@ SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 def _get_derived_package_name(meta_path=METADATA_PATH):
     with open(meta_path, "r", encoding="utf-8") as f:
         meta = json.load(f)
-    plugin_id = meta["KPlugin"]["Id"]
     plugin_version = meta["KPlugin"]["Version"]
-    return f"{plugin_id}-v{plugin_version}.kwinscript"
+    return f"movement-v{plugin_version}.kwinscript"
 
 
 def _snapshot_directory(path):
@@ -164,6 +163,8 @@ class TestPackageManifest(unittest.TestCase):
         self.assertNotIn("/", plugin_id)
         self.assertNotIn("\\", plugin_id)
         self.assertEqual(plugin_id, "tessera")
+        self.assertEqual(meta["KPlugin"]["Name"], "Movement")
+        self.assertEqual(meta["X-KDE-PluginKeyword"], plugin_id)
 
         self.assertIsInstance(plugin_version, str)
         self.assertTrue(bool(SAFE_IDENTIFIER_RE.match(plugin_version)))

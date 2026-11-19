@@ -1,4 +1,4 @@
-import type { Rect } from "@tessera/protocol";
+import type { Rect } from "@movement/protocol";
 import type {
   SerializableRetainedScreen,
   SerializableRetainedWindow,

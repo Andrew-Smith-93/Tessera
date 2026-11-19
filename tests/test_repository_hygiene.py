@@ -1,5 +1,5 @@
 """
-Automated unit tests for Tessera repository hygiene, public collaboration readiness,
+Automated unit tests for Movement repository hygiene, public collaboration readiness,
 privacy enforcement, workflow hardening, and documentation link integrity.
 """
 

@@ -14,7 +14,7 @@ import {
 } from "../src/snap-zones.js";
 import { toNormalizedScreen } from "../src/qml-reconciler-compat.js";
 import type { NormalizedScreenInput, NormalizedWindowInput } from "../src/coordinator-types.js";
-import type { Rect, Point } from "@tessera/protocol";
+import type { Rect, Point } from "@movement/protocol";
 
 const SCREEN_PRIMARY: NormalizedScreenInput = {
   outputId: "HDMI-A-1",

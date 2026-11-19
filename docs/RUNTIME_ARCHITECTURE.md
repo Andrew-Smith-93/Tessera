@@ -1,15 +1,15 @@
-# Tessera Runtime Architecture Specification
+# Movement Runtime Architecture Specification
 
-> **Authoritative Technical Specification**: This document details the runtime architecture, component structure, data flow, and reconciliation pipeline of Tessera for KDE Plasma 6.
+> **Authoritative Technical Specification**: This document details the runtime architecture, component structure, data flow, and reconciliation pipeline of Movement for KDE Plasma 6.
 
 ---
 
 ## 1. System Overview & Architectural Principles
 
-Tessera is an automatic dynamic tiling window manager designed natively for KDE Plasma 6. It operates strictly as an in-process KWin declarative script with bundled mathematical bridges and native KDE System Settings integration.
+Movement is an automatic dynamic tiling window manager designed natively for KDE Plasma 6. It operates strictly as an in-process KWin declarative script with bundled mathematical bridges and native KDE System Settings integration.
 
 ### Core Principles
-1. **In-Process KWin Execution**: Tessera executes directly within KWin's QML and JavaScript runtime. Zero background daemons, external services, or standalone helper processes are required or shipped.
+1. **In-Process KWin Execution**: Movement executes directly within KWin's QML and JavaScript runtime. Zero background daemons, external services, or standalone helper processes are required or shipped.
 2. **Single Authoritative Coordinator**: All window ordering, slot assignments, geometry diffing, and transaction planning are centralized in `RuntimeCoordinator`. No competing shadow order maps exist.
 3. **Turn-Based Event Coalescing**: Rapid bursts of compositor signals (e.g. multi-window launches or interactive resizing) coalesce into single, debounced reconciliation passes.
 4. **Echo Suppression**: Programmatic window geometry writes are tracked and filtered to eliminate feedback loops and compositor stutter.
@@ -21,7 +21,7 @@ Tessera is an automatic dynamic tiling window manager designed natively for KDE 
 
 ## 2. Shipped Component Architecture
 
-The following diagram illustrates the components shipped in the production Tessera `.kwinscript` package:
+The following diagram illustrates the components shipped in the production Movement `.kwinscript` package:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
@@ -53,16 +53,16 @@ The following diagram illustrates the components shipped in the production Tesse
 │  │    └─ Transaction Planning & Minimal Delta Geometry Operations                 │  │
 │  │                                                                                │  │
 │  │  • Statically Bundled Core Modules (Compiled Inlined):                         │  │
-│  │    ├─ @tessera/layout-core (Balanced Grid, Primary-Stack, BSP, Columns, Rows)  │  │
-│  │    ├─ @tessera/rules-engine (Window Classifier & Policy Resolution)            │  │
+│  │    ├─ @movement/layout-core (Balanced Grid, Primary-Stack, BSP, Columns, Rows)  │  │
+│  │    ├─ @movement/rules-engine (Window Classifier & Policy Resolution)            │  │
 │  │    └─ Snap Zone Math (12 Zones, Cursor Targeting, Region Transitions)          │  │
 │  └────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                      │
 │  ┌────────────────────────────────────────────────────────────────────────────────┐  │
 │  │ Standalone Compatibility Bridges (Packaged in .kwinscript, NOT imported by QML)│  │
 │  │                                                                                │  │
-│  │  • layouts.js: Standalone @tessera/layout-core bridge (isolated tests)         │  │
-│  │  • rules.js:   Standalone @tessera/rules-engine bridge (isolated tests)        │  │
+│  │  • layouts.js: Standalone @movement/layout-core bridge (isolated tests)         │  │
+│  │  • rules.js:   Standalone @movement/rules-engine bridge (isolated tests)        │  │
 │  │  (Zero runtime invocation by main.qml; zero shared mutable state)              │  │
 │  └────────────────────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────────────────────┘
@@ -85,7 +85,7 @@ The following diagram illustrates the components shipped in the production Tesse
 ### 3.2 Active Runtime Bridge (`contents/code/reconciler.js`)
 - **Role**: The **sole** active JavaScript runtime bridge imported by `contents/ui/main.qml` (`import "../code/reconciler.js" as ReconcilerModule`).
 - **Source**: Compiled via `esbuild` from `apps/kwin-adapter/src/qml-reconciler-compat.ts` and `apps/kwin-adapter/src/runtime-coordinator.ts`.
-- **Statically Inlines**: Directly bundles `@tessera/layout-core`, `@tessera/rules-engine`, and snap geometry mathematics into a single cohesive runtime bundle.
+- **Statically Inlines**: Directly bundles `@movement/layout-core`, `@movement/rules-engine`, and snap geometry mathematics into a single cohesive runtime bundle.
 - **QML-Owned Coordinator Lifecycle**: The coordinator instance is owned and retained directly by the QML script host (`property var coordinator: null` in `contents/ui/main.qml`). Upon first access or configuration load, `getCoordinator()` calls `ReconcilerModule.ReconcilerBridge.createCoordinator(config)` and caches the instance in `root.coordinator`. The bridge's exported module-level helper `getOrCreateCoordinator(config)` is not consumed by QML; instance lifetime and state persistence are bound directly to the active QML component lifecycle.
 - **Normalizer**: Converts live KWin objects to serializable records (`toNormalizedWindow`, `toNormalizedScreen`).
 - **Workspace Scoping**: Maintains collision-safe workspace scopes (`encodeURIComponent(outputId) + "//" + encodeURIComponent(desktopId)`).
@@ -93,17 +93,17 @@ The following diagram illustrates the components shipped in the production Tesse
 
 ### 3.3 Standalone Layout Bridge (`contents/code/layouts.js`)
 - **Role**: Standalone compatibility bridge packaged in `.kwinscript` for isolated contract validation and independent testing.
-- **Source**: Compiled via `esbuild` from `apps/kwin-adapter/src/qml-compat.ts` importing `@tessera/layout-core`.
+- **Source**: Compiled via `esbuild` from `apps/kwin-adapter/src/qml-compat.ts` importing `@movement/layout-core`.
 - **Runtime Execution**: **None during standard operation.** `main.qml` does not import `layouts.js`; all layout mathematics during active reconciliation execute through the inlined `layout-core` solvers inside `reconciler.js`. Zero shared state exists between `layouts.js` and `RuntimeCoordinator`.
 
 ### 3.4 Standalone Window Rules Bridge (`contents/code/rules.js`)
 - **Role**: Standalone compatibility bridge packaged in `.kwinscript` for isolated rule engine testing.
-- **Source**: Compiled via `esbuild` from `apps/kwin-adapter/src/qml-rules-compat.ts` importing `@tessera/rules-engine`.
+- **Source**: Compiled via `esbuild` from `apps/kwin-adapter/src/qml-rules-compat.ts` importing `@movement/rules-engine`.
 - **Runtime Execution**: **None during standard operation.** `main.qml` does not import `rules.js`; window classification during active reconciliation executes through the inlined `rules-engine` modules inside `reconciler.js`. Zero shared state exists between `rules.js` and `RuntimeCoordinator`.
 
 ### 3.5 Native Configuration Interface
 - **`contents/config/main.xml`**: Canonical KConfigXT schema declaring types, keys, and default values.
-- **`contents/ui/config.ui`**: Qt Designer form embedded directly in KDE System Settings (Window Management → KWin Scripts → Tessera).
+- **`contents/ui/config.ui`**: Qt Designer form embedded directly in KDE System Settings (Window Management → KWin Scripts → Movement).
 
 ---
 
@@ -157,7 +157,7 @@ frameGeometryChanged (Echo)            │                                   │
 
 ## 5. Region Occupancy Model & 12 Snap Zones
 
-Tessera implements a deterministic **Region Occupancy Model** that resolves interactions between explicit snaps, custom keyboard/drag resizes, and automatic layout tiling:
+Movement implements a deterministic **Region Occupancy Model** that resolves interactions between explicit snaps, custom keyboard/drag resizes, and automatic layout tiling:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -208,7 +208,7 @@ Smooth transitions between layout states are managed by `windowAnimator` inside 
 
 ## 7. Global Shortcuts Architecture
 
-Tessera registers 22 canonical keyboard shortcuts under KDE Plasma's Global Shortcuts (`kglobalshortcutsrc`). All shortcuts use the Super (<kbd>Meta</kbd>) modifier:
+Movement registers 22 canonical keyboard shortcuts under KDE Plasma's Global Shortcuts (`kglobalshortcutsrc`). All shortcuts use the Super (<kbd>Meta</kbd>) modifier:
 
 - **Tiling & Overlay Controls**:
   - `Meta+Shift+C`: Toggle Zone Overlay

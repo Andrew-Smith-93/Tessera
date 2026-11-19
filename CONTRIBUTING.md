@@ -1,12 +1,12 @@
-# Contributing to Tessera
+# Contributing to Movement
 
-Thank you for your interest in improving Tessera! We welcome community contributions, bug reports, layout algorithms, and documentation improvements.
+Thank you for your interest in improving Movement! We welcome community contributions, bug reports, layout algorithms, and documentation improvements.
 
 ---
 
 ## 🏛️ Architecture Overview
 
-Tessera is built as a self-contained KDE Plasma 6 KWin declarative script with a modern TypeScript monorepo architecture and native KDE System Settings configuration:
+Movement is built as a self-contained KDE Plasma 6 KWin declarative script with a modern TypeScript monorepo architecture and native KDE System Settings configuration:
 
 - **`packages/layout-core`**: Pure mathematical tiling algorithms (Balanced Grid default, Primary-Stack, Binary Split, Columns, Rows, Monocle, and Floating internal and compatibility solvers; no user-facing preset menus or cycling shortcuts), history navigation, and slot trees.
 - **`packages/rules-engine`**: Window matching, floating rules, and application classifier filters.
@@ -32,8 +32,8 @@ Tessera is built as a self-contained KDE Plasma 6 KWin declarative script with a
 ### Setup
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Andrew-Smith-93/Tessera.git
-   cd Tessera
+   git clone https://github.com/Andrew-Smith-93/Tessera.git Movement
+   cd Movement
    ```
 
 2. Install dependencies cleanly:

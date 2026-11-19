@@ -47,7 +47,7 @@ export function parseArgs(argv: string[]): CliOptions {
 
 function printHelp(): void {
   console.log(`
-Tessera Runtime Simulator CLI
+Movement Runtime Simulator CLI
 
 Usage:
   sim-cli [options] [path-to-fixture.json]

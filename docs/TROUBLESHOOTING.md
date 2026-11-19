@@ -1,12 +1,12 @@
-# Tessera Troubleshooting & Diagnostic Guide
+# Movement Troubleshooting & Diagnostic Guide
 
-This guide provides practical resolutions for common issues encountered during installation, configuration, shortcut registration, and runtime execution of Tessera on KDE Plasma 6.
+This guide provides practical resolutions for common issues encountered during installation, configuration, shortcut registration, and runtime execution of Movement on KDE Plasma 6.
 
 ---
 
 ## 1. System Requirements & Dependency Preflight
 
-Tessera requires a standard KDE Plasma 6 desktop environment with KWin 6.
+Movement requires a standard KDE Plasma 6 desktop environment with KWin 6.
 
 ### Required Utilities
 Before installing or troubleshooting, verify that the following utilities are available in your `PATH`:
@@ -34,13 +34,13 @@ command -v node npm
 
 ## 2. Installation, Upgrade & Recovery Lifecycle
 
-Tessera's installer (`./install.sh`) and uninstaller (`./uninstall.sh`) are designed with deterministic safety guarantees.
+Movement's installer (`./install.sh`) and uninstaller (`./uninstall.sh`) are designed with deterministic safety guarantees.
 
 ### Fresh Installation
 From the root of a cloned repository:
 ```bash
-git clone https://github.com/Andrew-Smith-93/Tessera.git
-cd Tessera
+git clone https://github.com/Andrew-Smith-93/Tessera.git Movement
+cd Movement
 npm ci
 npm run build
 ./install.sh
@@ -66,7 +66,7 @@ npm run build
 - **Legacy Cleanup**: Uncustomized legacy defaults that no longer exist in the runtime are safely unregistered from KWin.
 
 ### Standard Uninstallation
-To remove Tessera without deleting your personal configuration:
+To remove Movement without deleting your personal configuration:
 ```bash
 ./uninstall.sh
 ```
@@ -74,19 +74,19 @@ This removes:
 - The KWin script from `~/.local/share/kwin/scripts/tessera/`
 - Any legacy Control Center files (`~/.local/share/tessera/control/`, desktop entry, launcher)
 - Disables the plugin in `kwinrc` (`tesseraEnabled=false`)
-- Recognized Tessera default shortcut registrations from `kglobalshortcutsrc`
+- Recognized Movement default shortcut registrations from `kglobalshortcutsrc`
 
 User configurations (`[Script-tessera]`), intentional unbound bindings, and user-customized active or retired shortcuts are preserved byte-for-byte. Unrelated KRunner and Plasma shortcuts are never touched.
 
 ### Complete Purge
-To completely remove all Tessera files, configurations, and shortcuts:
+To completely remove all Movement files, configurations, and shortcuts:
 ```bash
 ./uninstall.sh --purge
 ```
 This additionally deletes:
-- All Tessera configuration properties from `kwinrc` (`[Script-tessera]`)
+- All Movement configuration properties from `kwinrc` (`[Script-tessera]`)
 - Legacy configuration files (`~/.config/tesserarc`, migration backups)
-- All Tessera shortcut registrations (both default and custom) from `~/.config/kglobalshortcutsrc`
+- All Movement shortcut registrations (both default and custom) from `~/.config/kglobalshortcutsrc`
 
 Unrelated KRunner, Plasma, and KWin shortcuts remain untouched.
 
@@ -116,16 +116,16 @@ Unrelated KRunner, Plasma, and KWin shortcuts remain untouched.
    Press <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> to ensure tiling has not been toggled off globally.
 
 ### Issue: Specific Application Tiles Unexpectedly (or Floats Unexpectedly)
-- Tessera automatically tiles standard application windows and floats transient dialogs, splash screens, and utilities.
+- Movement automatically tiles standard application windows and floats transient dialogs, splash screens, and utilities.
 - To customize window rules:
   1. Open **KDE System Settings → Window Management → KWin Scripts**.
-  2. Click the configure icon next to **Tessera**.
+  2. Click the configure icon next to **Movement**.
   3. Manage custom rules or exclusions directly in the configuration dialog.
   4. Alternatively, use standard KDE **Window Rules** (**KDE System Settings → Window Management → Window Rules**).
 
 ### Issue: Fullscreen and Borderless Windows Behave Differently
 
-Tessera distinguishes KWin's fullscreen state from a borderless window that merely fills a display. For normal managed windows, the [rule engine](../packages/rules-engine/src/rules.ts) applies these checks in order:
+Movement distinguishes KWin's fullscreen state from a borderless window that merely fills a display. For normal managed windows, the [rule engine](../packages/rules-engine/src/rules.ts) applies these checks in order:
 
 1. **True fullscreen** (`fullScreen === true`) is excluded from tiling before custom rules are considered. A custom tile rule does not override this state.
 2. **Explicit custom rules and floating filters** are considered before the borderless heuristic. A matching custom tile rule can therefore override fullscreen-like detection.
@@ -143,10 +143,10 @@ When checking a report on Plasma 6 / X11:
 The simulator has separate [true-fullscreen](../apps/runtime-simulator/fixtures/05-true-fullscreen-enter-exit.fixture.json) and [borderless](../apps/runtime-simulator/fixtures/06-borderless-fullscreen-enter-exit.fixture.json) scenarios. These are automated models, not proof that a particular game, Wayland session, or physical display setup has been tested. See the [public release checklist](PUBLIC_RELEASE_CHECKLIST.md) for live verification scope.
 
 ### Issue: Shortcut Keybinding Collisions
-- Tessera defaults to Super (<kbd>Meta</kbd>) key combinations for tiling and region navigation.
+- Movement defaults to Super (<kbd>Meta</kbd>) key combinations for tiling and region navigation.
 - If another application or Plasma component conflicts with a shortcut:
   1. Open **KDE System Settings → Shortcuts → KWin**.
-  2. Search for `Tessera:`.
+  2. Search for the action label, for example `Toggle Zone Overlay`.
   3. Assign custom alternative key combinations or reassign the conflicting Plasma action.
   4. Note that re-running `./install.sh` preserves existing custom and unbound bindings; it does not force-restore defaults or automatically resolve collisions with other Plasma actions.
   5. If you have custom bindings on retired legacy actions (e.g., `Focus Next Window`), pass `--migrate-spatial-shortcuts` to migrate them to active directional equivalents, or re-bind them to active actions in System Settings. Preserved legacy actions without active QML handlers remain dormant.
@@ -184,9 +184,9 @@ If the script registers with KWin or loads via D-Bus (`isScriptLoaded: true`), b
 When reporting an issue or filing a bug report, providing targeted system logs helps isolate the problem. Always sanitize sensitive information before sharing.
 
 ### 1. KWin Journal Logs
-Capture KWin compositor messages related to Tessera:
+Capture KWin compositor messages related to Movement:
 ```bash
-journalctl --user -b -g "js:.*[Tt]essera" --no-pager | tail -n 50 > tessera-kwin.log
+journalctl --user -b -g "js:.*[Tt]essera" --no-pager | tail -n 50 > movement-kwin.log
 ```
 
 ### 2. Sanitizing Log Output

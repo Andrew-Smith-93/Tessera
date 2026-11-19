@@ -98,7 +98,7 @@ Item {
     }
 
     function log(msg) {
-        console.log("[Tessera] " + msg);
+        console.log("[Movement] " + msg);
     }
 
     function getWindowId(w) {
@@ -244,7 +244,7 @@ Item {
 
         function notify(text, icon, force) {
             if (!config.showOsd && !force) return;
-            arguments = [icon || "preferences-desktop-virtual", "Tessera: " + text];
+            arguments = [icon || "preferences-desktop-virtual", "Movement: " + text];
             call();
         }
     }
@@ -1004,7 +1004,7 @@ Item {
     PlasmaCore.Dialog {
         id: overlayDialog
 
-        title: "Tessera Snap Overlay"
+        title: "Movement Snap Overlay"
         location: PlasmaCore.Types.Desktop
         type: PlasmaCore.Dialog.OnScreenDisplay
         backgroundHints: PlasmaCore.Types.NoBackground
@@ -1675,13 +1675,13 @@ Item {
     // 7. Window Event Hooks
     // =========================================================================
     function unhookWindow(w) {
-        if (!w || !w._tesseraHooks) return;
+        if (!w || !w._movementHooks) return;
         var wid = getWindowId(w);
         if (windowAnimator) {
             windowAnimator.cancelAnimation(wid, true);
         }
         try {
-            var h = w._tesseraHooks;
+            var h = w._movementHooks;
             if (w.interactiveMoveResizeStarted && h.started) w.interactiveMoveResizeStarted.disconnect(h.started);
             if (w.interactiveMoveResizeStepped && h.stepped) w.interactiveMoveResizeStepped.disconnect(h.stepped);
             if (w.interactiveMoveResizeFinished && h.finished) w.interactiveMoveResizeFinished.disconnect(h.finished);
@@ -1697,8 +1697,8 @@ Item {
         } catch (e) {
             // Ignore if already disconnected or window destroyed
         }
-        delete w._tesseraHooks;
-        delete w._tesseraHooked;
+        delete w._movementHooks;
+        delete w._movementHooked;
         delete w._targetOutputName;
         try {
             var unhookWid = getWindowId(w);
@@ -1708,10 +1708,10 @@ Item {
 
     function hookWindow(w) {
         if (!w || !w.managed || !w.normalWindow || w.deleted) return;
-        if (w._tesseraHooks) {
+        if (w._movementHooks) {
             unhookWindow(w);
         }
-        w._tesseraHooked = true;
+        w._movementHooked = true;
 
         var hooks = {};
 
@@ -2068,7 +2068,7 @@ Item {
             w.activitiesChanged.connect(onActivitiesChanged);
         }
 
-        w._tesseraHooks = hooks;
+        w._movementHooks = hooks;
     }
 
     // =========================================================================
@@ -2714,14 +2714,14 @@ Item {
     }
 
     Component.onCompleted: {
-        log("Tessera Declarative Extension loaded with Visual Snap Overlay");
+        log("Movement Declarative Extension loaded with Visual Snap Overlay");
         loadConfig();
         initRuntimeMode();
         retileNow();
     }
 
     Component.onDestruction: {
-        log("Tessera unloading: cleaning up window hooks");
+        log("Movement unloading: cleaning up window hooks");
         if (reconcileTimer && reconcileTimer.running) {
             reconcileTimer.stop();
         }

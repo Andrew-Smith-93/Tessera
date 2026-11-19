@@ -16,7 +16,7 @@ const __dirname = dirname(__filename);
 const VALID_DIR = resolve(__dirname, "../fixtures/valid");
 const INVALID_DIR = resolve(__dirname, "../fixtures/invalid");
 
-describe("Tessera Protocol V1 Conformance Fixtures Suite", () => {
+describe("Movement Protocol V1 Conformance Fixtures Suite", () => {
   const validFiles = readdirSync(VALID_DIR).filter(f => f.endsWith(".json")).sort();
   const invalidFiles = readdirSync(INVALID_DIR).filter(f => f.endsWith(".json")).sort();
 

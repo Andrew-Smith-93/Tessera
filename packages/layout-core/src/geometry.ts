@@ -1,4 +1,4 @@
-import type { Rect, GapConfig, SizeConstraints } from "@tessera/protocol";
+import type { Rect, GapConfig, SizeConstraints } from "@movement/protocol";
 
 export function createRect(x: number, y: number, width: number, height: number): Rect {
   return { x: Math.round(x), y: Math.round(y), width: Math.max(0, Math.round(width)), height: Math.max(0, Math.round(height)) };

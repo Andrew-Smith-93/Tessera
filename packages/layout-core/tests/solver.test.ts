@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { solveBalancedGrid, solveMasterStack, solveTree } from '../src/solver.js';
 import { insertWindow } from '../src/tree.js';
-import type { Rect, GapConfig } from '@tessera/protocol';
+import type { Rect, GapConfig } from '@movement/protocol';
 
 describe('layout solver', () => {
   const container: Rect = { x: 0, y: 0, width: 1920, height: 1080 };

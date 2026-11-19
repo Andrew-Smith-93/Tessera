@@ -6,7 +6,7 @@ import {
   type NormalizedWindowInput,
   type CoordinatorDiagnostics
 } from "../src/coordinator-types.js";
-import type { Rect } from "@tessera/protocol";
+import type { Rect } from "@movement/protocol";
 import { execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";

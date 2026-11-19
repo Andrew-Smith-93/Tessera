@@ -4,8 +4,8 @@ import type {
   LayoutAlgorithm,
   WindowClassification,
   GapConfig
-} from "@tessera/protocol";
-import type { GameWindowPolicy, CustomRule } from "@tessera/rules-engine";
+} from "@movement/protocol";
+import type { GameWindowPolicy, CustomRule } from "@movement/rules-engine";
 
 export interface Clock {
   now(): number;

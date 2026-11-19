@@ -1,4 +1,4 @@
-import type { LogicalWindowIdentity, Rect, WindowClassification } from "@tessera/protocol";
+import type { LogicalWindowIdentity, Rect, WindowClassification } from "@movement/protocol";
 
 export type MatchType = "class" | "title" | "role" | "app";
 export type LegacyRuleAction = "tile" | "float";
@@ -377,7 +377,7 @@ export class WindowRuleEngine {
    * 4. Fullscreen-like borderless state -> "fullscreen-like" (source: "runtime")
    * 5. Default game recognition -> follows gameWindowPolicy (source: "default-rule")
    * 6. Dialog / transient -> "dialog" (source: "runtime")
-   * 7. Default float patterns (Tessera Control Center) -> "floating" (source: "default-rule")
+   * 7. Default float patterns (Movement Control Center) -> "floating" (source: "default-rule")
    * 8. Default fallback -> "tiled" (source: "fallback")
    */
   public classify(window: WindowRuleInput | LogicalWindowIdentity): WindowClassificationResult {

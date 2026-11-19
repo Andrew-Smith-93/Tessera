@@ -1,19 +1,19 @@
 import type {
   Rect,
   RuntimeWindowId
-} from "@tessera/protocol";
+} from "@movement/protocol";
 import {
   solvePrimaryStack,
   solveBalancedGrid,
   solveLayout,
   solveTree,
   insertWindow
-} from "@tessera/layout-core";
+} from "@movement/layout-core";
 import type {
   WindowRuleInput,
   WindowClassificationResult,
   CustomRule
-} from "@tessera/rules-engine";
+} from "@movement/rules-engine";
 import {
   type RetainedWindowState,
   type RetainedScreenState,

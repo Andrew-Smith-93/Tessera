@@ -3,7 +3,7 @@ import { resolveRegionTransition, type SnapZoneId } from "../src/snap-zones.js";
 import { RuntimeCoordinator, LogicalClock } from "../src/index.js";
 import { evaluateCommitGeometry, toNormalizedWindow, toNormalizedScreen } from "../src/qml-reconciler-compat.js";
 import type { NormalizedScreenInput } from "../src/coordinator-types.js";
-import type { Rect } from "@tessera/protocol";
+import type { Rect } from "@movement/protocol";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vm from "node:vm";

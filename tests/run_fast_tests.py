@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dynamic test runner for Tessera fast unit, contract, and hygiene tests.
+Dynamic test runner for Movement fast unit, contract, and hygiene tests.
 Discovers all test_*.py modules in tests/ except test_installer_integration.py,
 asserts that no test module falls through, and runs all discovered tests.
 """

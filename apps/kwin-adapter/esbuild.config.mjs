@@ -6,9 +6,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const packageAliases = {
-  "@tessera/protocol": resolve(__dirname, "../../packages/protocol/src/index.ts"),
-  "@tessera/layout-core": resolve(__dirname, "../../packages/layout-core/src/index.ts"),
-  "@tessera/rules-engine": resolve(__dirname, "../../packages/rules-engine/src/index.ts"),
+  "@movement/protocol": resolve(__dirname, "../../packages/protocol/src/index.ts"),
+  "@movement/layout-core": resolve(__dirname, "../../packages/layout-core/src/index.ts"),
+  "@movement/rules-engine": resolve(__dirname, "../../packages/rules-engine/src/index.ts"),
 };
 
 async function bundle() {

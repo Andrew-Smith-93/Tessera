@@ -5,8 +5,8 @@ import {
   solveTree,
   insertWindow,
   applyGaps
-} from "@tessera/layout-core";
-import type { Rect, GapConfig, RuntimeWindowId } from "@tessera/protocol";
+} from "@movement/layout-core";
+import type { Rect, GapConfig, RuntimeWindowId } from "@movement/protocol";
 
 export interface QmlLayoutOptions {
   gapInner?: number;
