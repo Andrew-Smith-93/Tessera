@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Deterministic test shard runner for Tessera installer integration tests.
+Deterministic test shard runner for Movement installer integration tests.
 Ensures every dynamically discovered test runs exactly once without manual list maintenance.
 """
 

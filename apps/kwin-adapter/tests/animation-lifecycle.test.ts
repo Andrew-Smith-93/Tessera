@@ -5,7 +5,7 @@ import vm from "node:vm";
 import { RuntimeCoordinator, LogicalClock } from "../src/index.js";
 import { evaluateCommitGeometry } from "../src/qml-reconciler-compat.js";
 import type { NormalizedScreenInput, NormalizedWindowInput } from "../src/coordinator-types.js";
-import type { Rect } from "@tessera/protocol";
+import type { Rect } from "@movement/protocol";
 
 const QML_PATH = resolve(__dirname, "../../../contents/ui/main.qml");
 const qmlSource = readFileSync(QML_PATH, "utf8");
@@ -57,7 +57,7 @@ interface MockWindow {
   activities: any[];
   _geometry: Rect;
   frameGeometry: Rect;
-  _tesseraHooks?: any;
+  _movementHooks?: any;
   throwOnSetter?: boolean;
   clampMinSize?: { width: number; height: number };
   onFrameGeometryChanged?: () => void;
@@ -343,8 +343,8 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       env.ctx.hookWindow(win);
       // Set up frameGeometry setter to fire synchronous hook
       win.onFrameGeometryChanged = () => {
-        if (win._tesseraHooks && win._tesseraHooks.geom) {
-          win._tesseraHooks.geom();
+        if (win._movementHooks && win._movementHooks.geom) {
+          win._movementHooks.geom();
         }
       };
 
@@ -397,7 +397,7 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       env.ctx.commitWindowGeometry(win, target, "retile", 1);
       expect(env.ctx.isAnimating("win-1")).toBe(true);
       win.minimized = true;
-      win._tesseraHooks.minimized();
+      win._movementHooks.minimized();
       expect(env.ctx.isAnimating("win-1")).toBe(false);
       expect(env.coordinator.hasRecordedCommand("win-1")).toBe(false);
       win.minimized = false;
@@ -406,7 +406,7 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       env.ctx.commitWindowGeometry(win, target, "retile", 2);
       expect(env.ctx.isAnimating("win-1")).toBe(true);
       win.maximizeMode = 3;
-      win._tesseraHooks.maxChanged();
+      win._movementHooks.maxChanged();
       expect(env.ctx.isAnimating("win-1")).toBe(false);
       expect(env.coordinator.hasRecordedCommand("win-1")).toBe(false);
       win.maximizeMode = 0;
@@ -414,7 +414,7 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       // C. Interactive move/resize start
       env.ctx.commitWindowGeometry(win, target, "retile", 3);
       expect(env.ctx.isAnimating("win-1")).toBe(true);
-      win._tesseraHooks.started();
+      win._movementHooks.started();
       expect(env.ctx.isAnimating("win-1")).toBe(false);
       expect(env.coordinator.hasRecordedCommand("win-1")).toBe(false);
 
@@ -452,8 +452,8 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       // Hook window with production hookWindow callback
       env.ctx.hookWindow(win);
       win.onFrameGeometryChanged = () => {
-        if (win._tesseraHooks && win._tesseraHooks.geom) {
-          win._tesseraHooks.geom();
+        if (win._movementHooks && win._movementHooks.geom) {
+          win._movementHooks.geom();
         }
       };
 
@@ -467,7 +467,7 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       env.clock.advance(90);
       env.ctx.step();
 
-      // Intermediate frame write from Tessera's animator did not cancel animation or clear command
+      // Intermediate frame write from Movement's animator did not cancel animation or clear command
       expect(env.ctx.isAnimating("win-1")).toBe(true);
       expect(env.coordinator.hasRecordedCommand("win-1")).toBe(true);
       expect(win.frameGeometry.x).toBeGreaterThan(100);
@@ -506,8 +506,8 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       env.ctx.hookWindow(winB);
 
       winB.onFrameGeometryChanged = () => {
-        if (winB._tesseraHooks && winB._tesseraHooks.geom) {
-          winB._tesseraHooks.geom();
+        if (winB._movementHooks && winB._movementHooks.geom) {
+          winB._movementHooks.geom();
         }
       };
 
@@ -521,8 +521,8 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
           // Reentrantly mutate window B while window A is being written
           winB.frameGeometry = externalB;
         }
-        if (winA._tesseraHooks && winA._tesseraHooks.geom) {
-          winA._tesseraHooks.geom();
+        if (winA._movementHooks && winA._movementHooks.geom) {
+          winA._movementHooks.geom();
         }
       };
 
@@ -563,8 +563,8 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       win.delaySignalDelivery = true;
       win.delayedSignalQueue = delayedQueue;
       win.onFrameGeometryChanged = () => {
-        if (win._tesseraHooks && win._tesseraHooks.geom) {
-          win._tesseraHooks.geom();
+        if (win._movementHooks && win._movementHooks.geom) {
+          win._movementHooks.geom();
         }
       };
 
@@ -586,7 +586,7 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       const flushSignal = delayedQueue.shift()!;
       flushSignal();
 
-      // Because the delayed signal geometry matches Tessera's expected intermediate write,
+      // Because the delayed signal geometry matches Movement's expected intermediate write,
       // it MUST NOT self-cancel!
       expect(env.ctx.isAnimating("win-1")).toBe(true);
       expect(env.coordinator.hasRecordedCommand("win-1")).toBe(true);
@@ -706,8 +706,8 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
 
       env.ctx.hookWindow(win);
       win.onFrameGeometryChanged = () => {
-        if (win._tesseraHooks && win._tesseraHooks.geom) {
-          win._tesseraHooks.geom();
+        if (win._movementHooks && win._movementHooks.geom) {
+          win._movementHooks.geom();
         }
       };
 
@@ -751,8 +751,8 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       env.ctx.hookWindow(winB);
 
       winB.onFrameGeometryChanged = () => {
-        if (winB._tesseraHooks && winB._tesseraHooks.geom) {
-          winB._tesseraHooks.geom();
+        if (winB._movementHooks && winB._movementHooks.geom) {
+          winB._movementHooks.geom();
         }
       };
 
@@ -763,8 +763,8 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
           reentrantTriggered = true;
           winB.frameGeometry = externalB;
         }
-        if (winA._tesseraHooks && winA._tesseraHooks.geom) {
-          winA._tesseraHooks.geom();
+        if (winA._movementHooks && winA._movementHooks.geom) {
+          winA._movementHooks.geom();
         }
       };
 
@@ -797,8 +797,8 @@ describe("Production QML Animation Engine & Lifecycle Behavioral Verification", 
       win.delaySignalDelivery = true;
       win.delayedSignalQueue = delayedQueue;
       win.onFrameGeometryChanged = () => {
-        if (win._tesseraHooks && win._tesseraHooks.geom) {
-          win._tesseraHooks.geom();
+        if (win._movementHooks && win._movementHooks.geom) {
+          win._movementHooks.geom();
         }
       };
 

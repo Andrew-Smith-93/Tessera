@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { RuntimeCoordinator } from "../src/runtime-coordinator.js";
 import { computeSnapZones } from "../src/snap-zones.js";
 import type { NormalizedScreenInput, NormalizedWindowInput, ReconciliationTransaction } from "../src/coordinator-types.js";
-import type { Rect } from "@tessera/protocol";
+import type { Rect } from "@movement/protocol";
 
 const SCREEN: NormalizedScreenInput = {
   outputId: "HDMI-A-1",

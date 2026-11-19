@@ -1,6 +1,6 @@
 {
     "KPlugin": {
-        "Name": "Tessera",
+        "Name": "Movement",
         "Description": "Dynamic tiling window manager script and visual settings interface for KDE Plasma 6.",
         "Icon": "preferences-desktop-virtual",
         "Authors": [

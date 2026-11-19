@@ -1,4 +1,4 @@
-import type { Rect, Direction, RuntimeWindowId } from "@tessera/protocol";
+import type { Rect, Direction, RuntimeWindowId } from "@movement/protocol";
 import { centerPoint } from "./geometry.js";
 
 export function findDirectionalNeighbor(

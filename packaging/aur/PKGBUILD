@@ -1,16 +1,16 @@
 # Maintainer: Drew (@Andrew-Smith-93)
-pkgname=kwin-script-tessera-git
-_pkgname=tessera
+pkgname=kwin-script-movement-git
+_pkgname=movement
 pkgver=1.0.2.r0
 pkgrel=1
-pkgdesc="Modern dynamic tiling window manager for KDE Plasma 6"
+pkgdesc="Movement: dynamic tiling window manager for KDE Plasma 6"
 arch=('any')
 url="https://github.com/Andrew-Smith-93/Tessera"
 license=('GPL-3.0-or-later')
 depends=('kwin' 'plasma-workspace')
 makedepends=('git')
-provides=('kwin-script-tessera')
-conflicts=('kwin-script-tessera')
+provides=('kwin-script-movement' 'kwin-script-tessera' 'kwin-script-tessera-git')
+conflicts=('kwin-script-movement' 'kwin-script-tessera' 'kwin-script-tessera-git')
 source=("$_pkgname::git+https://github.com/Andrew-Smith-93/Tessera.git")
 sha256sums=('SKIP')
 

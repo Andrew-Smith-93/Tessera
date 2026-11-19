@@ -1,19 +1,19 @@
 {
-  "name": "@tessera/runtime-simulator",
+  "name": "@movement/runtime-simulator",
   "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "tessera-sim": "./bin/sim-cli.mjs"
+    "movement-sim": "./bin/sim-cli.mjs"
   },
   "scripts": {
     "build": "tsc"
   },
   "dependencies": {
-    "@tessera/protocol": "*",
-    "@tessera/layout-core": "*",
-    "@tessera/rules-engine": "*",
-    "@tessera/kwin-adapter": "*"
+    "@movement/protocol": "*",
+    "@movement/layout-core": "*",
+    "@movement/rules-engine": "*",
+    "@movement/kwin-adapter": "*"
   }
 }

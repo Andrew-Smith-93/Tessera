@@ -29,7 +29,7 @@ function randomAsciiString(rng: () => number, length: number): string {
   return str;
 }
 
-describe("Tessera Protocol V1 Deterministic Fuzz Suite", () => {
+describe("Movement Protocol V1 Deterministic Fuzz Suite", () => {
   const ITERATIONS = 5000;
 
   it("1. Arbitrary byte stream chunks (5,000 iterations with fixed seed 42) never crash decoder", () => {

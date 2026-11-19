@@ -1,5 +1,5 @@
 {
-  "name": "@tessera/protocol",
+  "name": "@movement/protocol",
   "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",

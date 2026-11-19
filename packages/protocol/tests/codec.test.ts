@@ -7,7 +7,7 @@ import {
   type ProtocolRequest
 } from "../src/index.js";
 
-describe("Tessera Protocol V1 Framing Codec", () => {
+describe("Movement Protocol V1 Framing Codec", () => {
   const sampleRequest: ProtocolRequest = {
     protocol: "tessera.ipc",
     majorVersion: 1,

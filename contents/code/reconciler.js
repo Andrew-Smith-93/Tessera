@@ -608,7 +608,7 @@ var ReconcilerModule = (() => {
      * 4. Fullscreen-like borderless state -> "fullscreen-like" (source: "runtime")
      * 5. Default game recognition -> follows gameWindowPolicy (source: "default-rule")
      * 6. Dialog / transient -> "dialog" (source: "runtime")
-     * 7. Default float patterns (Tessera Control Center) -> "floating" (source: "default-rule")
+     * 7. Default float patterns (Movement Control Center) -> "floating" (source: "default-rule")
      * 8. Default fallback -> "tiled" (source: "fallback")
      */
     classify(window) {

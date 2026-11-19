@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea, tiling algorithm, or enhancement for Tessera
+about: Suggest an idea, tiling algorithm, or enhancement for Movement
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

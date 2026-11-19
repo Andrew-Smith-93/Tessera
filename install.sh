@@ -27,7 +27,7 @@ if [ "${TESSERA_MIGRATE_LEGACY_SPATIAL:-0}" = "1" ] || [ "${TESSERA_OPT_IN_SPATI
     OPT_IN_SPATIAL_REPLACEMENTS=true
 fi
 
-echo "Installing Tessera for KDE Plasma 6..."
+echo "Installing Movement for KDE Plasma 6..."
 
 # Dependency preflight checks before any mutation
 for required in python3 kreadconfig6 kwriteconfig6; do
@@ -137,7 +137,7 @@ rollback_install() {
 
     set +e
     set +u
-    echo "Installation failed; restoring the previous Tessera installation." >&2
+    echo "Installation failed; restoring the previous Movement installation." >&2
     if [ "$PLUGIN_WAS_WRITTEN" = true ]; then
         if [ "$PLUGIN_WAS_PRESENT" = true ]; then
             kwriteconfig6 --file kwinrc --group Plugins --key tesseraEnabled "$PLUGIN_PREVIOUS_VALUE" >/dev/null 2>&1
@@ -601,7 +601,7 @@ detect_plasma_conflicts() {
                         fi
                     fi
                     if [ -n "$p_check_seq" ] && [ "$t_seq" = "$p_check_seq" ]; then
-                        conflicts+=("Tessera '$t_name' (bound to '$t_seq') and Plasma '$p_key' ($p_desc) both use '$t_seq'")
+                        conflicts+=("Movement '$t_name' (bound to '$t_seq') and Plasma '$p_key' ($p_desc) both use '$t_seq'")
                     fi
                 done
             fi
@@ -613,7 +613,7 @@ detect_plasma_conflicts() {
         for c in "${conflicts[@]}"; do
             echo "  - $c"
         done
-        echo "Tessera shortcuts were registered without modifying unrelated shortcuts. You can customize them in KDE System Settings -> Shortcuts."
+        echo "Movement shortcuts were registered without modifying unrelated shortcuts. You can customize them in KDE System Settings -> Shortcuts."
     fi
 }
 
@@ -736,7 +736,7 @@ if command -v qdbus6 >/dev/null 2>&1; then
 fi
 
 if [ ${#CONTROL_CLEANUP_FAILURES[@]} -eq 0 ]; then
-    echo "Installation complete. Configure Tessera in KDE System Settings -> Window Management -> KWin Scripts."
+    echo "Installation complete. Configure Movement in KDE System Settings -> Window Management -> KWin Scripts."
 else
-    echo "Installation complete with warnings. Configure Tessera in KDE System Settings -> Window Management -> KWin Scripts."
+    echo "Installation complete with warnings. Configure Movement in KDE System Settings -> Window Management -> KWin Scripts."
 fi

@@ -1,4 +1,4 @@
-# 💠 Tessera: Dynamic Tiling Window Manager for KDE Plasma 6
+# 💠 Movement: Dynamic Tiling Window Manager for KDE Plasma 6
 
 > **Copy-Paste Product Description for KDE Store / Pling / Discover**
 > **Product URL**: [store.kde.org/p/2375512](https://store.kde.org/p/2375512/)
@@ -8,9 +8,9 @@
 
 ## 🌟 Overview
 
-**Tessera** (`K-Tessera`) brings keyboard-driven dynamic tiling to **KDE Plasma 6** without replacing your desktop environment, display manager, or compositor.
+**Movement** brings keyboard-driven dynamic tiling to **KDE Plasma 6** without replacing your desktop environment, display manager, or compositor.
 
-Built as a **pure KWin declarative script**, Tessera executes directly within KWin's process, operates alongside native KDE Plasma panels and widgets, and is configured entirely through standard **KDE System Settings**. It is centered on an intuitive **Quadrant and Three-Pillar Workflow** designed for both traditional 16:9 displays and modern ultrawide monitors.
+Built as a **pure KWin declarative script**, Movement executes directly within KWin's process, operates alongside native KDE Plasma panels and widgets, and is configured entirely through standard **KDE System Settings**. It is centered on an intuitive **Quadrant and Three-Pillar Workflow** designed for both traditional 16:9 displays and modern ultrawide monitors.
 
 ---
 
@@ -103,14 +103,14 @@ All shortcuts use the Super (<kbd>Meta</kbd>) key as their primary modifier, int
 ### Method 1: Via KDE System Settings (Recommended)
 1. Open **KDE System Settings** → **Window Management** → **KWin Scripts**.
 2. Click **"Get New Scripts..."** (KNewStuff).
-3. Search for **Tessera**.
+3. Search for **Movement**.
 4. Click **Install**.
-5. Enable the **Tessera** checkbox and click **Apply**.
+5. Enable the **Movement** checkbox and click **Apply**.
 
 ### Method 2: Manual Package Installation
-Download `tessera-v1.0.2.kwinscript` from the **Files** section and run:
+For a new installation, use the downloaded filename from the **Files** section (source build example below):
 ```bash
-kpackagetool6 --type KWin/Script --install tessera-v1.0.2.kwinscript
+kpackagetool6 --type KWin/Script --install movement-v1.0.2.kwinscript
 ```
 Then enable in **System Settings → KWin Scripts**.
 
@@ -118,8 +118,8 @@ Then enable in **System Settings → KWin Scripts**.
 
 ## 🎛️ How to Customize
 
-- **Settings & Gaps**: Open **System Settings → Window Management → KWin Scripts** and click the configure icon next to **Tessera**. Here you can tune inner/outer gaps, animation duration, debounce timing, and window rules. You can also view the **Shortcuts** tab to inspect starting keybindings and the layout diagram.
-- **Keybindings**: Open **System Settings → Shortcuts → KWin**, search for **Tessera**, and click any action to set your own custom keys.
+- **Settings & Gaps**: Open **System Settings → Window Management → KWin Scripts** and click the configure icon next to **Movement**. Here you can tune inner/outer gaps, animation duration, debounce timing, and window rules. You can also view the **Shortcuts** tab to inspect starting keybindings and the layout diagram.
+- **Keybindings**: Open **System Settings → Shortcuts → KWin**, search for **Movement**, and click any action to set your own custom keys.
 
 ---
 

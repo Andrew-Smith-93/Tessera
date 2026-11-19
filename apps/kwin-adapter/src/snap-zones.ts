@@ -1,4 +1,4 @@
-import type { Rect, Point } from "@tessera/protocol";
+import type { Rect, Point } from "@movement/protocol";
 
 export type SnapZoneType = "maximize" | "half" | "quarter" | "pillar";
 

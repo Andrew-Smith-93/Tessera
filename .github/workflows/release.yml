@@ -98,6 +98,7 @@ jobs:
           files: |
             dist/*.kwinscript
             dist/SHA256SUMS.txt
+          name: Movement ${{ github.ref_name }}
           generate_release_notes: true
           draft: true
           fail_on_unmatched_files: true

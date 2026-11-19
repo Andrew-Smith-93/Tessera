@@ -1,5 +1,5 @@
 {
-  "name": "@tessera/kwin-adapter",
+  "name": "@movement/kwin-adapter",
   "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -8,8 +8,8 @@
     "build": "tsc && node esbuild.config.mjs"
   },
   "dependencies": {
-    "@tessera/protocol": "*",
-    "@tessera/layout-core": "*",
-    "@tessera/rules-engine": "*"
+    "@movement/protocol": "*",
+    "@movement/layout-core": "*",
+    "@movement/rules-engine": "*"
   }
 }

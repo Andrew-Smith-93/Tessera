@@ -61,7 +61,7 @@ export {
   recordCustomRules,
   resetRuleEngineState
 } from "./qml-rules-compat.js";
-import type { Rect, RuntimeWindowId } from "@tessera/protocol";
+import type { Rect, RuntimeWindowId } from "@movement/protocol";
 
 function stableObjectId(value: any, fallback: string = ""): string {
   if (value === undefined || value === null) return fallback;

@@ -1,6 +1,6 @@
-# Getting Support for Tessera
+# Getting Support for Movement
 
-Thank you for using Tessera! Here is how to find help, report issues, and participate in development.
+Thank you for using Movement! Here is how to find help, report issues, and participate in development.
 
 ## 📖 Documentation First
 

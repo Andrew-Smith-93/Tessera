@@ -1,5 +1,5 @@
-import type { Rect, RuntimeWindowId } from "@tessera/protocol";
-import type { RuntimeCoordinator } from "@tessera/kwin-adapter";
+import type { Rect, RuntimeWindowId } from "@movement/protocol";
+import type { RuntimeCoordinator } from "@movement/kwin-adapter";
 import type {
   SimulatedEchoMode,
   SerializableGeometryOperation

@@ -118,8 +118,8 @@ class TestShortcutContract(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "README.md"), "r", encoding="utf-8") as handle:
             readme = handle.read()
 
-        table_rows = re.findall(r"^\| (Tessera: [^|]+?) \| ([^|]+?) \|$", readme, re.MULTILINE)
-        expected = [(item["name"], item["sequence"]) for item in self.document["shortcuts"]]
+        table_rows = re.findall(r"^\| ([^|]+?) \| (Meta\+[^|]+?) \|$", readme, re.MULTILINE)
+        expected = [(item["label"], item["sequence"]) for item in self.document["shortcuts"]]
         self.assertEqual(table_rows, expected)
         self.assertIn("config/shortcuts.json` is the canonical catalog", readme)
 

@@ -720,7 +720,7 @@ class TestInstallerIntegration(unittest.TestCase):
                             "MOCK_MV_LOG": mv_log,
                         })
                         self.assertNotEqual(res.returncode, 0)
-                        self.assertIn("restoring the previous Tessera installation", res.stderr)
+                        self.assertIn("restoring the previous Movement installation", res.stderr)
 
                         # Verify intended phase was hit
                         self.assertTrue(os.path.exists(mv_log), f"Mock mv did not record hit for {phase} on {label}")
@@ -768,7 +768,7 @@ class TestInstallerIntegration(unittest.TestCase):
         target_key = "Tessera: Toggle Tiling"
         res = self.sb.run_installer(extra_env={"MOCK_SIGINT_ON_KEY": target_key})
         self.assertIn(res.returncode, (130, -signal.SIGINT))
-        self.assertIn("restoring the previous Tessera installation", res.stderr)
+        self.assertIn("restoring the previous Movement installation", res.stderr)
 
         # Replaced targets restored
         with open(os.path.join(kwin_script, "marker.txt"), "r") as f: self.assertEqual(f.read(), "orig script")
@@ -918,7 +918,7 @@ class TestInstallerIntegration(unittest.TestCase):
 
                 res = self.sb.run_installer()
                 self.assertNotEqual(res.returncode, 0)
-                self.assertIn("restoring the previous Tessera installation", res.stderr)
+                self.assertIn("restoring the previous Movement installation", res.stderr)
 
                 # Custom shortcut preserved
                 has_custom, custom_val = self.sb.get_kconfig("kglobalshortcutsrc", "kwin", "Tessera: Toggle Tiling")
@@ -956,7 +956,7 @@ class TestInstallerIntegration(unittest.TestCase):
 
                 res = self.sb.run_installer()
                 self.assertNotEqual(res.returncode, 0)
-                self.assertIn("restoring the previous Tessera installation", res.stderr)
+                self.assertIn("restoring the previous Movement installation", res.stderr)
 
                 # Plugin restored to false
                 has_plugin, plug_val = self.sb.get_kconfig("kwinrc", "Plugins", "tesseraEnabled")
@@ -1234,7 +1234,7 @@ class TestInstallerIntegration(unittest.TestCase):
     def test_uninstaller_no_purge_fallback_shortcut_names_mode(self):
         """8b. Uninstaller fallback SHORTCUT_NAMES path (No purge):
         Verifies behavior when config/shortcuts.json is unavailable, unreadable, partially malformed,
-        or same-length corrupted (replaced with non-Tessera key or duplicate entries):
+        or same-length corrupted (replaced with non-Movement key or duplicate entries):
         - removes recognized active and legacy default shortcuts
         - preserves custom active bindings byte-for-byte
         - preserves custom dormant-legacy bindings byte-for-byte
@@ -1243,7 +1243,7 @@ class TestInstallerIntegration(unittest.TestCase):
         - preserves Script-tessera config and legacy files
         - disables plugin
         - second-run idempotence preserves all custom and unrelated bindings
-        - maintains explicit --purge distinction (purges custom Tessera bindings, strictly keeps unrelated)."""
+        - maintains explicit --purge distinction (purges custom Movement bindings, strictly keeps unrelated)."""
         with open(os.path.join(REPO_ROOT, "config", "shortcuts.json"), "r", encoding="utf-8") as f:
             base_catalog = json.load(f)
 
@@ -1418,7 +1418,7 @@ class TestInstallerIntegration(unittest.TestCase):
                 self.assertEqual(kc_val2, kwin_other_val)
 
                 # Verify explicit --purge distinction in fallback mode:
-                # --purge deletes all Tessera shortcuts (including custom), but still preserves unrelated keys
+                # --purge deletes all Movement shortcuts (including custom), but still preserves unrelated keys
                 res_purge = self.sb.run_uninstaller(cwd=iso_dir, args=["--purge"])
                 self.assertEqual(res_purge.returncode, 0)
 
@@ -1451,7 +1451,7 @@ class TestInstallerIntegration(unittest.TestCase):
         - preserves intentional unbound ('none' or empty) bindings byte-for-byte
         - preserves unrelated KRunner, Plasma, and KWin shortcuts byte-for-byte
         - proves second normal uninstallation idempotence
-        - verifies --purge distinction removes custom Tessera shortcuts while preserving unrelated shortcuts."""
+        - verifies --purge distinction removes custom Movement shortcuts while preserving unrelated shortcuts."""
         res_inst = self.sb.run_installer()
         self.assertEqual(res_inst.returncode, 0)
 
@@ -1783,7 +1783,7 @@ class TestInstallerIntegration(unittest.TestCase):
         # 1. Normal purge
         res_purge = self.sb.run_uninstaller(args=["--purge"])
         self.assertEqual(res_purge.returncode, 0, res_purge.stderr)
-        self.assertIn("Tessera and its saved configuration have been removed", res_purge.stdout)
+        self.assertIn("Movement and its saved configuration have been removed", res_purge.stdout)
 
         # Assert derived expected set equals the exact set of Script-tessera keys deleted behaviorally
         deleted_script_keys = {
@@ -1797,7 +1797,7 @@ class TestInstallerIntegration(unittest.TestCase):
             has_key, _ = self.sb.get_kconfig("kwinrc", "Script-tessera", key)
             self.assertFalse(has_key, f"Purged key {key} must not remain in kwinrc")
 
-        # Assert all Tessera shortcuts are completely deleted in purge mode (default, custom, unbound, legacy)
+        # Assert all Movement shortcuts are completely deleted in purge mode (default, custom, unbound, legacy)
         first_shortcut = self.shortcuts_doc["shortcuts"][0]["name"]
         self.assertFalse(self.sb.get_kconfig("kglobalshortcutsrc", "kwin", first_shortcut)[0])
         self.assertFalse(self.sb.get_kconfig("kglobalshortcutsrc", "kwin", custom_active_name)[0])
@@ -1837,7 +1837,7 @@ class TestInstallerIntegration(unittest.TestCase):
         res_partial = self.sb.run_uninstaller(args=["--purge"])
         self.assertEqual(res_partial.returncode, 0)
         self.assertIn("some saved configuration could not be deleted", res_partial.stdout)
-        self.assertNotIn("Tessera and its saved configuration have been removed", res_partial.stdout)
+        self.assertNotIn("Movement and its saved configuration have been removed", res_partial.stdout)
 
     def test_uninstaller_symlink_safety(self):
         """10. Symlink safety across standard and purge modes:
@@ -2017,7 +2017,7 @@ class TestInstallerIntegration(unittest.TestCase):
                     # Honest reporting check
                     if is_purge:
                         self.assertIn("some saved configuration could not be deleted", res.stdout)
-                        self.assertNotIn("Tessera and its saved configuration have been removed", res.stdout)
+                        self.assertNotIn("Movement and its saved configuration have been removed", res.stdout)
                     else:
                         self.assertIn("some configuration could not be disabled or deleted", res.stdout)
                         self.assertNotIn("saved layout settings were preserved", res.stdout)
@@ -2290,7 +2290,7 @@ class TestInstallerIntegration(unittest.TestCase):
 
     def test_plasma_conflict_detection_reads_actual_active_bindings(self):
         """14. Plasma conflict detection reads actual active bindings:
-        - Does NOT warn when a Tessera shortcut is intentionally unbound
+        - Does NOT warn when a Movement shortcut is intentionally unbound
         - DOES detect and surface collisions with custom user bindings
         - Preserves unrelated Plasma shortcuts completely untouched."""
         with tempfile.TemporaryDirectory(prefix="tessera-conflict-unbound-") as sub_tmp:
@@ -2302,11 +2302,11 @@ class TestInstallerIntegration(unittest.TestCase):
 
             res = sub_sb.run_installer()
             self.assertEqual(res.returncode, 0, res.stderr)
-            # Must not warn for unbound Tessera shortcut
+            # Must not warn for unbound Movement shortcut
             self.assertNotIn(
-                "Tessera 'Tessera: Move Window to Left Region'",
+                "Movement 'Tessera: Move Window to Left Region'",
                 res.stdout,
-                "Must not warn of conflict for intentionally unbound Tessera shortcut"
+                "Must not warn of conflict for intentionally unbound Movement shortcut"
             )
             # Unrelated Plasma shortcut untouched
             has_plasma, plasma_val = sub_sb.get_kconfig("kglobalshortcutsrc", "kwin", "Window Quick Tile Left")
@@ -2328,7 +2328,7 @@ class TestInstallerIntegration(unittest.TestCase):
             self.assertEqual(res.returncode, 0, res.stderr)
             # Must detect collision with custom active binding
             self.assertIn(
-                "Tessera 'Tessera: Toggle Tiling' (bound to 'Meta+Left') and Plasma 'Window Quick Tile Left'",
+                "Movement 'Tessera: Toggle Tiling' (bound to 'Meta+Left') and Plasma 'Window Quick Tile Left'",
                 res.stdout,
                 "Must detect conflict against actual active custom binding"
             )
@@ -2339,7 +2339,7 @@ class TestInstallerIntegration(unittest.TestCase):
             sub_sb = SandboxHarness(sub_tmp)
             # Explicitly unbind Plasma Quick Tile Left (empty sequence before comma)
             sub_sb.set_kconfig("kglobalshortcutsrc", "kwin", "Window Quick Tile Left", ",none,Quick Tile Left")
-            # Tessera shortcut uses its default Meta+Left
+            # Movement shortcut uses its default Meta+Left
             res = sub_sb.run_installer()
             self.assertEqual(res.returncode, 0, res.stderr)
             # Must NOT warn of conflict when Plasma shortcut is explicitly unbound with empty sequence
@@ -2362,12 +2362,12 @@ class TestInstallerIntegration(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="tessera-conflict-plasma-missing-") as sub_tmp:
             sub_sb = SandboxHarness(sub_tmp)
             # Plasma Quick Tile Left is completely missing from kglobalshortcutsrc (Plasma uses built-in default Meta+Left)
-            # Tessera Move Window to Left Region will receive default Meta+Left
+            # Movement Move Window to Left Region will receive default Meta+Left
             res = sub_sb.run_installer()
             self.assertEqual(res.returncode, 0, res.stderr)
             # Must detect conflict against missing Plasma shortcut using its built-in default
             self.assertIn(
-                "Tessera 'Tessera: Move Window to Left Region' (bound to 'Meta+Left') and Plasma 'Window Quick Tile Left'",
+                "Movement 'Tessera: Move Window to Left Region' (bound to 'Meta+Left') and Plasma 'Window Quick Tile Left'",
                 res.stdout,
                 "Must detect conflict when Plasma shortcut is missing from kglobalshortcutsrc and defaults to Meta+Left"
             )
@@ -2393,7 +2393,7 @@ class TestInstallerIntegration(unittest.TestCase):
                 self.assertIn("Warning: failed to remove legacy Control Center files:", res.stderr)
                 self.assertIn("Legacy cleanup incomplete; please remove remaining files manually.", res.stderr)
                 self.assertIn("Installation complete with warnings.", res.stdout)
-                self.assertNotIn("Installation complete. Configure Tessera", res.stdout)
+                self.assertNotIn("Installation complete. Configure Movement", res.stdout)
             finally:
                 # Restore permissions for temp directory cleanup
                 os.chmod(control_dir, 0o755)

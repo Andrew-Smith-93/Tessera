@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Tessera Build & Packaging Tool
+# Movement Build & Packaging Tool
 # Builds a deterministic reproducible .kwinscript package for local verification and maintainer distribution
 # ==============================================================================
 set -euo pipefail
@@ -84,7 +84,7 @@ if meta.get("X-Plasma-MainScript") != "ui/main.qml":
 
 print(plugin_id)
 print(plugin_version)
-print(f"{plugin_id}-v{plugin_version}.kwinscript")
+print(f"movement-v{plugin_version}.kwinscript")
 PYEOF
 )
 
@@ -93,7 +93,7 @@ PLUGIN_VERSION=$(echo "$PACKAGE_IDENTITY" | sed -n '2p')
 PACKAGE_NAME=$(echo "$PACKAGE_IDENTITY" | sed -n '3p')
 
 echo "================================================="
-echo " Building Tessera Distribution Package v${PLUGIN_VERSION}"
+echo " Building Movement Distribution Package v${PLUGIN_VERSION}"
 echo "================================================="
 
 # Ensure TypeScript sources are built and up-to-date before packaging
