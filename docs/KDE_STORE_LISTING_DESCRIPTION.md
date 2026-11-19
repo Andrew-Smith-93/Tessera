@@ -110,7 +110,7 @@ All shortcuts use the Super (<kbd>Meta</kbd>) key as their primary modifier, int
 ### Method 2: Manual Package Installation
 For a new installation, use the downloaded filename from the **Files** section (source build example below):
 ```bash
-kpackagetool6 --type KWin/Script --install movement-v1.0.2.kwinscript
+kpackagetool6 --type KWin/Script --install movement-v1.0.3.kwinscript
 ```
 Then enable in **System Settings → KWin Scripts**.
 
@@ -119,13 +119,16 @@ Then enable in **System Settings → KWin Scripts**.
 ## 🎛️ How to Customize
 
 - **Settings & Gaps**: Open **System Settings → Window Management → KWin Scripts** and click the configure icon next to **Movement**. Here you can tune inner/outer gaps, animation duration, debounce timing, and window rules. You can also view the **Shortcuts** tab to inspect starting keybindings and the layout diagram.
-- **Keybindings**: Open **System Settings → Shortcuts → KWin**, search for **Movement**, and click any action to set your own custom keys.
+- **Keybindings**: Open **System Settings → Shortcuts → KWin**, search for the action label (for example **Toggle Zone Overlay**), and click any action to set your own custom keys.
 
 ---
 
 ## 📋 Changelog
 
-### v1.0.2 (Current Release)
+### v1.0.3 (Source candidate)
+The script is now called Movement. Existing settings, shortcuts and the KWin package identity are retained.
+
+### v1.0.2 (Previous release)
 - **Shortcuts Tab in KCM Settings**: Inspect starting keybindings and visual layout diagrams directly within KDE System Settings.
 - **Multi-Monitor Vertical Snap Fix**: Resolved window drop displacement on vertically stacked displays.
 - **Persistent Monitor Affinity State**: Guarded window screen affinity against KWin 6 C++ wrapper recreation during drag-and-drop.
