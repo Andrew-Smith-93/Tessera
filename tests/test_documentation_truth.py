@@ -504,8 +504,8 @@ STATIC_PER_OCCURRENCE_REGISTRY = {
         "category": "TEST_ASSERTION_OR_FIXTURE",
         "total_occurrences": 2,
         "lines": {
-            "b38f86bd2705a4f2b632cba36eff0756069d7bab65f651f4fe09018b03857dd7": {"occ": 1, "repeat": 1, "positions": [544]},
-            "ee1f7dcb880f79f2cec9353f4a0fe11d598da16329434e20c274acfe3a61862d": {"occ": 1, "repeat": 1, "positions": [532]},
+            "b38f86bd2705a4f2b632cba36eff0756069d7bab65f651f4fe09018b03857dd7": {"occ": 1, "repeat": 1, "positions": [545]},
+            "ee1f7dcb880f79f2cec9353f4a0fe11d598da16329434e20c274acfe3a61862d": {"occ": 1, "repeat": 1, "positions": [533]},
         }
     },
     "tests/test_shortcut_contract.py": {
@@ -677,8 +677,8 @@ class TestDocumentationTruth(unittest.TestCase):
         derives or parameterizes the package filename, and does not claim publication or GPU marketing.
         """
         pub_content = self._read_file("docs/KDE_STORE_PUBLISHING.md")
-        self.assertIn("This is a maintainer checklist, not evidence that Tessera has been published", pub_content)
-        self.assertIn("dist/tessera-v<Version>.kwinscript", pub_content)
+        self.assertIn("This is a maintainer checklist, not evidence that Movement has been published", pub_content)
+        self.assertIn("dist/movement-v<Version>.kwinscript", pub_content)
         self.assertNotIn("GPU-optimized", pub_content)
         self.assertNotIn("NVIDIA", pub_content)
         self.assertNotIn("nvidia", pub_content.lower())

@@ -8,8 +8,8 @@ import {
   type GameWindowPolicy,
   type ClassificationChangeResult,
   type RuleValidationResult
-} from "@tessera/rules-engine";
-import type { Rect } from "@tessera/protocol";
+} from "@movement/rules-engine";
+import type { Rect } from "@movement/protocol";
 
 export { validateCustomRules };
 

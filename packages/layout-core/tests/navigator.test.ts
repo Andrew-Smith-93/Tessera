@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { findDirectionalNeighbor } from '../src/navigator.js';
-import type { Rect } from '@tessera/protocol';
+import type { Rect } from '@movement/protocol';
 
 describe('spatial directional navigator', () => {
   // Setup a 2x2 grid:

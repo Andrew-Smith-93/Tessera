@@ -451,7 +451,7 @@ class TestConfigStructuralContract(unittest.TestCase):
         self.assertIn("kcfg_showOsd", widget_labels)
         self.assertEqual(
             widget_labels["kcfg_showOsd"],
-            "Show Tessera notifications for snapping and configuration changes"
+            "Show Movement notifications for snapping and configuration changes"
         )
 
     def test_no_layout_menu_presets_or_primary_count_controls(self):

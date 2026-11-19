@@ -1,5 +1,5 @@
 {
-  "name": "@tessera/layout-core",
+  "name": "@movement/layout-core",
   "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -8,6 +8,6 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@tessera/protocol": "*"
+    "@movement/protocol": "*"
   }
 }

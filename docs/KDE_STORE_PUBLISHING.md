@@ -1,6 +1,6 @@
-# 🛍️ Publishing Tessera to the KDE Store & Discover
+# 🛍️ Publishing Movement to the KDE Store & Discover
 
-This is a maintainer checklist, not evidence that Tessera has been published. Repository verification ends with a local upload-ready artifact; account creation, upload, and publication require an explicit release decision.
+This is a maintainer checklist, not evidence that Movement has been published. Repository verification ends with a local upload-ready artifact; account creation, upload, and publication require an explicit release decision.
 
 When published to the KDE Store (subject to store CDN caching and search indexing propagation), it is designed to become discoverable and downloadable via:
 1. **KDE System Settings** → *Window Management* → *KWin Scripts* → **"Get New Scripts..."** (KNewStuff)
@@ -25,9 +25,9 @@ Run the packaging script in the repository root:
 
 This generates:
 ```
-dist/tessera-v<Version>.kwinscript
+dist/movement-v<Version>.kwinscript
 ```
-*(A standard `.kwinscript` bundle formatted for KDE Plasma 6, e.g. `dist/tessera-v1.0.2.kwinscript` derived from `metadata.json`).*
+*(A standard `.kwinscript` bundle formatted for KDE Plasma 6, e.g. `dist/movement-v1.0.3.kwinscript` derived from `metadata.json`).*
 
 ---
 
@@ -44,8 +44,8 @@ dist/tessera-v<Version>.kwinscript
 2. **Select Category**:
    - Navigate to: `KWin Scripts` (or `Plasma 6 Extensions / KWin Scripts`).
 3. **Product Information**:
-   - **Name**: `Tessera - Dynamic Tiling Window Manager for KDE Plasma 6`
-   - **Version**: Matches `KPlugin.Version` in `metadata.json` (e.g. `1.0.2`)
+   - **Name**: `Movement - Dynamic Tiling Window Manager for KDE Plasma 6`
+   - **Version**: Matches `KPlugin.Version` in `metadata.json` (e.g. `1.0.3`)
    - **Summary**: `Dynamic tiling window manager script and native configuration interface for KDE Plasma 6.`
    - **License**: `GPL-3.0-or-later` (matching `metadata.json` and package metadata)
    - **Homepage / Source Code**: `https://github.com/Andrew-Smith-93/Tessera`
@@ -59,7 +59,7 @@ dist/tessera-v<Version>.kwinscript
 5. **Media & Screenshots**:
    - Upload screenshots of:
      - Tiled windows on a KDE Plasma 6 desktop.
-     - The native Tessera configuration page in KDE System Settings.
+     - The native Movement configuration page in KDE System Settings.
      - The visual snap zone overlay in action.
 
 ---
@@ -67,8 +67,8 @@ dist/tessera-v<Version>.kwinscript
 ## Step 4: Upload the File
 
 1. In the **Files** section of your product page, click **Add File**.
-2. Upload `dist/tessera-v<Version>.kwinscript` (derived from `metadata.json`).
-3. Set the download name to `tessera-v<Version>.kwinscript`.
+2. Upload `dist/movement-v<Version>.kwinscript` (derived from `metadata.json`).
+3. Set the download name to `movement-v<Version>.kwinscript`.
 4. In the **Changelog** field, paste the formatted release notes from [docs/APP_STORE_CHANGELOG.md](APP_STORE_CHANGELOG.md).
 5. Click **Save & Publish** (only after explicit maintainer release authorization).
 
@@ -79,6 +79,6 @@ dist/tessera-v<Version>.kwinscript
 If and only if an explicit maintainer decision authorizes public release and publication on store.kde.org (see Gate C in [PUBLIC_RELEASE_CHECKLIST.md](PUBLIC_RELEASE_CHECKLIST.md)):
 - Users open **System Settings** → **Window Management** → **KWin Scripts**.
 - Click **"Get New Scripts..."** (KNewStuff).
-- Search for **Tessera** (once store indexing completes).
+- Search for **Movement** (once store indexing completes).
 - Click **Install**.
 - Once downloaded and unpacked by Plasma, users enable the script checkbox in KWin Scripts and click **Apply** to activate it.

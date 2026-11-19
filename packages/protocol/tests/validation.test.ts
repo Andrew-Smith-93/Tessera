@@ -6,7 +6,7 @@ import {
   ProtocolErrorCode
 } from "../src/index.js";
 
-describe("Tessera Protocol V1 Validation Suite", () => {
+describe("Movement Protocol V1 Validation Suite", () => {
   it("1. Rejects null, primitives, and arrays as envelopes", () => {
     expect(validateEnvelope(null).valid).toBe(false);
     expect(validateEnvelope("string").valid).toBe(false);

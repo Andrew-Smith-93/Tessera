@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>TesseraConfig</class>
- <widget class="QWidget" name="TesseraConfig">
+ <class>MovementConfig</class>
+ <widget class="QWidget" name="MovementConfig">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Tessera Configuration</string>
+   <string>Movement Configuration</string>
   </property>
   <layout class="QVBoxLayout" name="mainLayout">
    <property name="spacing">
@@ -51,7 +51,7 @@
           <item>
            <widget class="QCheckBox" name="kcfg_enableTiling">
             <property name="text">
-             <string>Enable Tessera Window Tiling</string>
+             <string>Enable Movement Window Tiling</string>
             </property>
            </widget>
           </item>
@@ -79,7 +79,7 @@
           <item>
            <widget class="QCheckBox" name="kcfg_showOsd">
             <property name="text">
-             <string>Show Tessera notifications for snapping and configuration changes</string>
+             <string>Show Movement notifications for snapping and configuration changes</string>
             </property>
            </widget>
           </item>
@@ -389,10 +389,10 @@ Invalid edits retain last valid runtime rules without crashing or discarding.</s
            <widget class="QLabel" name="lblCustomizationInstructions">
             <property name="text">
              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;
-&lt;p&gt;&lt;b&gt;All 22 Tessera keybindings are registered as native KDE Global Shortcuts.&lt;/b&gt;&lt;/p&gt;
+&lt;p&gt;&lt;b&gt;All 22 Movement keybindings are registered as native KDE Global Shortcuts.&lt;/b&gt;&lt;/p&gt;
 &lt;p&gt;To customize, rebind, or resolve collisions with other Plasma actions:&lt;br/&gt;
 1. Open &lt;b&gt;System Settings → Shortcuts → KWin&lt;/b&gt;.&lt;br/&gt;
-2. Search for &lt;b&gt;Tessera&lt;/b&gt; to view and edit all shortcuts.&lt;br/&gt;
+2. Search for an action such as &lt;b&gt;Toggle Zone Overlay&lt;/b&gt; to view and edit all shortcuts.&lt;br/&gt;
 3. Click any shortcut to set a custom sequence or reset to default.&lt;/p&gt;
 &lt;p&gt;&lt;i&gt;Your custom shortcut assignments are preserved automatically across script updates.&lt;/i&gt;&lt;/p&gt;
 &lt;/body&gt;&lt;/html&gt;</string>

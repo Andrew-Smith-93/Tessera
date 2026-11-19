@@ -1,4 +1,4 @@
-import type { Rect, GapConfig, LayoutAlgorithm, RuntimeWindowId } from "@tessera/protocol";
+import type { Rect, GapConfig, LayoutAlgorithm, RuntimeWindowId } from "@movement/protocol";
 import { applyGaps } from "./geometry.js";
 import type { LayoutNode, LeafNode } from "./tree.js";
 

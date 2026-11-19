@@ -1,4 +1,6 @@
-# 💠 Tessera (`K-Tessera`)
+# 💠 Movement
+
+> Formerly Tessera. This source rename does not change the existing store listing or published releases. [Upgrade compatibility](docs/RENAME.md).
 
 > **A native dynamic tiling window manager script for KDE Plasma 6.**
 
@@ -16,14 +18,14 @@
 
 ---
 
-## 🌟 What is Tessera?
+## 🌟 What is Movement?
 
-Tessera brings keyboard-driven dynamic tiling to KDE Plasma 6 without replacing your desktop environment, display manager, or compositor.
+Movement brings keyboard-driven dynamic tiling to KDE Plasma 6 without replacing your desktop environment, display manager, or compositor.
 
-![Tessera Live Multi-Screen Dynamic Tiling](docs/screenshots/tessera-multiscreen-live.png)
-*Live Tessera dynamic tiling running across a 3-monitor desktop in KDE Plasma 6, featuring balanced grid, 3-column pillars, and quadrant snap splits.*
+![Movement Live Multi-Screen Dynamic Tiling](docs/screenshots/movement-multiscreen-live.png)
+*Live Movement dynamic tiling running across a 3-monitor desktop in KDE Plasma 6, featuring balanced grid, 3-column pillars, and quadrant snap splits.*
 
-Built as a **pure KWin declarative script**, Tessera executes directly within KWin's process, operates alongside native KDE Plasma panels and widgets, and is configured entirely through standard **KDE System Settings**. It is centered on an intuitive **Quadrant and Three-Pillar Workflow** designed for both traditional displays and modern ultrawide monitors.
+Built as a **pure KWin declarative script**, Movement executes directly within KWin's process, operates alongside native KDE Plasma panels and widgets, and is configured entirely through standard **KDE System Settings**. It is centered on an intuitive **Quadrant and Three-Pillar Workflow** designed for both traditional displays and modern ultrawide monitors.
 
 ```
 ┌───────────────────┬───────────────────┐     ┌──────────────┬──────────────┬──────────────┐
@@ -46,8 +48,8 @@ Built as a **pure KWin declarative script**, Tessera executes directly within KW
 
 - 🏎️ **In-Process & Coalesced**: Executes inside KWin with turn-based event coalescing (60ms debounce default), dirty-screen invalidation, and geometry echo suppression (`recordCommand`, `checkAndHandleEcho`) to prevent redundant geometry operations.
 - 📐 **7 Automatic Layout Engines (Internal & Compatibility Strategies)**:
-  - Tessera's internal layout solver includes 7 deterministic arrangement algorithms (Balanced Grid default, Primary + Stack, Binary Split, Columns, Rows, Monocle, and Floating).
-  - In alignment with Tessera's clean "no presets" design, there are no user-facing preset menus or layout-cycling shortcuts. All workspace layout algorithms normalize to the canonical Balanced Grid engine, while preserving custom per-window floating and game policies.
+  - Movement's internal layout solver includes 7 deterministic arrangement algorithms (Balanced Grid default, Primary + Stack, Binary Split, Columns, Rows, Monocle, and Floating).
+  - In alignment with Movement's clean "no presets" design, there are no user-facing preset menus or layout-cycling shortcuts. All workspace layout algorithms normalize to the canonical Balanced Grid engine, while preserving custom per-window floating and game policies.
 - 🎯 **12 Visual Snap Zones & Region Occupancy**:
   - Interactive drop targets: Top Maximize Bar, Left/Right Halves, 4 Corner Quadrants, and 3 Equal Pillars (Left, Center Full/Split, Right).
   - Deterministic Region Occupancy Model adapts older peer windows to remaining space while protecting the newest requested drop target and preserving custom user resize geometries.
@@ -65,16 +67,16 @@ Built as a **pure KWin declarative script**, Tessera executes directly within KW
 
 ## 📐 Snap Semantics: Quadrants & Three Pillars
 
-Tessera provides 12 distinct snap drop zones that support both standard halves/quadrants and three-column ultrawide workflows:
+Movement provides 12 distinct snap drop zones that support both standard halves/quadrants and three-column ultrawide workflows:
 
 ### Corner Quadrants
 - The usable screen area is divided into four equal corners: **Top-Left**, **Top-Right**, **Bottom-Left**, and **Bottom-Right**.
 - Each quadrant occupies 50% of the screen width and 50% of the screen height (adjusted for configured gaps).
-- Dropping a window into a corner pins it to that quadrant. When additional windows are dropped, Tessera automatically arranges peer windows into compatible adjacent quadrants or stacks them vertically.
+- Dropping a window into a corner pins it to that quadrant. When additional windows are dropped, Movement automatically arranges peer windows into compatible adjacent quadrants or stacks them vertically.
 
 ### Three Pillars (Ultrawide & Multi-Column)
 - The screen width is divided into three equal columns: **Left Pillar** (left 33%), **Center Pillar** (middle 33%), and **Right Pillar** (right 33%).
-- **Center Pillar Configuration**: The center column accommodates either a single full-height **Center Full** (33% width, 100% usable height) focal window or two stacked half-height slots (**Center Top** and **Center Bottom**). Tessera never creates three stacked cells in the center column.
+- **Center Pillar Configuration**: The center column accommodates either a single full-height **Center Full** (33% width, 100% usable height) focal window or two stacked half-height slots (**Center Top** and **Center Bottom**). Movement never creates three stacked cells in the center column.
 - **Cross-Family Resolution**: When windows from different snap families share the screen, the Deterministic Region Occupancy Model resolves geometric arrangements:
   - If a window occupies **Left-Half** (50% width) and a new window is dropped into **Center Pillar**, the left-half window adapts to **Left Pillar** (33% width).
   - The newest requested target geometry is protected, adapting older peers to remaining screen space.
@@ -86,7 +88,7 @@ Tessera provides 12 distinct snap drop zones that support both standard halves/q
 
 - **Timer-Driven Interpolation**: Window animations interpolate frame bounds via KWin's script API using periodic 16ms timer ticks over a configurable duration (default: 180ms).
 - **Cancellation Safety**: Active animations cancel immediately when a window receives a compositor event (e.g. user drag, manual resize, window closure, minimization, or fullscreen transition) without writing stale target bounds.
-- **Explicit Compositor Limitations**: Tessera does not bypass KWin's frame scheduling or use native Wayland presentation-time callbacks / direct GPU sync. Animation timing relies on the compositor event loop; under heavy system load or rapid window creation, animation frame steps may exhibit jitter.
+- **Explicit Compositor Limitations**: Movement does not bypass KWin's frame scheduling or use native Wayland presentation-time callbacks / direct GPU sync. Animation timing relies on the compositor event loop; under heavy system load or rapid window creation, animation frame steps may exhibit jitter.
 
 ---
 
@@ -102,8 +104,8 @@ Tessera provides 12 distinct snap drop zones that support both standard halves/q
 Clone the repository, install dependencies, compile fresh bridges, and run the transactional installer:
 
 ```bash
-git clone https://github.com/Andrew-Smith-93/Tessera.git
-cd Tessera
+git clone https://github.com/Andrew-Smith-93/Tessera.git Movement
+cd Movement
 npm ci
 npm run build
 ./install.sh
@@ -114,7 +116,7 @@ npm run build
 The installer:
 1. Validates system dependencies and file manifest integrity before modifying any configuration.
 2. Deploys the KWin script package to `~/.local/share/kwin/scripts/tessera/`.
-3. Enables Tessera in `~/.config/kwinrc`.
+3. Enables Movement in `~/.config/kwinrc`.
 4. Registers canonical global shortcuts in `~/.config/kglobalshortcutsrc` (migrating recognized older defaults while strictly preserving existing custom and unbound bindings; does not force-restore defaults or automatically resolve collisions with other Plasma actions).
 5. Cleans up any obsolete configuration files or shortcuts from retired versions.
 6. Notifies KWin to reload the script configuration.
@@ -138,22 +140,22 @@ npm run build
 
 ### Uninstallation
 
-To remove Tessera while preserving your configuration:
+To remove Movement while preserving your configuration:
 
 ```bash
 ./uninstall.sh
 ```
 
-Standard uninstallation removes the installed KWin script, disables the plugin in `kwinrc`, removes legacy Control Center artifacts, and deletes recognized Tessera default shortcut registrations from `kglobalshortcutsrc`. Personal configuration options (`[Script-tessera]`), intentional unbound bindings, and user-customized active or retired shortcuts are preserved byte-for-byte. Unrelated KRunner and Plasma shortcuts are never touched.
+Standard uninstallation removes the installed KWin script, disables the plugin in `kwinrc`, removes legacy Control Center artifacts, and deletes recognized Movement default shortcut registrations from `kglobalshortcutsrc`. Personal configuration options (`[Script-tessera]`), intentional unbound bindings, and user-customized active or retired shortcuts are preserved byte-for-byte. Unrelated KRunner and Plasma shortcuts are never touched.
 
-To perform a complete purge (removing the script, all settings in `kwinrc`, legacy config backups, and all Tessera shortcut registrations):
+To perform a complete purge (removing the script, all settings in `kwinrc`, legacy config backups, and all Movement shortcut registrations):
 
 ```bash
 ./uninstall.sh --purge
 ```
 
 > [!WARNING]
-> `--purge` permanently deletes all custom Tessera layout options, gaps, rules, and shortcut registrations (both default and custom) from your configuration files. Do **not** use `--purge` merely to resolve shortcut conflicts; use native KDE System Settings instead.
+> `--purge` permanently deletes all custom Movement layout options, gaps, rules, and shortcut registrations (both default and custom) from your configuration files. Do **not** use `--purge` merely to resolve shortcut conflicts; use native KDE System Settings instead.
 
 ### Recovery & Configuration Realities
 
@@ -171,9 +173,9 @@ Understand the operational distinctions between **reloading**, **removing**, and
     qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start
     ```
     *(Note: `org.kde.KWin.reconfigure` updates settings for running scripts; because KWin's `loadDeclarativeScript` returns -1 when a script is already registered, an explicit `unloadScript` is required before `start` to reload updated code into memory. Note that `isScriptLoaded` reflects script registration, not proof of successful QML root object instantiation).*
-- **Removing (Uninstall)**: Running `./uninstall.sh` removes the Tessera script from `~/.local/share/kwin/scripts/tessera/`; it does **not** restore previous versions or previous configuration snapshots.
+- **Removing (Uninstall)**: Running `./uninstall.sh` removes the Movement script from `~/.local/share/kwin/scripts/tessera/`; it does **not** restore previous versions or previous configuration snapshots.
 - **Restoring Shortcuts & Settings**:
-  - **Native Shortcut Reset (Recommended)**: To reset shortcuts to defaults or resolve collisions with other Plasma actions, open **KDE System Settings → Shortcuts → KWin**, select Tessera actions, and click **Defaults** or reassign competing bindings. Re-running `./install.sh` preserves existing custom and unbound bindings; it does **not** force-restore defaults or resolve collisions with other Plasma actions.
+  - **Native Shortcut Reset (Recommended)**: To reset shortcuts to defaults or resolve collisions with other Plasma actions, open **KDE System Settings → Shortcuts → KWin**, select Movement actions, and click **Defaults** or reassign competing bindings. Re-running `./install.sh` preserves existing custom and unbound bindings; it does **not** force-restore defaults or resolve collisions with other Plasma actions.
   - **Full Reset**: If a complete configuration wipe is genuinely intended, back up your files first, run `./uninstall.sh --purge`, and reinstall via `./install.sh`.
 
 ---
@@ -184,28 +186,28 @@ All shortcuts use the Super (<kbd>Meta</kbd>) key as their primary modifier, int
 
 | Action ID | Default sequence |
 | :--- | :--- |
-| Tessera: Toggle Zone Overlay | Meta+Shift+C |
-| Tessera: Toggle Tiling | Meta+Shift+T |
-| Tessera: Toggle Window Floating | Meta+Shift+F |
-| Tessera: Move Window to Left Region | Meta+Left |
-| Tessera: Move Window to Right Region | Meta+Right |
-| Tessera: Move Window to Up Region | Meta+Up |
-| Tessera: Move Window to Down Region | Meta+Down |
-| Tessera: Expand Window Width | Meta+Shift+Right |
-| Tessera: Shrink Window Width | Meta+Shift+Left |
-| Tessera: Expand Window Height | Meta+Shift+Down |
-| Tessera: Shrink Window Height | Meta+Shift+Up |
-| Tessera: Move Window to Screen Left | Meta+Ctrl+Left |
-| Tessera: Move Window to Screen Right | Meta+Ctrl+Right |
-| Tessera: Move Window to Screen Above | Meta+Ctrl+Up |
-| Tessera: Move Window to Screen Below | Meta+Ctrl+Down |
-| Tessera: Focus Left Window | Meta+Alt+A |
-| Tessera: Focus Right Window | Meta+Alt+D |
-| Tessera: Focus Up Window | Meta+Alt+W |
-| Tessera: Focus Down Window | Meta+Alt+S |
-| Tessera: Swap Left Window | Meta+Alt+Q |
-| Tessera: Swap Right Window | Meta+Alt+E |
-| Tessera: Retile Current Workspace | Meta+Shift+R |
+| Toggle Zone Overlay | Meta+Shift+C |
+| Toggle Tiling Globally | Meta+Shift+T |
+| Toggle Active Window Floating | Meta+Shift+F |
+| Move Window to Left Snap Region | Meta+Left |
+| Move Window to Right Snap Region | Meta+Right |
+| Move Window to Upper Snap Region | Meta+Up |
+| Move Window to Lower Snap Region | Meta+Down |
+| Expand Window Width | Meta+Shift+Right |
+| Shrink Window Width | Meta+Shift+Left |
+| Expand Window Height | Meta+Shift+Down |
+| Shrink Window Height | Meta+Shift+Up |
+| Move Window to Screen Left | Meta+Ctrl+Left |
+| Move Window to Screen Right | Meta+Ctrl+Right |
+| Move Window to Screen Above | Meta+Ctrl+Up |
+| Move Window to Screen Below | Meta+Ctrl+Down |
+| Focus Left Window (WASD) | Meta+Alt+A |
+| Focus Right Window (WASD) | Meta+Alt+D |
+| Focus Up Window (WASD) | Meta+Alt+W |
+| Focus Down Window (WASD) | Meta+Alt+S |
+| Swap Window Left (Counter-Clockwise) | Meta+Alt+Q |
+| Swap Window Right (Clockwise) | Meta+Alt+E |
+| Force Retile Workspace | Meta+Shift+R |
 
 `config/shortcuts.json` is the canonical catalog. Installation preserves every existing user binding, including an explicitly empty binding.
 
@@ -216,17 +218,17 @@ When upgrading from older Tessera installations:
 - Old shortcuts do not functionally trigger retired actions unless migrated or re-assigned to one of the 22 active shortcuts in KDE System Settings.
 
 ### Resolving Plasma Shortcut Conflicts
-By default, KDE Plasma may assign certain `Meta` key combinations (such as `Meta+Left` / `Meta+Right` for KWin Quick Tiling). `Meta+Space` is reserved for Plasma Search / KRunner and is not bound by Tessera.
+By default, KDE Plasma may assign certain `Meta` key combinations (such as `Meta+Left` / `Meta+Right` for KWin Quick Tiling). `Meta+Space` is reserved for Plasma Search / KRunner and is not bound by Movement.
 To resolve conflicts:
 1. Open **KDE System Settings → Shortcuts**.
 2. Search for the conflicting shortcut (e.g. `Quick Tile Window to the Left`).
-3. Reassign or disable the default Plasma binding, allowing Tessera's registered handler to receive the key sequence.
+3. Reassign or disable the default Plasma binding, allowing Movement's registered handler to receive the key sequence.
 
 ---
 
 ## 🎛️ Native Configuration
 
-All configuration lives in native KDE interfaces. Open **KDE System Settings → Window Management → KWin Scripts** and click the configure icon next to **Tessera**:
+All configuration lives in native KDE interfaces. Open **KDE System Settings → Window Management → KWin Scripts** and click the configure icon next to **Movement**:
 
 - **General**: Toggle global tiling, new window tiling behavior, minimize behavior, virtual desktop layout independence, and Plasma OSD notifications.
 - **Layout & Spacing**: Configure inner gap (default: 8px) and outer margin (default: 10px) sizes. User-facing layout preset menus, layout-cycling shortcuts, and primary ratio controls are retired; legacy stored layout algorithms (such as Primary + Stack, Monocle, Floating, Binary Split, Columns, and Rows) are automatically normalized to the canonical Balanced Grid layout by the runtime reconciler, while per-window floating is managed separately via window rules and game policies.
@@ -314,4 +316,4 @@ Contributions, bug reports, and layout proposals are welcome!
 
 ## 📄 License
 
-Tessera is licensed under the [GNU General Public License v3.0](LICENSE).
+Movement is licensed under the [GNU General Public License v3.0](LICENSE).

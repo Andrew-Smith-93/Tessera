@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Tessera is currently in active pre-release development. Security fixes and patches are applied to the active default branch.
+Movement is currently in active pre-release development. Security fixes and patches are applied to the active default branch.
 
 | Version / Branch | Supported | Notes |
 | :--- | :--- | :--- |
@@ -11,7 +11,7 @@ Tessera is currently in active pre-release development. Security fixes and patch
 
 ## Reporting a Vulnerability
 
-We take the security and integrity of Tessera seriously.
+We take the security and integrity of Movement seriously.
 
 1. **Private Reporting Status (Pending Activation)**:
    - An authenticated private vulnerability intake mechanism (GitHub Private Vulnerability Reporting) is **currently unavailable / pending** repository publication and administrative activation (see Gate B in [docs/PUBLIC_RELEASE_CHECKLIST.md](docs/PUBLIC_RELEASE_CHECKLIST.md)).

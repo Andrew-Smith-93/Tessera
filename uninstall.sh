@@ -49,17 +49,17 @@ remove_file_target() {
     esac
 }
 
-echo "Uninstalling Tessera..."
+echo "Uninstalling Movement..."
 
 CONFIG_CLEANUP_SUCCESS=true
 
 if command -v kwriteconfig6 >/dev/null 2>&1; then
     if ! kwriteconfig6 --file kwinrc --group Plugins --key tesseraEnabled false; then
-        echo "Warning: failed to disable Tessera plugin in kwinrc." >&2
+        echo "Warning: failed to disable Movement plugin in kwinrc." >&2
         CONFIG_CLEANUP_SUCCESS=false
     fi
 else
-    echo "Warning: kwriteconfig6 not found; cannot disable Tessera plugin in kwinrc." >&2
+    echo "Warning: kwriteconfig6 not found; cannot disable Movement plugin in kwinrc." >&2
     CONFIG_CLEANUP_SUCCESS=false
 fi
 
@@ -423,14 +423,14 @@ fi
 
 if [ "$PURGE" = true ]; then
     if [ "$CONFIG_CLEANUP_SUCCESS" = true ]; then
-        echo "Tessera and its saved configuration have been removed."
+        echo "Movement and its saved configuration have been removed."
     else
-        echo "Tessera has been removed; some saved configuration could not be deleted."
+        echo "Movement has been removed; some saved configuration could not be deleted."
     fi
 else
     if [ "$CONFIG_CLEANUP_SUCCESS" = true ]; then
-        echo "Tessera has been removed; saved layout settings were preserved."
+        echo "Movement has been removed; saved layout settings were preserved."
     else
-        echo "Tessera has been removed; some configuration could not be disabled or deleted."
+        echo "Movement has been removed; some configuration could not be disabled or deleted."
     fi
 fi

@@ -1,5 +1,5 @@
-import type { Rect, RuntimeWindowId } from "@tessera/protocol";
-import { rectEquals } from "@tessera/layout-core";
+import type { Rect, RuntimeWindowId } from "@movement/protocol";
+import { rectEquals } from "@movement/layout-core";
 
 interface InFlightEntry {
   target: Rect;

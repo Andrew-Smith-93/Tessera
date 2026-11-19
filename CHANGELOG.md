@@ -1,6 +1,10 @@
 # Changelog
 
-All notable changes to Tessera (`K-Tessera`) will be documented in this file.
+## Unreleased: Movement
+
+New product name. Existing KWin installations retain their settings and shortcuts; the plugin ID stays `tessera`. New source builds produce `movement-v<version>.kwinscript`. Entries below describe the original releases.
+
+All notable changes to Movement will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

@@ -1,8 +1,8 @@
-# Tessera Runtime Simulator (`apps/runtime-simulator`)
+# Movement Runtime Simulator (`apps/runtime-simulator`)
 
-The Tessera Runtime Simulator is a headless, deterministic simulation and trace-replay environment for Tessera's tiling window manager runtime.
+The Movement Runtime Simulator is a headless, deterministic simulation and trace-replay environment for Movement's tiling window manager runtime.
 
-It executes the production TypeScript runtime directly—including `RuntimeCoordinator`, `@tessera/layout-core` solvers, `@tessera/rules-engine`, and screen affinity algorithms—without requiring KDE Plasma, KWin, QML, X11/Wayland display servers, DBus, or a live desktop session.
+It executes the production TypeScript runtime directly—including `RuntimeCoordinator`, `@movement/layout-core` solvers, `@movement/rules-engine`, and screen affinity algorithms—without requiring KDE Plasma, KWin, QML, X11/Wayland display servers, DBus, or a live desktop session.
 
 ---
 
@@ -17,9 +17,9 @@ The simulator does **not** reimplement layout mathematics, rule classification, 
   [RuntimeSimulator Engine]
              │
              ├──► Injectable LogicalClock (tick-based, deterministic)
-             ├──► Production RuntimeCoordinator (@tessera/kwin-adapter)
-             │          ├──► @tessera/layout-core (solveMasterStack, solveBalancedGrid, etc.)
-             │          ├──► @tessera/rules-engine (WindowRuleEngine)
+             ├──► Production RuntimeCoordinator (@movement/kwin-adapter)
+             │          ├──► @movement/layout-core (solveMasterStack, solveBalancedGrid, etc.)
+             │          ├──► @movement/rules-engine (WindowRuleEngine)
              │          └──► Screen Affinity & Snap Zone Math
              │
              ▼

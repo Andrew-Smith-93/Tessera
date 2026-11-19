@@ -12,7 +12,7 @@ import {
   type SystemUnsubscribeResult
 } from "../src/index.js";
 
-describe("Tessera Protocol V1 Behavioral Cross-Language Conformance Suite (TypeScript)", () => {
+describe("Movement Protocol V1 Behavioral Cross-Language Conformance Suite (TypeScript)", () => {
   let mockConfig: Record<string, unknown>;
   let mockScreens: any[];
   let mockWindows: any[];

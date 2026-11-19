@@ -11,7 +11,7 @@ import {
   type RuntimeCommandAckResult
 } from "../src/index.js";
 
-describe("Tessera Protocol V1 Reference Endpoint & Command Queue", () => {
+describe("Movement Protocol V1 Reference Endpoint & Command Queue", () => {
   let mockRuntime: CoordinatorRuntimeTarget;
   let mockConfig: Record<string, unknown>;
   let mockScreens: any[];

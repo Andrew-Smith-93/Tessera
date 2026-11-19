@@ -16,7 +16,7 @@ import {
 import { validateInvariants } from "../src/invariants.js";
 import { runCli } from "../src/cli.js";
 import { SimulatedKWinSession } from "../src/session.js";
-import { RuntimeCoordinator, TraceRecorder, LogicalClock } from "@tessera/kwin-adapter";
+import { RuntimeCoordinator, TraceRecorder, LogicalClock } from "@movement/kwin-adapter";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

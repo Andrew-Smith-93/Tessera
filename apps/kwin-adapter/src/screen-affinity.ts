@@ -1,4 +1,4 @@
-import type { Rect, Point } from "@tessera/protocol";
+import type { Rect, Point } from "@movement/protocol";
 import type { NormalizedScreenInput } from "./coordinator-types.js";
 
 export interface ScreenAffinityInputs {

@@ -395,14 +395,14 @@ describe("WindowRuleEngine & Game-Safe Classification", () => {
     expect(kcalc.source).toBe("user-rule");
   });
 
-  // 22. Retired Control Center implicit float rule removed; windows with Tessera in title tile by default
-  it("does not float ordinary windows with Tessera in title merely for that string", () => {
+  // 22. Retired Control Center implicit float rule removed; windows with Movement in title tile by default
+  it("does not float ordinary windows with Movement in title merely for that string", () => {
     const docWindow = engine.classify({
       windowId: "25",
       managed: true,
       normalWindow: true,
       resourceClass: "google-chrome",
-      title: "Tessera Documentation - Architecture"
+      title: "Movement Documentation - Architecture"
     });
     expect(docWindow.classification).toBe("tiled");
     expect(docWindow.source).toBe("fallback");
@@ -422,7 +422,7 @@ describe("WindowRuleEngine & Game-Safe Classification", () => {
       managed: true,
       normalWindow: true,
       resourceClass: "tessera-settings",
-      title: "Tessera Control Center"
+      title: "Movement Control Center"
     });
     expect(retiredSettingsWindow.classification).toBe("tiled");
     expect(retiredSettingsWindow.source).toBe("fallback");

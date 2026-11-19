@@ -7,8 +7,8 @@ import {
   type RetainedScreenState,
   type RetainedWindowState,
   type GeometryOperation
-} from "@tessera/kwin-adapter";
-import type { Rect } from "@tessera/protocol";
+} from "@movement/kwin-adapter";
+import type { Rect } from "@movement/protocol";
 import type {
   TraceFixture,
   SimulationResult,

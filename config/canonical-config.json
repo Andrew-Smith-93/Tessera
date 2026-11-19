@@ -9,12 +9,12 @@
       "default": 2,
       "minimum": 1,
       "maximum": 10,
-      "description": "Tessera configuration schema version"
+      "description": "Movement configuration schema version"
     },
     "enableTiling": {
       "type": "boolean",
       "default": true,
-      "description": "Enable or disable Tessera automatic window tiling"
+      "description": "Enable or disable Movement automatic window tiling"
     },
     "defaultLayout": {
       "type": "string",

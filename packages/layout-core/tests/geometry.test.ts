@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createRect, rectEquals, applyGaps, clampConstraints, centerPoint } from '../src/geometry.js';
-import type { Rect, GapConfig, SizeConstraints } from '@tessera/protocol';
+import type { Rect, GapConfig, SizeConstraints } from '@movement/protocol';
 
 describe('geometry utilities', () => {
   it('creates rect with rounded precision', () => {

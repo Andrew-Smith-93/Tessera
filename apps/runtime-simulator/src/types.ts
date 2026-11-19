@@ -1,9 +1,9 @@
-import type { Rect, Point, RuntimeWindowId, LayoutAlgorithm } from "@tessera/protocol";
+import type { Rect, Point, RuntimeWindowId, LayoutAlgorithm } from "@movement/protocol";
 import type {
   CoordinatorConfig,
   NormalizedWindowInput,
   NormalizedScreenInput
-} from "@tessera/kwin-adapter";
+} from "@movement/kwin-adapter";
 
 export const TRACE_SCHEMA_VERSION = "1.0.0";
 

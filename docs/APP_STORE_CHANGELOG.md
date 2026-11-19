@@ -1,4 +1,8 @@
-# 📱 Tessera App Store Changelog
+# 📱 Movement App Store Changelog
+
+## Unreleased: Movement
+
+New product name. Existing KWin installations retain their settings and shortcuts; the plugin ID stays `tessera`. New source builds produce `movement-v<version>.kwinscript`. Entries below describe the original releases.
 
 This document contains formatted release notes tailored for app store listings (**KDE Store**, **Pling.com**, **KDE Discover Software Center**, and **AppStream metainfo**).
 
