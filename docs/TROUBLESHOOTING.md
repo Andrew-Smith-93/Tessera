@@ -123,6 +123,25 @@ Unrelated KRunner, Plasma, and KWin shortcuts remain untouched.
   3. Manage custom rules or exclusions directly in the configuration dialog.
   4. Alternatively, use standard KDE **Window Rules** (**KDE System Settings → Window Management → Window Rules**).
 
+### Issue: Fullscreen and Borderless Windows Behave Differently
+
+Movement distinguishes KWin's fullscreen state from a borderless window that merely fills a display. For normal managed windows, the [rule engine](../packages/rules-engine/src/rules.ts) applies these checks in order:
+
+1. **True fullscreen** (`fullScreen === true`) is excluded from tiling before custom rules are considered. A custom tile rule does not override this state.
+2. **Explicit custom rules and floating filters** are considered before the borderless heuristic. A matching custom tile rule can therefore override fullscreen-like detection.
+3. **Borderless fullscreen-like** requires `noBorder === true`, no maximization (`maximizeMode === 0`), and a sufficiently large frame: at least 98% of the output area, or frame position and dimensions each within 5 pixels of the output. The classifier uses physical output geometry when available, falling back to the usable area.
+4. **Recognized games** that did not match an earlier check follow the configured game window policy.
+
+Removing a title bar alone is not enough to make a window fullscreen-like. A maximized window is also not the same as true fullscreen.
+
+When checking a report on Plasma 6 / X11:
+- Record the application, Plasma/KWin versions, session type, monitor arrangement, and relevant custom rules.
+- Compare ordinary windowed mode, the application's fullscreen mode, and its borderless mode separately. Note which mode changes tiling behavior and whether it returns after leaving that mode.
+- Check custom rules before assuming the borderless heuristic is failing. Do not reset or purge your configuration to collect a reproduction.
+- Share only sanitized diagnostics, following section 4 below.
+
+The simulator has separate [true-fullscreen](../apps/runtime-simulator/fixtures/05-true-fullscreen-enter-exit.fixture.json) and [borderless](../apps/runtime-simulator/fixtures/06-borderless-fullscreen-enter-exit.fixture.json) scenarios. These are automated models, not proof that a particular game, Wayland session, or physical display setup has been tested. See the [public release checklist](PUBLIC_RELEASE_CHECKLIST.md) for live verification scope.
+
 ### Issue: Shortcut Keybinding Collisions
 - Movement defaults to Super (<kbd>Meta</kbd>) key combinations for tiling and region navigation.
 - If another application or Plasma component conflicts with a shortcut:
